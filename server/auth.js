@@ -1,4 +1,4 @@
-// Email/password auth with JWT sessions, replacing Base44's hosted auth.
+// Email/password auth with JWT sessions.
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { users, userToPublic, otp } from './db.js';

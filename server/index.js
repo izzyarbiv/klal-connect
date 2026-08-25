@@ -1,4 +1,4 @@
-// Klal Connect API — the app's own backend (replaces Base44).
+// Klal Connect API — entities, auth, business functions and uploads.
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';

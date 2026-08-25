@@ -17,8 +17,6 @@ export function safeReturnTo() {
     // Strip auth/bootstrap params. A crafted returnTo must never be able to
     // hand the freshly issued session somewhere else, so drop anything that
     // could overwrite the token or repoint the client at another backend.
-    // (Kept from the Base44 era: those params are gone, but stripping them is
-    // free and protects against a stale link still carrying them.)
     for (const p of ["access_token", "clear_access_token", "app_id", "app_base_url", "functions_version", "from_url"]) {
       url.searchParams.delete(p);
     }

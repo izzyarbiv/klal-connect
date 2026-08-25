@@ -1,10 +1,9 @@
 // SQLite-backed document store.
 //
-// Base44 entities were schemaless documents, and the app leans on that: pages
-// read and write ad-hoc fields across 18 entities. Rather than reverse-engineer
-// 18 rigid tables (and break every time a component writes a new field), each
-// record is one row with its fields in a JSON blob. The columns pulled out of
-// the blob are only the ones the app sorts/filters on everywhere.
+// The app reads and writes ad-hoc fields across 18 entities, so records are
+// stored as documents: one row each, fields in a JSON blob. Adding a field is
+// not a migration. Only the columns every entity is sorted or scoped by are
+// lifted out of the blob into real columns.
 import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -79,7 +78,7 @@ function splitFields(obj = {}) {
 
 // ---- query helpers ----------------------------------------------------------
 
-// Base44's sort string: "field" ascending, "-field" descending.
+// Sort strings are "field" for ascending, "-field" for descending.
 function applySort(rows, sort) {
   if (!sort) return rows;
   const desc = sort.startsWith('-');

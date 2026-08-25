@@ -3,8 +3,8 @@
 A community-powered platform for finding trusted Jewish professionals, businesses, and
 resources in your area.
 
-This was originally a Base44 export. It no longer depends on Base44 in any way — the
-frontend, the API, the database, and authentication are all in this repo.
+Frontend, API, database and authentication all live in this repo — there is no external
+platform to sign into and no hosted service to configure before it runs.
 
 ## Quick start
 
@@ -86,8 +86,7 @@ the Shabbos write-gate.
 ## Data
 
 SQLite at `server/data/klal.db`, uploads in `server/uploads/` — both gitignored. Entities
-are stored as documents (a JSON blob per record), which keeps the schemaless behaviour the
-app was written against.
+are stored as documents (a JSON blob per record), so adding a field is not a migration.
 
 ## Not done yet
 

@@ -3,10 +3,9 @@ import { api, tokenStore } from '@/api/client';
 
 // Session state for the app.
 //
-// Base44 gated every page behind a hosted "app public settings" call, which is
-// why the old version blocked on isLoadingPublicSettings. We own auth now, so
-// there is nothing to fetch before render: the app is public, and individual
-// pages send visitors to /login when they need a session.
+// Nothing blocks the first render: the directory is public, so we resolve the
+// session in the background and let individual pages send visitors to /login
+// when they actually need one.
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {

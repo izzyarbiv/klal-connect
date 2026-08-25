@@ -1,9 +1,8 @@
 // Klal Connect API client.
 //
-// Replaces the Base44 SDK. It keeps the same object shape the app was written
-// against (entities / auth / functions / integrations), so the ~100 components
-// that call it did not need rewriting — only the name changed, and the calls
-// now go to our own server.
+// One object — entities / auth / functions / integrations — is the app's entire
+// interface to the server. Components import `api` and never touch fetch, so
+// auth headers, error shapes and the token live in exactly one place.
 const TOKEN_KEY = 'kc_access_token';
 const API = '/api';
 
@@ -74,8 +73,8 @@ function entityApi(name) {
     updateMany: (query, update) =>
       request('POST', `/entities/${name}/update-many`, { body: { query, update } }),
 
-    // Base44 pushed realtime updates; we poll instead. Same contract: pass a
-    // callback, get an unsubscribe function back.
+    // Polling stands in for realtime: pass a callback, get an unsubscribe
+    // function back. Swapping in websockets later means changing only this.
     subscribe: (callback, intervalMs = 20000) => {
       const id = setInterval(() => { try { callback(); } catch { /* caller handles */ } }, intervalMs);
       return () => clearInterval(id);

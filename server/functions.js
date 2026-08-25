@@ -1,9 +1,8 @@
-// Server-side business logic, replacing the Base44 cloud functions the app
-// invokes via base44.functions.invoke(name, payload).
+// Server-side business logic, reached from the app via api.functions.invoke().
 //
-// These exist as functions (rather than plain entity writes from the client)
-// because each one enforces something the client must not be trusted with:
-// moderation status, ownership, counter integrity, or the Shabbos write-gate.
+// These are functions rather than plain entity writes because each enforces
+// something the client must not be trusted with: moderation status, ownership,
+// counter integrity, or the Shabbos write-gate.
 import { store, users, userToPublic } from './db.js';
 import { computeShabbosStatus, assertWritable } from './shabbos.js';
 
