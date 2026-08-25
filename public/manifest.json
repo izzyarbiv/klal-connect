@@ -1,0 +1,14 @@
+{
+  "name": "Klal Connect",
+  "short_name": "Klal Connect",
+  "description": "A community-powered platform for finding trusted Jewish professionals, businesses, and resources in your area. Connect with your community, discover local services, and support those who help us grow, all in one place.",
+  "icons": [
+    { "src": "/brand/logo.jpg", "sizes": "192x192", "type": "image/jpeg" },
+    { "src": "/brand/logo.jpg", "sizes": "512x512", "type": "image/jpeg" }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0D3B44",
+  "background_color": "#0B1F24",
+  "scope": "/"
+}
