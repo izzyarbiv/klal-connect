@@ -28,13 +28,35 @@ export default function LocationPicker({ user }) {
     setBusy(true);setErr('');
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;setLat(latitude);setLon(longitude);
-      try {const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);const d = await r.json();const a = d.address || {};setCity(a.city || a.town || a.village || a.county || '');setCountry((a.country_code || '').toUpperCase());} catch {}
-      try {setTz(Intl.DateTimeFormat().resolvedOptions().timeZone);} catch {}
+      let zone = '';
+      try {
+        const d = await api.geo.reverse(latitude, longitude);
+        setCity(d.city || '');setCountry(d.country_code || '');zone = d.timezone || '';
+      } catch (e) { setErr(e.message || 'Could not look up that location.'); }
+      // The zone is derived from the coordinates. Falling back to the browser's
+      // zone is only correct when it agrees with where the pin actually is.
+      if (!zone) { try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {} }
+      setTz(zone);
       setBusy(false);
     }, () => {setBusy(false);setErr('Location permission denied. Search for your city instead.');}, { timeout: 10000 });
   };
-  const search = async () => {if (!q.trim()) return;setBusy(true);setErr('');try {const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=8`);setResults(await r.json());} catch {setErr('Search failed.');}setBusy(false);};
-  const pick = (r) => {setLat(parseFloat(r.lat));setLon(parseFloat(r.lon));setCity((r.display_name || '').split(',')[0]);setCountry((r.address && r.address.country_code || '').toUpperCase());setResults([]);setQ('');try {setTz(Intl.DateTimeFormat().resolvedOptions().timeZone);} catch {}};
+  const search = async () => {
+    if (!q.trim()) return;
+    setBusy(true);setErr('');
+    try { setResults(await api.geo.search(q, 8)); }
+    catch (e) { setErr(e.message || 'Search failed.'); }
+    setBusy(false);
+  };
+  // Takes the timezone of the place that was picked, not the browser's. Picking
+  // a city in another zone and keeping the local one would compute candle
+  // lighting for the wrong place entirely.
+  const pick = (r) => {
+    setLat(r.latitude);setLon(r.longitude);
+    setCity(r.city || (r.label || '').split(',')[0]);
+    setCountry(r.country_code || '');
+    if (r.timezone) setTz(r.timezone);
+    setResults([]);setQ('');
+  };
   const save = async () => {
     setErr('');
     if (lat == null || lon == null || !tz) {setErr('Location and timezone are required.');return;}
@@ -54,7 +76,7 @@ export default function LocationPicker({ user }) {
     </div>}
     <button onClick={useCurrent} className="secondary"><LocateFixed size={16} />Use my current location</button>
     <div className="flex gap-2"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a city…" className="field flex-1" /><button onClick={search} className="secondary"><Search size={16} />Search</button></div>
-    {results.length > 0 && <div className="max-h-48 overflow-y-auto rounded-xl border border-brand-line">{results.map((r) => <button key={r.place_id} onClick={() => pick(r)} className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-brand-tint">{r.display_name}</button>)}</div>}
+    {results.length > 0 && <div className="max-h-48 overflow-y-auto rounded-xl border border-brand-line">{results.map((r) => <button key={`${r.latitude},${r.longitude}`} onClick={() => pick(r)} className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-brand-tint">{r.label}</button>)}</div>}
     <div className="grid gap-3 sm:grid-cols-2">
       <label>City<input className="field" value={city} onChange={(e) => setCity(e.target.value)} /></label>
       <label>Country code<input className="field" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} placeholder="US, IL…" /></label>

@@ -41,6 +41,12 @@ db.exec(`
     updated_date  TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS geo_cache (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS otp_codes (
     email      TEXT NOT NULL,
     code       TEXT NOT NULL,
@@ -231,5 +237,26 @@ export const otp = {
     if (!row || row.expires_at < Date.now() || row.code !== String(code).trim()) return false;
     db.prepare('DELETE FROM otp_codes WHERE email = ? AND purpose = ?').run(email, purpose);
     return true;
+  },
+};
+
+// ---- geocoding cache --------------------------------------------------------
+
+// Geocoding answers are stable and upstream providers are rate-limited (or
+// billed per call), so results are cached across restarts rather than in memory.
+export const geoCache = {
+  get(key) {
+    const row = db.prepare('SELECT value, expires_at FROM geo_cache WHERE key = ?').get(key);
+    if (!row) return null;
+    if (row.expires_at < Date.now()) {
+      db.prepare('DELETE FROM geo_cache WHERE key = ?').run(key);
+      return null;
+    }
+    try { return JSON.parse(row.value); } catch { return null; }
+  },
+  set(key, value, ttlMs) {
+    db.prepare('INSERT OR REPLACE INTO geo_cache (key, value, expires_at) VALUES (?, ?, ?)')
+      .run(key, JSON.stringify(value), Date.now() + ttlMs);
+    return value;
   },
 };

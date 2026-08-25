@@ -12,6 +12,7 @@ import {
   hashPassword, checkPassword, signToken, deliverCode,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
+import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.KC_PORT || 4000);
@@ -19,6 +20,10 @@ const UPLOAD_DIR = process.env.KC_UPLOAD_DIR || path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const app = express();
+// Vercel and most hosts terminate TLS in front of us; req.ip must come from
+// X-Forwarded-For there, but trusting that header when we are NOT behind a
+// proxy would let any client spoof its own IP.
+if (process.env.KC_TRUST_PROXY === '1') app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(attachUser);
@@ -272,6 +277,41 @@ app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
 });
 
 app.use('/api/files', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+
+// ------------------------------------------------------------- geocoding --
+
+// Signed-in only: an open geocoding proxy would let anyone burn the app's
+// provider quota, and every caller in the app is already authenticated.
+app.get('/api/geo/reverse', requireAuth, async (req, res, next) => {
+  try {
+    res.json(await reverseGeocode(req.query.lat, req.query.lon));
+  } catch (err) { next(err); }
+});
+
+app.get('/api/geo/search', requireAuth, async (req, res, next) => {
+  try {
+    res.json(await searchPlaces(req.query.q, req.query.limit));
+  } catch (err) { next(err); }
+});
+
+// Coarse fallback when the browser's geolocation is denied or unavailable.
+app.get('/api/geo/ip', requireAuth, async (req, res, next) => {
+  try {
+    // req.ip honours the trust-proxy setting below, so a spoofed
+    // X-Forwarded-For is only believed when we are actually behind a proxy.
+    res.json(await geolocateIp(req.ip));
+  } catch (err) { next(err); }
+});
+
+// Runtime config the browser needs before it can render. Kept server-side so
+// tiles can be repointed with an env var instead of a rebuild.
+app.get('/api/config', (_req, res) => {
+  res.json({
+    tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    tileAttribution: process.env.KC_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors',
+    geocoder: GEO_PROVIDER,
+  });
+});
 
 app.get('/api/health', (_req, res) =>
   res.json({ ok: true, users: users.all().length, providers: store.count('Provider') })

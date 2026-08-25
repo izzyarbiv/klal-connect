@@ -12,7 +12,8 @@
     "start": "node server/index.js",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "KC_DATA_DIR=${TMPDIR:-/tmp}/kc-geotest node server/geocode.test.mjs"
   },
   "dependencies": {
     "@hebcal/core": "^6.9.2",
@@ -84,6 +85,7 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.171.0",
+    "tz-lookup": "^6.1.25",
     "vaul": "^1.1.2",
     "zod": "^3.24.2"
   },

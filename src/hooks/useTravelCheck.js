@@ -16,25 +16,19 @@ function haversineMi(lat1, lon1, lat2, lon2){
 function roundKey(lat, lon){ return `${Number(lat).toFixed(1)},${Number(lon).toFixed(1)}`; }
 
 async function reverseGeocode(latitude, longitude){
-  let city='', country_code='';
   try{
-    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-    const d=await r.json();
-    const a=d.address||{};
-    city=a.city||a.town||a.village||a.county||'';
-    country_code=(a.country_code||'').toUpperCase();
-  }catch{}
-  return { city, country_code };
+    const { city, country_code, timezone }=await api.geo.reverse(latitude, longitude);
+    return { city, country_code, timezone };
+  }catch{ return { city:'', country_code:'', timezone:'' }; }
 }
 
 async function ipFallback(){
   try{
-    const r=await fetch('https://ipapi.co/json/');
-    const d=await r.json();
-    if(d.latitude==null) return null;
-    let tzid='';
-    try{ tzid=d.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone; }catch{}
-    return { latitude:d.latitude, longitude:d.longitude, city:d.city||'', country_code:(d.country_code||'').toUpperCase(), tzid };
+    const d=await api.geo.ip();
+    if(!d || d.latitude==null) return null;
+    let tzid=d.timezone;
+    if(!tzid){ try{ tzid=Intl.DateTimeFormat().resolvedOptions().timeZone; }catch{} }
+    return { latitude:d.latitude, longitude:d.longitude, city:d.city||'', country_code:d.country_code||'', tzid };
   }catch{ return null; }
 }
 
@@ -52,9 +46,9 @@ async function freshLocation(){
     try{
       const pos = await new Promise((resolve, reject)=>navigator.geolocation.getCurrentPosition(resolve, reject, { timeout:10000, maximumAge:300000 }));
       const { latitude, longitude }=pos.coords;
-      const { city, country_code }=await reverseGeocode(latitude, longitude);
-      let tzid='';
-      try{ tzid=Intl.DateTimeFormat().resolvedOptions().timeZone; }catch{}
+      const { city, country_code, timezone }=await reverseGeocode(latitude, longitude);
+      let tzid=timezone;
+      if(!tzid){ try{ tzid=Intl.DateTimeFormat().resolvedOptions().timeZone; }catch{} }
       return { latitude, longitude, city, country_code, tzid };
     }catch{}
   }

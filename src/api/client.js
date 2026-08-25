@@ -183,6 +183,23 @@ const functionsApi = {
   },
 };
 
+// ---------------------------------------------------------------- geo --
+
+// Geocoding goes through our server, never straight to a provider: the browser
+// cannot set the User-Agent OSM requires, API keys must not ship to a client,
+// and the user's coordinates should not be handed to a third party by their own
+// browser. Shapes are normalized server-side, so swapping providers changes
+// nothing here.
+const geo = {
+  reverse: (latitude, longitude) => request('GET', '/geo/reverse', { query: { lat: latitude, lon: longitude } }),
+  search: (q, limit = 8) => request('GET', '/geo/search', { query: { q, limit } }),
+  ip: () => request('GET', '/geo/ip'),
+};
+
+let configPromise = null;
+// Cached for the page's lifetime — it is static per deployment.
+const getConfig = () => (configPromise ??= request('GET', '/config').catch(() => ({})));
+
 // ------------------------------------------------------------ integrations --
 
 const integrations = {
@@ -195,6 +212,6 @@ const integrations = {
   },
 };
 
-export const api = { entities, auth, functions: functionsApi, integrations };
+export const api = { entities, auth, functions: functionsApi, integrations, geo, getConfig };
 export { ApiError };
 export default api;
