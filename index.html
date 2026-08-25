@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/jpeg" href="/brand/logo.jpg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <script>
+      // Apply the saved theme before first paint. This runs synchronously in
+      // <head> on purpose: doing it in React (a useEffect) lands after the
+      // first paint, which flashes a light screen at dark-mode users, and it
+      // only ran on pages that mount ThemeToggle — so the auth pages were
+      // stuck light regardless of preference. Key must match useTheme.
+      (function () {
+        try {
+          var stored = localStorage.getItem('kc-theme');
+          var dark = stored === 'dark' ||
+            (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          // Keeps native controls, scrollbars and form widgets in the same theme.
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
     <link rel="manifest" href="/manifest.json" />
     <title>Klal Connect — Community resources &amp; business directory</title>
     <meta name="description" content="Klal Connect is a community-powered platform for finding trusted Jewish professionals, businesses, and resources near you." />
