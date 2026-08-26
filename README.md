@@ -103,7 +103,10 @@ are stored as documents (a JSON blob per record), so adding a field is not a mig
 
 ## Live demo
 
-**https://klal-connect.vercel.app** — sign in as `demo@klalconnect.app` / `demo1234`.
+**https://klal-connect.vercel.app** — no sign-in needed. Visitors are given a shared
+guest session automatically, so the whole app (feed, people, messages, saved, profile)
+is browsable straight away. To see the admin screens, sign in as
+`demo@klalconnect.app` / `demo1234`.
 
 This deployment runs with `KC_DEMO_MODE=1`: there is no database attached, so the
 data lives in each serverless instance's memory. It seeds itself on cold start, and
@@ -125,7 +128,7 @@ It exists to show the app. Attach Postgres before it is anything more than that.
    | `KC_TRUST_PROXY` | `1` — Vercel terminates TLS in front of us, so `req.ip` comes from `X-Forwarded-For` |
    | `KC_AUTO_MIGRATE` | `0` — run `npm run migrate` yourself instead of on every cold start |
    | `NODE_ENV` | `production` |
-   | `KC_DEMO_MODE` | Remove it. It swaps Postgres for in-memory storage and must never be set on a real deployment. |
+   | `KC_DEMO_MODE` | Remove it. It swaps Postgres for in-memory storage and opens a guest-session route, neither of which belongs on a real deployment. |
 
 3. Run `npm run migrate` once against the production database.
 4. `npm run create-admin` against it too — with no email provider wired up, the
