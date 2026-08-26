@@ -101,6 +101,15 @@ the Shabbos write-gate.
 SQLite at `server/data/klal.db`, uploads in `server/uploads/` — both gitignored. Entities
 are stored as documents (a JSON blob per record), so adding a field is not a migration.
 
+## Live demo
+
+**https://klal-connect.vercel.app** — sign in as `demo@klalconnect.app` / `demo1234`.
+
+This deployment runs with `KC_DEMO_MODE=1`: there is no database attached, so the
+data lives in each serverless instance's memory. It seeds itself on cold start, and
+anything written through the UI survives only as long as that instance stays warm.
+It exists to show the app. Attach Postgres before it is anything more than that.
+
 ## Deploying to Vercel
 
 1. **Supabase** — create a project, then a **public** Storage bucket named `uploads`.
@@ -116,6 +125,7 @@ are stored as documents (a JSON blob per record), so adding a field is not a mig
    | `KC_TRUST_PROXY` | `1` — Vercel terminates TLS in front of us, so `req.ip` comes from `X-Forwarded-For` |
    | `KC_AUTO_MIGRATE` | `0` — run `npm run migrate` yourself instead of on every cold start |
    | `NODE_ENV` | `production` |
+   | `KC_DEMO_MODE` | Remove it. It swaps Postgres for in-memory storage and must never be set on a real deployment. |
 
 3. Run `npm run migrate` once against the production database.
 4. `npm run create-admin` against it too — with no email provider wired up, the
