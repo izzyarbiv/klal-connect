@@ -13,9 +13,10 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "preview": "vite preview",
-    "test": "DATABASE_URL=${KC_TEST_DATABASE_URL:-postgres://localhost:5432/klal_connect_test} node server/geocode.test.mjs",
+    "test": "node src/lib/shabbosState.test.mjs && DATABASE_URL=${KC_TEST_DATABASE_URL:-postgres://localhost:5432/klal_connect_test} node server/geocode.test.mjs",
     "create-admin": "node --env-file-if-exists=.env.local server/create-admin.js",
-    "migrate": "node --env-file-if-exists=.env.local server/migrate.js"
+    "migrate": "node --env-file-if-exists=.env.local server/migrate.js",
+    "test:gate": "node scripts/shabbos-gate-check.mjs"
   },
   "dependencies": {
     "@hebcal/core": "^6.9.2",
