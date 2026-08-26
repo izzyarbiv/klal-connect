@@ -42,10 +42,20 @@ export const newId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 24);
 
 let readyPromise = null;
 
-// Called once per process before the first query. Cheap enough to run on every
-// cold start, and it keeps deploys from needing a separate migration step.
+// Called once per process before the first query.
+//
+// Set KC_AUTO_MIGRATE=0 in production and run `npm run migrate` on deploy
+// instead: on a serverless host, a burst of cold starts would otherwise have
+// every instance issuing DDL at once. IF NOT EXISTS makes that safe rather
+// than correct, and it is wasted work on every cold start.
 export function ready() {
-  readyPromise ??= (async () => {
+  if (process.env.KC_AUTO_MIGRATE === '0') return Promise.resolve();
+  readyPromise ??= migrate();
+  return readyPromise;
+}
+
+export function migrate() {
+  return (async () => {
     await query(`
       CREATE TABLE IF NOT EXISTS records (
         id            TEXT PRIMARY KEY,
@@ -89,7 +99,6 @@ export function ready() {
       );
     `);
   })();
-  return readyPromise;
 }
 
 // ---- record <-> row ---------------------------------------------------------

@@ -8,6 +8,8 @@ dist-ssr
 !.vscode/extensions.json
 *.log
 
-# Local database and uploaded files
-server/data
+# Local uploads (production uses object storage)
 server/uploads
+
+# Vercel
+.vercel
