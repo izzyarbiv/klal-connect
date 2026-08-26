@@ -1,6 +1,7 @@
 // Demo content: the categories the UI expects plus a small set of listings.
 // Safe to run repeatedly — it skips anything already present.
 import { store } from './db.js';
+import { stableId } from './db-shared.js';
 
 const CATEGORIES = [
   { name: 'Home Services',   icon: 'Home',            order: 1,  subcategories: ['Plumbing', 'Electrical', 'Cleaning', 'Handyman'] },
@@ -74,7 +75,11 @@ async function seedCategories() {
   let added = 0;
   for (const category of CATEGORIES) {
     if ((await store.filter('Category', { name: category.name })).length) continue;
-    await store.create('Category', { ...category, slug: slugify(category.name) });
+    await store.create('Category', {
+      ...category,
+      id: stableId('Category', category.name),
+      slug: slugify(category.name),
+    });
     added++;
   }
   return added;
@@ -88,6 +93,7 @@ async function seedProviders(owner) {
       'Provider',
       {
         ...provider,
+        id: stableId('Provider', provider.name),
         slug: slugify(provider.name),
         status: 'published',   // seeded listings skip the review queue
         claimed: false,

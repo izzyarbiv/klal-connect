@@ -4,6 +4,7 @@
 // this runs once per cold start and is awaited by the request path — otherwise
 // the first visitor would see an empty directory.
 import { store, users, isDemoMode } from './db.js';
+import { stableId } from './db-shared.js';
 import { seedAll } from './seed-data.js';
 import { hashPassword } from './auth.js';
 
@@ -20,6 +21,9 @@ export function ensureDemoData() {
     started = (async () => {
       if (await store.count('Category')) return;
       const admin = await users.create({
+        // Fixed id: a session minted by one instance must still resolve on the
+        // next, and each instance seeds its own copy of this account.
+        id: stableId('demo-user', DEMO_EMAIL),
         email: DEMO_EMAIL,
         password_hash: hashPassword(DEMO_PASSWORD),
         role: 'admin',

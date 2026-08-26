@@ -122,10 +122,10 @@ export const users = {
   async byId(id) {
     return userRows.find((u) => u.id === id) || null;
   },
-  async create({ email, password_hash, role = 'user', verified = false, ...rest }) {
+  async create({ id, email, password_hash, role = 'user', verified = false, ...rest }) {
     const ts = nowISO();
     const row = {
-      id: newId(), email: String(email).trim(), password_hash, role,
+      id: id || newId(), email: String(email).trim(), password_hash, role,
       verified: !!verified, data: rest, created_date: ts, updated_date: ts,
     };
     userRows.push(row);

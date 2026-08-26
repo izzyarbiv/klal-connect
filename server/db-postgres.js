@@ -312,12 +312,12 @@ export const users = {
     const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     return rows[0] || null;
   },
-  async create({ email, password_hash, role = 'user', verified = false, ...rest }) {
+  async create({ id, email, password_hash, role = 'user', verified = false, ...rest }) {
     await ready();
     const { rows } = await pool.query(
       `INSERT INTO users (id, email, password_hash, role, verified, data)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [newId(), String(email).trim(), password_hash, role, !!verified, JSON.stringify(rest)]
+      [id || newId(), String(email).trim(), password_hash, role, !!verified, JSON.stringify(rest)]
     );
     return rows[0];
   },
