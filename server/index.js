@@ -2,22 +2,17 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import path from 'node:path';
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
-import { store, users, userToPublic, otp, newId } from './db.js';
+import { store, users, userToPublic, otp } from './db.js';
 import {
   attachUser, requireAuth, requireAdmin,
   hashPassword, checkPassword, signToken, deliverCode,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
+import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.KC_PORT || 4000);
-const UPLOAD_DIR = process.env.KC_UPLOAD_DIR || path.join(__dirname, 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const app = express();
 // Vercel and most hosts terminate TLS in front of us; req.ip must come from
@@ -262,21 +257,26 @@ app.post('/api/functions/:name', async (req, res, next) => {
 
 // ----------------------------------------------------------------- uploads --
 
+// Buffered in memory rather than written to disk: on a serverless host there
+// is no durable disk to write to, and the storage layer needs the bytes anyway.
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-    filename: (_req, file, cb) => cb(null, `${newId()}${path.extname(file.originalname || '').slice(0, 10)}`),
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
 });
 
-app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Please choose an image file under 8MB.' });
-  res.json({ file_url: `/api/files/${req.file.filename}` });
+app.post('/api/upload', requireAuth, upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Please choose an image file under 8MB.' });
+    res.json({ file_url: await putFile(req.file.buffer, req.file.mimetype) });
+  } catch (err) { next(err); }
 });
 
-app.use('/api/files', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+// Only meaningful for the local-disk backend; with object storage the browser
+// fetches the file straight from the storage host.
+if (!usingObjectStorage) {
+  app.use('/api/files', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+}
 
 // ------------------------------------------------------------- geocoding --
 
