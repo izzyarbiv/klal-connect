@@ -50,11 +50,16 @@ export function requireAdmin(req, res, next) {
   next();
 }
 
-// In dev there is no mail provider, so the code is logged and returned to the
-// client. `KC_EMAIL_DELIVERY=real` flips this off once SMTP is wired up.
+// With no mail provider wired up, verification codes are logged and handed back
+// to the caller so the flow can be completed locally.
+//
+// Fail safe: that only ever happens when explicitly opted in AND not in
+// production. Returning a code to an unauthenticated caller in production would
+// let anyone register under someone else's address and verify it themselves,
+// so the dangerous case must require two positive signals, never a default.
 export function deliverCode(email, purpose, code) {
-  const expose = process.env.KC_EMAIL_DELIVERY !== 'real';
-  console.log(`[auth] ${purpose} code for ${email}: ${code}`);
+  const expose = process.env.KC_EMAIL_DELIVERY === 'dev' && process.env.NODE_ENV !== 'production';
+  console.log(`[auth] ${purpose} code for ${email}: ${expose ? code : '(withheld)'}`);
   return expose ? code : undefined;
 }
 
