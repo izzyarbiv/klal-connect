@@ -8,10 +8,15 @@ platform to sign into and no hosted service to configure before it runs.
 
 ## Quick start
 
+Requires Postgres running locally.
+
 ```bash
+createdb klal_connect_dev
 npm install
-npm run seed   # categories + sample listings (safe to re-run)
-npm run dev    # API on :4000, web on :5173
+npm run migrate                                  # create the schema
+npm run seed                                     # categories + sample listings
+npm run create-admin -- you@example.com 'a-password'
+npm run dev                                      # API on :4000, web on :5173
 ```
 
 Open http://localhost:5173
@@ -24,8 +29,11 @@ are printed to the API console and returned to the client so you can finish the 
 
 ```
 server/
-  index.js      Express API — entities, auth, functions, uploads
-  db.js         SQLite document store
+  app.js        Express API — entities, auth, functions, uploads
+  index.js      Local dev server (listens; production does not)
+  db.js         Postgres document store
+  storage.js    Uploads — local disk in dev, Supabase Storage in production
+  geocode.js    Geocoding proxy (mapbox / geoapify / locationiq / nominatim)
   auth.js       JWT sessions, bcrypt passwords, OTP codes
   functions.js  Business logic (moderation, counters, messaging)
   shabbos.js    Zmanim / Yom Tov engine (@hebcal/core)
@@ -46,6 +54,11 @@ Path alias `@/` → `src/`.
 | Command | Does |
 | --- | --- |
 | `npm run dev` | API + web together (concurrently) |
+| `npm run migrate` | Create/update the schema (run once per deploy) |
+| `npm run create-admin` | Create or promote an admin — `-- <email> '<password>'` |
+| `npm test` | Shabbos gate + geocoder adapter tests |
+| `npm run test:gate` | Browser check: the gate never shows an unlocked app |
+| `npm run test:offline` | Browser check: same, with the service worker offline |
 | `npm run dev:api` | API only, with `--watch` reload |
 | `npm run dev:web` | Vite only |
 | `npm run seed` | Seed categories and sample listings |
@@ -88,14 +101,47 @@ the Shabbos write-gate.
 SQLite at `server/data/klal.db`, uploads in `server/uploads/` — both gitignored. Entities
 are stored as documents (a JSON blob per record), so adding a field is not a migration.
 
+## Deploying to Vercel
+
+1. **Supabase** — create a project, then a **public** Storage bucket named `uploads`.
+2. **Vercel** — import the repo and set these environment variables:
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | Supabase **Transaction pooler** string, port **6543** — not the direct connection, which is IPv6-only and exhausts its connection budget under serverless. Remove any `?sslmode=` (TLS is configured in code). |
+   | `SUPABASE_URL` | `https://<ref>.supabase.co` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API. Server-side only. |
+   | `KC_JWT_SECRET` | A long random string. The server refuses to boot in production without it. |
+   | `KC_GEOCODER` / `KC_GEOCODER_KEY` | `mapbox` and your token |
+   | `KC_TRUST_PROXY` | `1` — Vercel terminates TLS in front of us, so `req.ip` comes from `X-Forwarded-For` |
+   | `KC_AUTO_MIGRATE` | `0` — run `npm run migrate` yourself instead of on every cold start |
+   | `NODE_ENV` | `production` |
+
+3. Run `npm run migrate` once against the production database.
+4. `npm run create-admin` against it too — with no email provider wired up, the
+   signup flow cannot be completed, so this is the only way in.
+
+The whole API is one function (`api/index.js`), so a warm instance keeps a single
+database pool rather than one per route.
+
+## Installing as an app
+
+The build produces a service worker and manifest, so the site is installable:
+Add to Home Screen on iOS, or the install prompt on Android/Chrome. Nothing
+under `/api` is ever cached — see the invariants in `vite.config.js`.
+
 ## Not done yet
 
 - **Email delivery** — OTP and reset codes are console-only until SMTP is configured.
 - **Google sign-in** — the button is present but reports that it isn't configured; it needs
   OAuth credentials.
-- **Deployment** — runs locally; no hosting target chosen yet.
+- **Native app builds** — Capacitor wrappers for the App Store and Play Store are
+  not set up. Apple's guideline 4.2 rejects thin web wrappers, so this needs
+  native capabilities (push, geolocation) before it is worth submitting.
+- **Map tiles** — still OpenStreetMap's public tiles, whose policy does not cover
+  production app traffic. `KC_TILE_URL` repoints them without a rebuild.
 
 ## Stack
 
 React 18 · Vite 6 · Tailwind 3 · shadcn/ui (Radix) · react-router-dom 6 · TanStack Query ·
-react-leaflet · framer-motion · lucide-react · Express 5 · SQLite · @hebcal/core
+react-leaflet · framer-motion · lucide-react · Express 5 · Postgres · @hebcal/core
