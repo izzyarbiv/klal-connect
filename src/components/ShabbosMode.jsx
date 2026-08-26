@@ -2,14 +2,29 @@ import React,{useEffect,useState} from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
 import { useShabbosStatus, shabbosState } from '@/hooks/useShabbosStatus';
+import { tokenStore } from '@/api/client';
+import { useAuth } from '@/lib/AuthContext';
 
 function fmt(ms,tzid){ if(!ms) return '—'; try{ return new Intl.DateTimeFormat('en-US',{timeZone:tzid,hour:'numeric',minute:'2-digit'}).format(new Date(ms)); }catch{ return new Date(ms).toLocaleTimeString(); } }
 function countdown(ms){ if(!ms) return ''; const s=Math.max(0,Math.floor((ms-Date.now())/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 
 export default function ShabbosMode(){
   const { status, verified }=useShabbosStatus();
+  const { isAuthenticated }=useAuth();
   const [,force]=useState(0);
   useEffect(()=>{ const id=setInterval(()=>force(x=>x+1),1000); return ()=>clearInterval(id); },[]);
+
+  // The gate is keyed to a signed-in user's saved location, so a visitor who is
+  // not signed in has nothing to gate on — the server answers hasLocation:false
+  // for them anyway.
+  //
+  // The signal is the presence of a token, NOT a successful session check.
+  // Offline, /api/auth/me fails and isAuthenticated goes false, which would
+  // skip the gate for a signed-in user — the exact fail-open this guards
+  // against. AuthContext only clears the token on a real 401/403, so a token
+  // that is still there means the session is still good as far as we know.
+  const signedIn = !!tokenStore.get() || isAuthenticated;
+  if(!signedIn) return null;
 
   // Decided from the clock against absolute boundaries, so crossing candle
   // lighting locks on the next tick rather than at the next poll.

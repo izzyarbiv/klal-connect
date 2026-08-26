@@ -6,7 +6,16 @@ import { writeFileSync } from 'node:fs';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9225, BASE = 'http://localhost:5173';
-const [EMAIL, PASSWORD] = process.argv.slice(2);
+// Credentials come from argv or the environment. Missing ones used to fail
+// silently: the sign-in did nothing, the gate correctly saw a signed-out
+// visitor, and the run reported a leak that was not there.
+const EMAIL = process.argv[2] || process.env.KC_TEST_EMAIL;
+const PASSWORD = process.argv[3] || process.env.KC_TEST_PASSWORD;
+if (!EMAIL || !PASSWORD) {
+  console.error('usage: node ' + process.argv[1].split('/').pop() + " <email> '<password>'");
+  console.error('   or: KC_TEST_EMAIL=... KC_TEST_PASSWORD=... npm run <script>');
+  process.exit(2);
+}
 
 const chrome = spawn(CHROME, ['--headless=new','--disable-gpu','--no-sandbox','--no-first-run',
   `--remote-debugging-port=${PORT}`,`--user-data-dir=/tmp/kc-shab-${Date.now()}`,'about:blank'],{stdio:'ignore'});
@@ -40,6 +49,8 @@ await send('Page.navigate',{url:`${BASE}/login`}); await sleep(2500);
 const type=(sel,v)=>ev(`(()=>{const el=document.querySelector(${JSON.stringify(sel)});const s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;s.call(el,${JSON.stringify(v)});el.dispatchEvent(new Event('input',{bubbles:true}));return 'ok'})()`);
 await type('#email',EMAIL); await type('#password',PASSWORD);
 await ev(`document.querySelector('form').requestSubmit()`); await sleep(3000);
+const signedIn = await ev(`!!localStorage.getItem('kc_access_token')`);
+if (!signedIn) { console.error('sign-in failed — check the credentials'); process.exit(2); }
 
 console.log('\n1. ONLINE, no location set on the account');
 await send('Page.navigate',{url:BASE}); await sleep(3000);
