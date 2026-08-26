@@ -40,9 +40,9 @@ function havdalahOptions(method) {
  *   shabbos_read_only, admin_override
  * @param now epoch ms
  */
-export function computeShabbosStatus(profile = {}, now = Date.now()) {
+export async function computeShabbosStatus(profile = {}, now = Date.now()) {
   const globalOverride =
-    store.filter('Setting', { key: 'shabbos_global_override' })[0]?.value === 'true';
+    (await store.filter('Setting', { key: 'shabbos_global_override' }))[0]?.value === 'true';
 
   if (globalOverride || profile.admin_override) {
     return { adminOverride: true, isRestricted: false, hasLocation: true };
@@ -127,8 +127,8 @@ export function computeShabbosStatus(profile = {}, now = Date.now()) {
 
 // Write-gate used by the mutating functions: during Shabbos/Yom Tov the server
 // refuses writes, so a client clock or a stale tab can't slip one through.
-export function assertWritable(profile, now = Date.now()) {
-  const status = computeShabbosStatus(profile, now);
+export async function assertWritable(profile, now = Date.now()) {
+  const status = await computeShabbosStatus(profile, now);
   if (status.isRestricted) {
     const err = new Error('This action is unavailable during Shabbos and Yom Tov.');
     err.statusCode = 423;

@@ -5,7 +5,7 @@
 // otherwise be no way to get the first account in.
 //
 //   npm run create-admin -- someone@example.com 'their-password'
-import { users, userToPublic } from './db.js';
+import { users, userToPublic, pool } from './db.js';
 import { hashPassword } from './auth.js';
 
 const [email, password] = process.argv.slice(2);
@@ -19,9 +19,10 @@ if (password.length < 8) {
   process.exit(1);
 }
 
-const existing = users.byEmail(email);
+const existing = await users.byEmail(email);
 const user = existing
-  ? users.update(existing.id, { password_hash: hashPassword(password), role: 'admin', verified: true })
-  : users.create({ email, password_hash: hashPassword(password), role: 'admin', verified: 1, full_name: '' });
+  ? await users.update(existing.id, { password_hash: hashPassword(password), role: 'admin', verified: true })
+  : await users.create({ email, password_hash: hashPassword(password), role: 'admin', verified: true, full_name: '' });
 
 console.log(`${existing ? 'Promoted' : 'Created'} admin:`, userToPublic(user).email);
+await pool.end();

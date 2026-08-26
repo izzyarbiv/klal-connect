@@ -33,10 +33,14 @@ function tokenFromRequest(req) {
 
 // Populates req.user when a valid token is present; never rejects. Routes that
 // require a session use requireAuth below.
-export function attachUser(req, _res, next) {
-  const claims = verifyToken(tokenFromRequest(req));
-  req.user = claims ? userToPublic(users.byId(claims.sub)) : null;
-  next();
+export async function attachUser(req, _res, next) {
+  try {
+    const claims = verifyToken(tokenFromRequest(req));
+    req.user = claims ? userToPublic(await users.byId(claims.sub)) : null;
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 export function requireAuth(req, res, next) {

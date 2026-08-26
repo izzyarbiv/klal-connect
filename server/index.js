@@ -96,52 +96,52 @@ const parseJSON = (value, fallback) => {
 
 // Registered before the generic :entity route below, which would otherwise
 // shadow it and return an empty list (users don't live in the records table).
-app.get('/api/entities/User', (req, res) => {
-  const all = users.all().map(userToPublic);
+app.get('/api/entities/User', async (req, res, next) => {
+  const all = (await users.all()).map(userToPublic);
   res.json(req.user?.role === 'admin' ? all : all.map(publicProfile));
 });
 
-app.get('/api/entities/:entity', (req, res) => {
+app.get('/api/entities/:entity', async (req, res, next) => {
   const { entity } = req.params;
   const { sort, limit, query } = req.query;
   const q = parseJSON(query, null);
-  const rows = q ? store.filter(entity, q, sort, null) : store.list(entity, sort, null);
+  const rows = q ? await store.filter(entity, q, sort, null) : await store.list(entity, sort, null);
   const visible = readable(entity, rows, req.user);
   res.json(limit ? visible.slice(0, Number(limit)) : visible);
 });
 
-app.get('/api/entities/:entity/:id', (req, res) => {
-  const row = store.get(req.params.entity, req.params.id);
+app.get('/api/entities/:entity/:id', async (req, res, next) => {
+  const row = await store.get(req.params.entity, req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   const [visible] = readable(req.params.entity, [row], req.user);
   if (!visible) return res.status(403).json({ error: 'Not permitted' });
   res.json(visible);
 });
 
-app.post('/api/entities/:entity', requireAuth, (req, res) => {
+app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   const { entity } = req.params;
   if (!canWrite(entity, req.user)) return res.status(403).json({ error: 'Not permitted' });
-  res.status(201).json(store.create(entity, req.body, req.user));
+  res.status(201).json(await store.create(entity, req.body, req.user));
 });
 
-app.put('/api/entities/:entity/:id', requireAuth, (req, res) => {
+app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   const { entity, id } = req.params;
-  const existing = store.get(entity, id);
+  const existing = await store.get(entity, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!canWrite(entity, req.user, existing)) return res.status(403).json({ error: 'Not permitted' });
-  res.json(store.update(entity, id, req.body));
+  res.json(await store.update(entity, id, req.body));
 });
 
-app.delete('/api/entities/:entity/:id', requireAuth, (req, res) => {
+app.delete('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   const { entity, id } = req.params;
-  const existing = store.get(entity, id);
+  const existing = await store.get(entity, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!canWrite(entity, req.user, existing)) return res.status(403).json({ error: 'Not permitted' });
-  store.delete(entity, id);
+  await store.delete(entity, id);
   res.json({ ok: true });
 });
 
-app.post('/api/entities/:entity/update-many', requireAuth, (req, res) => {
+app.post('/api/entities/:entity/update-many', requireAuth, async (req, res, next) => {
   const { entity } = req.params;
   const { query = {}, update = {} } = req.body || {};
   if (!canWrite(entity, req.user)) return res.status(403).json({ error: 'Not permitted' });
@@ -149,7 +149,7 @@ app.post('/api/entities/:entity/update-many', requireAuth, (req, res) => {
   const scoped = req.user.role === 'admin'
     ? query
     : { ...query, ...(entity === 'Notification' ? { recipient_id: req.user.id } : { created_by_id: req.user.id }) };
-  res.json({ updated: store.updateMany(entity, scoped, update) });
+  res.json({ updated: await store.updateMany(entity, scoped, update) });
 });
 
 // ------------------------------------------------------------------- users --
@@ -161,13 +161,13 @@ function publicProfile(user) {
   return safe;
 }
 
-app.get('/api/users', (req, res) => {
-  const all = users.all().map(userToPublic);
+app.get('/api/users', async (req, res, next) => {
+  const all = (await users.all()).map(userToPublic);
   res.json(req.user?.role === 'admin' ? all : all.map(publicProfile));
 });
 
-app.get('/api/users/:id', (req, res) => {
-  const user = userToPublic(users.byId(req.params.id));
+app.get('/api/users/:id', async (req, res, next) => {
+  const user = userToPublic(await users.byId(req.params.id));
   if (!user) return res.status(404).json({ error: 'Not found' });
   const isSelfOrAdmin = req.user && (req.user.id === user.id || req.user.role === 'admin');
   res.json(isSelfOrAdmin ? user : publicProfile(user));
@@ -177,76 +177,76 @@ app.get('/api/users/:id', (req, res) => {
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json(req.user));
 
-app.put('/api/auth/me', requireAuth, (req, res) => {
+app.put('/api/auth/me', requireAuth, async (req, res, next) => {
   // Role and verification are server-owned; a user cannot promote themselves.
   const { role, verified, password_hash, email, id, ...safe } = req.body || {};
-  res.json(userToPublic(users.update(req.user.id, safe)));
+  res.json(userToPublic(await users.update(req.user.id, safe)));
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res, next) => {
   const { email, password } = req.body || {};
-  const row = users.byEmail(email);
+  const row = await users.byEmail(email);
   if (!row || !checkPassword(password, row.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   res.json({ access_token: signToken(row), user: userToPublic(row) });
 });
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res, next) => {
   const { email, password, full_name } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
   if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  if (users.byEmail(email)) return res.status(409).json({ error: 'That email is already registered' });
+  if (await users.byEmail(email)) return res.status(409).json({ error: 'That email is already registered' });
 
   // First account bootstraps the admin; there is no other way in yet.
-  const role = users.all().length === 0 ? 'admin' : 'user';
-  users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '' });
-  const code = otp.issue(String(email).trim(), 'verify');
+  const role = (await users.all()).length === 0 ? 'admin' : 'user';
+  await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '' });
+  const code = await otp.issue(String(email).trim(), 'verify');
   res.status(201).json({ ok: true, otp_sent: true, dev_code: deliverCode(email, 'verify', code) });
 });
 
-app.post('/api/auth/verify-otp', (req, res) => {
+app.post('/api/auth/verify-otp', async (req, res, next) => {
   const { email, otpCode } = req.body || {};
-  if (!otp.verify(String(email || '').trim(), 'verify', otpCode)) {
+  if (!(await otp.verify(String(email || '').trim(), 'verify', otpCode))) {
     return res.status(400).json({ error: 'That code is incorrect or has expired' });
   }
-  const row = users.byEmail(email);
+  const row = await users.byEmail(email);
   if (!row) return res.status(404).json({ error: 'Account not found' });
-  users.update(row.id, { verified: true });
-  res.json({ access_token: signToken(row), user: userToPublic(users.byId(row.id)) });
+  await users.update(row.id, { verified: true });
+  res.json({ access_token: signToken(row), user: userToPublic(await users.byId(row.id)) });
 });
 
-app.post('/api/auth/resend-otp', (req, res) => {
+app.post('/api/auth/resend-otp', async (req, res, next) => {
   const { email } = req.body || {};
-  if (!users.byEmail(email)) return res.json({ ok: true }); // don't reveal who is registered
-  const code = otp.issue(String(email).trim(), 'verify');
+  if (!(await users.byEmail(email))) return res.json({ ok: true }); // don't reveal who is registered
+  const code = await otp.issue(String(email).trim(), 'verify');
   res.json({ ok: true, dev_code: deliverCode(email, 'verify', code) });
 });
 
-app.post('/api/auth/reset-password-request', (req, res) => {
+app.post('/api/auth/reset-password-request', async (req, res, next) => {
   const { email } = req.body || {};
-  if (!users.byEmail(email)) return res.json({ ok: true });
-  const code = otp.issue(String(email).trim(), 'reset');
+  if (!(await users.byEmail(email))) return res.json({ ok: true });
+  const code = await otp.issue(String(email).trim(), 'reset');
   res.json({ ok: true, dev_code: deliverCode(email, 'reset', code) });
 });
 
-app.post('/api/auth/reset-password', (req, res) => {
+app.post('/api/auth/reset-password', async (req, res, next) => {
   const { email, resetToken, newPassword } = req.body || {};
   if (String(newPassword || '').length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
-  if (!otp.verify(String(email || '').trim(), 'reset', resetToken)) {
+  if (!(await otp.verify(String(email || '').trim(), 'reset', resetToken))) {
     return res.status(400).json({ error: 'That reset code is incorrect or has expired' });
   }
-  const row = users.byEmail(email);
+  const row = await users.byEmail(email);
   if (!row) return res.status(404).json({ error: 'Account not found' });
-  users.update(row.id, { password_hash: hashPassword(newPassword) });
+  await users.update(row.id, { password_hash: hashPassword(newPassword) });
   res.json({ ok: true });
 });
 
 // --------------------------------------------------------------- functions --
 
-app.post('/api/functions/:name', (req, res) => {
+app.post('/api/functions/:name', async (req, res, next) => {
   const { name } = req.params;
   const fn = functions[name];
   if (!fn) return res.status(404).json({ error: `Unknown function: ${name}` });
@@ -254,7 +254,7 @@ app.post('/api/functions/:name', (req, res) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
   try {
-    res.json(fn(req.body || {}, req.user));
+    res.json(await fn(req.body || {}, req.user));
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message || 'Something went wrong' });
   }
@@ -305,7 +305,7 @@ app.get('/api/geo/ip', requireAuth, async (req, res, next) => {
 
 // Runtime config the browser needs before it can render. Kept server-side so
 // tiles can be repointed with an env var instead of a rebuild.
-app.get('/api/config', (_req, res) => {
+app.get('/api/config', async (_req, res, next) => {
   res.json({
     tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     tileAttribution: process.env.KC_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors',
@@ -313,9 +313,11 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
-app.get('/api/health', (_req, res) =>
-  res.json({ ok: true, users: users.all().length, providers: store.count('Provider') })
-);
+app.get('/api/health', async (_req, res, next) => {
+  try {
+    res.json({ ok: true, users: (await users.all()).length, providers: await store.count('Provider') });
+  } catch (err) { next(err); }
+});
 
 app.use((err, _req, res, _next) => {
   console.error('[api]', err);

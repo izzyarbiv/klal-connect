@@ -1,63 +1,96 @@
-// SQLite-backed document store.
+// Postgres-backed document store.
 //
 // The app reads and writes ad-hoc fields across 18 entities, so records are
-// stored as documents: one row each, fields in a JSON blob. Adding a field is
+// stored as documents: one row each, fields in a jsonb blob. Adding a field is
 // not a migration. Only the columns every entity is sorted or scoped by are
 // lifted out of the blob into real columns.
-import Database from 'better-sqlite3';
-import path from 'node:path';
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
+//
+// Serverless note: this module is imported once per warm instance, so the pool
+// is created once and kept small. Against Supabase it must point at the
+// transaction pooler, not the direct connection — a serverless platform opens
+// far more short-lived connections than Postgres will accept directly.
+import pg from 'pg';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.KC_DATA_DIR || path.join(__dirname, 'data');
-fs.mkdirSync(DATA_DIR, { recursive: true });
+const { Pool } = pg;
 
-export const db = new Database(path.join(DATA_DIR, 'klal.db'));
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+const connectionString =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  'postgres://localhost:5432/klal_connect_dev';
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS records (
-    id            TEXT PRIMARY KEY,
-    entity        TEXT NOT NULL,
-    data          TEXT NOT NULL DEFAULT '{}',
-    created_date  TEXT NOT NULL,
-    updated_date  TEXT NOT NULL,
-    created_by_id TEXT,
-    created_by    TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_records_entity  ON records(entity);
-  CREATE INDEX IF NOT EXISTS idx_records_creator ON records(entity, created_by_id);
+// Supabase (and most hosted Postgres) require TLS; a local dev server does not.
+const isLocal = /localhost|127\.0\.0\.1/.test(connectionString);
 
-  CREATE TABLE IF NOT EXISTS users (
-    id            TEXT PRIMARY KEY,
-    email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    password_hash TEXT,
-    role          TEXT NOT NULL DEFAULT 'user',
-    verified      INTEGER NOT NULL DEFAULT 0,
-    data          TEXT NOT NULL DEFAULT '{}',
-    created_date  TEXT NOT NULL,
-    updated_date  TEXT NOT NULL
-  );
+export const pool = new Pool({
+  connectionString,
+  // Keep this low: every warm serverless instance holds its own pool, and the
+  // pooler's connection budget is shared across all of them.
+  max: Number(process.env.KC_PG_POOL_MAX || (process.env.VERCEL ? 1 : 10)),
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 10_000,
+  ssl: isLocal ? false : { rejectUnauthorized: false },
+});
 
-  CREATE TABLE IF NOT EXISTS geo_cache (
-    key        TEXT PRIMARY KEY,
-    value      TEXT NOT NULL,
-    expires_at INTEGER NOT NULL
-  );
+pool.on('error', (err) => console.error('[db] idle client error', err.message));
 
-  CREATE TABLE IF NOT EXISTS otp_codes (
-    email      TEXT NOT NULL,
-    code       TEXT NOT NULL,
-    purpose    TEXT NOT NULL,
-    expires_at INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_otp_email ON otp_codes(email, purpose);
-`);
+export const query = (text, params) => pool.query(text, params);
 
 export const nowISO = () => new Date().toISOString();
 export const newId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+
+// ---- schema -----------------------------------------------------------------
+
+let readyPromise = null;
+
+// Called once per process before the first query. Cheap enough to run on every
+// cold start, and it keeps deploys from needing a separate migration step.
+export function ready() {
+  readyPromise ??= (async () => {
+    await query(`
+      CREATE TABLE IF NOT EXISTS records (
+        id            TEXT PRIMARY KEY,
+        entity        TEXT NOT NULL,
+        data          JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_date  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_date  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_by_id TEXT,
+        created_by    TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_records_entity   ON records (entity, created_date DESC);
+      CREATE INDEX IF NOT EXISTS idx_records_creator  ON records (entity, created_by_id);
+      -- Containment queries on arbitrary document fields ride this index.
+      CREATE INDEX IF NOT EXISTS idx_records_data_gin ON records USING GIN (data jsonb_path_ops);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id            TEXT PRIMARY KEY,
+        email         TEXT NOT NULL,
+        password_hash TEXT,
+        role          TEXT NOT NULL DEFAULT 'user',
+        verified      BOOLEAN NOT NULL DEFAULT false,
+        data          JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_date  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_date  TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      -- Case-insensitive uniqueness: "A@b.com" and "a@b.com" are one account.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (lower(email));
+
+      CREATE TABLE IF NOT EXISTS otp_codes (
+        email      TEXT NOT NULL,
+        code       TEXT NOT NULL,
+        purpose    TEXT NOT NULL,
+        expires_at BIGINT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_otp_email ON otp_codes (lower(email), purpose);
+
+      CREATE TABLE IF NOT EXISTS geo_cache (
+        key        TEXT PRIMARY KEY,
+        value      JSONB NOT NULL,
+        expires_at BIGINT NOT NULL
+      );
+    `);
+  })();
+  return readyPromise;
+}
 
 // ---- record <-> row ---------------------------------------------------------
 
@@ -66,10 +99,10 @@ export const newId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 24);
 function toRecord(row) {
   if (!row) return null;
   return {
-    ...JSON.parse(row.data),
+    ...row.data,
     id: row.id,
-    created_date: row.created_date,
-    updated_date: row.updated_date,
+    created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
+    updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
     created_by_id: row.created_by_id,
     created_by: row.created_by,
   };
@@ -100,7 +133,7 @@ function applySort(rows, sort) {
   });
 }
 
-// Equality matching only — a scan of the call sites showed the app never uses
+// Equality matching. A scan of the call sites showed the app never uses
 // Mongo-style operators, so anything fancier would be dead code.
 function matches(record, query = {}) {
   return Object.entries(query).every(([k, want]) => {
@@ -111,61 +144,102 @@ function matches(record, query = {}) {
   });
 }
 
+// Filtering and sorting stay in JS so the semantics above are preserved exactly.
+// To keep that from meaning "fetch the whole table", the parts of a query that
+// map cleanly onto real columns are pushed into SQL first.
+const COLUMN_FIELDS = new Set(['id', 'created_by_id', 'created_by']);
+
+function buildWhere(entity, query = {}) {
+  const where = ['entity = $1'];
+  const params = [entity];
+  for (const [key, want] of Object.entries(query)) {
+    if (!COLUMN_FIELDS.has(key)) continue;
+    if (Array.isArray(want)) {
+      params.push(want);
+      where.push(`${key} = ANY($${params.length})`);
+    } else {
+      params.push(want);
+      where.push(`${key} = $${params.length}`);
+    }
+  }
+  return { text: where.join(' AND '), params };
+}
+
+async function fetchRows(entity, query) {
+  await ready();
+  const { text, params } = buildWhere(entity, query);
+  const { rows } = await pool.query(
+    `SELECT * FROM records WHERE ${text} ORDER BY created_date DESC`,
+    params
+  );
+  return rows.map(toRecord);
+}
+
 export const store = {
-  list(entity, sort, limit) {
-    const rows = db.prepare('SELECT * FROM records WHERE entity = ?').all(entity).map(toRecord);
+  async list(entity, sort, limit) {
+    const rows = await fetchRows(entity, {});
     const sorted = applySort(rows, sort || '-created_date');
     return limit ? sorted.slice(0, Number(limit)) : sorted;
   },
 
-  filter(entity, query, sort, limit) {
-    const rows = db.prepare('SELECT * FROM records WHERE entity = ?').all(entity).map(toRecord);
+  async filter(entity, query, sort, limit) {
+    const rows = await fetchRows(entity, query);
     const hits = rows.filter((r) => matches(r, query));
     const sorted = applySort(hits, sort || '-created_date');
     return limit ? sorted.slice(0, Number(limit)) : sorted;
   },
 
-  get(entity, id) {
-    return toRecord(db.prepare('SELECT * FROM records WHERE entity = ? AND id = ?').get(entity, id));
+  async get(entity, id) {
+    await ready();
+    const { rows } = await pool.query('SELECT * FROM records WHERE entity = $1 AND id = $2', [entity, id]);
+    return toRecord(rows[0]);
   },
 
-  create(entity, obj = {}, actor = null) {
+  async create(entity, obj = {}, actor = null) {
+    await ready();
     const id = obj.id || newId();
-    const ts = nowISO();
-    db.prepare(
-      `INSERT INTO records (id, entity, data, created_date, updated_date, created_by_id, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      id, entity, JSON.stringify(splitFields(obj)), ts, ts,
-      obj.created_by_id ?? actor?.id ?? null,
-      obj.created_by ?? actor?.email ?? null
+    const { rows } = await pool.query(
+      `INSERT INTO records (id, entity, data, created_by_id, created_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [
+        id,
+        entity,
+        JSON.stringify(splitFields(obj)),
+        obj.created_by_id ?? actor?.id ?? null,
+        obj.created_by ?? actor?.email ?? null,
+      ]
     );
-    return this.get(entity, id);
+    return toRecord(rows[0]);
   },
 
-  update(entity, id, patch = {}) {
-    const current = this.get(entity, id);
-    if (!current) return null;
-    const merged = { ...splitFields(current), ...splitFields(patch) };
-    db.prepare('UPDATE records SET data = ?, updated_date = ? WHERE entity = ? AND id = ?')
-      .run(JSON.stringify(merged), nowISO(), entity, id);
-    return this.get(entity, id);
+  async update(entity, id, patch = {}) {
+    await ready();
+    // Merge server-side so concurrent writers cannot clobber each other's
+    // fields by round-tripping a whole document through the client.
+    const { rows } = await pool.query(
+      `UPDATE records SET data = data || $3::jsonb, updated_date = now()
+       WHERE entity = $1 AND id = $2 RETURNING *`,
+      [entity, id, JSON.stringify(splitFields(patch))]
+    );
+    return toRecord(rows[0]);
   },
 
-  delete(entity, id) {
-    return db.prepare('DELETE FROM records WHERE entity = ? AND id = ?').run(entity, id).changes > 0;
+  async delete(entity, id) {
+    await ready();
+    const { rowCount } = await pool.query('DELETE FROM records WHERE entity = $1 AND id = $2', [entity, id]);
+    return rowCount > 0;
   },
 
-  updateMany(entity, query, patch = {}) {
+  async updateMany(entity, query, patch = {}) {
     // The app passes Mongo-ish { $set: {...} } here; accept both shapes.
     const fields = patch.$set ? patch.$set : patch;
-    const hits = this.filter(entity, query);
-    for (const hit of hits) this.update(entity, hit.id, fields);
+    const hits = await this.filter(entity, query);
+    for (const hit of hits) await this.update(entity, hit.id, fields);
     return hits.length;
   },
 
-  count(entity, query = {}) {
-    return this.filter(entity, query).length;
+  async count(entity, query = {}) {
+    return (await this.filter(entity, query)).length;
   },
 };
 
@@ -174,68 +248,87 @@ export const store = {
 export function userToPublic(row) {
   if (!row) return null;
   return {
-    ...JSON.parse(row.data),
+    ...row.data,
     id: row.id,
     email: row.email,
     role: row.role,
     verified: !!row.verified,
-    created_date: row.created_date,
-    updated_date: row.updated_date,
+    created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
+    updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
   };
 }
 
 export const users = {
-  byEmail(email) {
-    return db.prepare('SELECT * FROM users WHERE email = ?').get(String(email || '').trim());
+  async byEmail(email) {
+    await ready();
+    const { rows } = await pool.query('SELECT * FROM users WHERE lower(email) = lower($1)', [
+      String(email || '').trim(),
+    ]);
+    return rows[0] || null;
   },
-  byId(id) {
-    return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  async byId(id) {
+    await ready();
+    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    return rows[0] || null;
   },
-  create({ email, password_hash, role = 'user', verified = 0, ...rest }) {
-    const id = newId();
-    const ts = nowISO();
-    db.prepare(
-      `INSERT INTO users (id, email, password_hash, role, verified, data, created_date, updated_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(id, String(email).trim(), password_hash, role, verified ? 1 : 0, JSON.stringify(rest), ts, ts);
-    return this.byId(id);
-  },
-  update(id, patch = {}) {
-    const row = this.byId(id);
-    if (!row) return null;
-    const { email, role, verified, password_hash, ...rest } = patch;
-    const data = { ...JSON.parse(row.data), ...rest };
-    db.prepare(
-      `UPDATE users SET email = ?, role = ?, verified = ?, password_hash = ?, data = ?, updated_date = ?
-       WHERE id = ?`
-    ).run(
-      email ?? row.email,
-      role ?? row.role,
-      verified === undefined ? row.verified : (verified ? 1 : 0),
-      password_hash ?? row.password_hash,
-      JSON.stringify(data),
-      nowISO(),
-      id
+  async create({ email, password_hash, role = 'user', verified = false, ...rest }) {
+    await ready();
+    const { rows } = await pool.query(
+      `INSERT INTO users (id, email, password_hash, role, verified, data)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [newId(), String(email).trim(), password_hash, role, !!verified, JSON.stringify(rest)]
     );
-    return this.byId(id);
+    return rows[0];
   },
-  all() {
-    return db.prepare('SELECT * FROM users ORDER BY created_date DESC').all();
+  async update(id, patch = {}) {
+    await ready();
+    const { email, role, verified, password_hash, ...rest } = patch;
+    const { rows } = await pool.query(
+      `UPDATE users SET
+         email         = COALESCE($2, email),
+         role          = COALESCE($3, role),
+         verified      = COALESCE($4, verified),
+         password_hash = COALESCE($5, password_hash),
+         data          = data || $6::jsonb,
+         updated_date  = now()
+       WHERE id = $1 RETURNING *`,
+      [
+        id,
+        email ?? null,
+        role ?? null,
+        verified === undefined ? null : !!verified,
+        password_hash ?? null,
+        JSON.stringify(rest),
+      ]
+    );
+    return rows[0] || null;
+  },
+  async all() {
+    await ready();
+    const { rows } = await pool.query('SELECT * FROM users ORDER BY created_date DESC');
+    return rows;
   },
 };
 
 export const otp = {
-  issue(email, purpose, ttlMinutes = 15) {
+  async issue(email, purpose, ttlMinutes = 15) {
+    await ready();
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    db.prepare('DELETE FROM otp_codes WHERE email = ? AND purpose = ?').run(email, purpose);
-    db.prepare('INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES (?, ?, ?, ?)')
-      .run(email, code, purpose, Date.now() + ttlMinutes * 60_000);
+    await pool.query('DELETE FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2', [email, purpose]);
+    await pool.query('INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES ($1, $2, $3, $4)', [
+      email, code, purpose, Date.now() + ttlMinutes * 60_000,
+    ]);
     return code;
   },
-  verify(email, purpose, code) {
-    const row = db.prepare('SELECT * FROM otp_codes WHERE email = ? AND purpose = ?').get(email, purpose);
-    if (!row || row.expires_at < Date.now() || row.code !== String(code).trim()) return false;
-    db.prepare('DELETE FROM otp_codes WHERE email = ? AND purpose = ?').run(email, purpose);
+  async verify(email, purpose, code) {
+    await ready();
+    const { rows } = await pool.query(
+      'SELECT * FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2',
+      [email, purpose]
+    );
+    const row = rows[0];
+    if (!row || Number(row.expires_at) < Date.now() || row.code !== String(code).trim()) return false;
+    await pool.query('DELETE FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2', [email, purpose]);
     return true;
   },
 };
@@ -243,20 +336,28 @@ export const otp = {
 // ---- geocoding cache --------------------------------------------------------
 
 // Geocoding answers are stable and upstream providers are rate-limited (or
-// billed per call), so results are cached across restarts rather than in memory.
+// billed per call), so results are cached in the database rather than in memory
+// — a serverless instance rarely lives long enough for an in-process cache to
+// pay off, and every instance would keep its own copy.
 export const geoCache = {
-  get(key) {
-    const row = db.prepare('SELECT value, expires_at FROM geo_cache WHERE key = ?').get(key);
+  async get(key) {
+    await ready();
+    const { rows } = await pool.query('SELECT value, expires_at FROM geo_cache WHERE key = $1', [key]);
+    const row = rows[0];
     if (!row) return null;
-    if (row.expires_at < Date.now()) {
-      db.prepare('DELETE FROM geo_cache WHERE key = ?').run(key);
+    if (Number(row.expires_at) < Date.now()) {
+      await pool.query('DELETE FROM geo_cache WHERE key = $1', [key]);
       return null;
     }
-    try { return JSON.parse(row.value); } catch { return null; }
+    return row.value;
   },
-  set(key, value, ttlMs) {
-    db.prepare('INSERT OR REPLACE INTO geo_cache (key, value, expires_at) VALUES (?, ?, ?)')
-      .run(key, JSON.stringify(value), Date.now() + ttlMs);
+  async set(key, value, ttlMs) {
+    await ready();
+    await pool.query(
+      `INSERT INTO geo_cache (key, value, expires_at) VALUES ($1, $2, $3)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, expires_at = EXCLUDED.expires_at`,
+      [key, JSON.stringify(value), Date.now() + ttlMs]
+    );
     return value;
   },
 };

@@ -1,7 +1,7 @@
 // Seeds the categories the UI expects plus a small set of sample listings, so a
 // fresh install isn't an empty shell. Safe to re-run: it skips anything already
 // present rather than duplicating it.
-import { store, users } from './db.js';
+import { store, users, pool } from './db.js';
 import { hashPassword } from './auth.js';
 
 // `icon` must match a key in CategoryGrid's icon map, or the tile falls back to
@@ -74,21 +74,21 @@ const PROVIDERS = [
   },
 ];
 
-function seedCategories() {
+async function seedCategories() {
   let added = 0;
   for (const category of CATEGORIES) {
-    if (store.filter('Category', { name: category.name }).length) continue;
-    store.create('Category', { ...category, slug: slugify(category.name) });
+    if ((await store.filter('Category', { name: category.name })).length) continue;
+    await store.create('Category', { ...category, slug: slugify(category.name) });
     added++;
   }
   return added;
 }
 
-function seedProviders(owner) {
+async function seedProviders(owner) {
   let added = 0;
   for (const provider of PROVIDERS) {
-    if (store.filter('Provider', { name: provider.name }).length) continue;
-    store.create(
+    if ((await store.filter('Provider', { name: provider.name })).length) continue;
+    await store.create(
       'Provider',
       {
         ...provider,
@@ -106,12 +106,13 @@ function seedProviders(owner) {
   return added;
 }
 
-const owner = users.all()[0] || null;
-const categories = seedCategories();
-const providers = seedProviders(owner ? { id: owner.id, email: owner.email } : null);
+const owner = (await users.all())[0] || null;
+const categories = await seedCategories();
+const providers = await seedProviders(owner ? { id: owner.id, email: owner.email } : null);
 
 if (!owner) {
   console.log('[seed] No user yet — register in the app; the first account becomes admin.');
 }
-console.log(`[seed] categories added: ${categories} (total ${store.count('Category')})`);
-console.log(`[seed] providers  added: ${providers} (total ${store.count('Provider')})`);
+console.log(`[seed] categories added: ${categories} (total ${await store.count('Category')})`);
+console.log(`[seed] providers  added: ${providers} (total ${await store.count('Provider')})`);
+await pool.end();

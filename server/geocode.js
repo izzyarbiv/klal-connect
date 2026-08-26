@@ -290,7 +290,7 @@ export async function geolocateIp(ip) {
     country_code: d.country_code || d.country,
     label: d.city,
   });
-  return geoCache.set(key, result, IP_TTL);
+  return await geoCache.set(key, result, IP_TTL);
 }
 
 export { GeoError, PROVIDER };
