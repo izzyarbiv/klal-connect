@@ -241,12 +241,12 @@ export async function reverseGeocode(lat, lon) {
   // near-identical lookups a moving device produces into one cache entry. It
   // also means we never persist a user's exact position as a cache key.
   const key = `rev:${PROVIDER}:${latitude.toFixed(2)},${longitude.toFixed(2)}`;
-  const hit = geoCache.get(key);
+  const hit = await geoCache.get(key);
   // Coordinates are the caller's own; only the place name is cached.
   if (hit) return { ...hit, latitude, longitude, timezone: tzFor(latitude, longitude) };
 
   const result = await call(() => activeProvider().reverse(latitude, longitude));
-  geoCache.set(key, { city: result.city, country_code: result.country_code, label: result.label }, REVERSE_TTL);
+  await geoCache.set(key, { city: result.city, country_code: result.country_code, label: result.label }, REVERSE_TTL);
   return result;
 }
 
@@ -256,11 +256,11 @@ export async function searchPlaces(query, limit = 8) {
   const capped = Math.min(Math.max(Number(limit) || 8, 1), 10);
 
   const key = `search:${PROVIDER}:${capped}:${q.toLowerCase()}`;
-  const hit = geoCache.get(key);
+  const hit = await geoCache.get(key);
   if (hit) return hit;
 
   const results = await call(() => activeProvider().search(q, capped));
-  geoCache.set(key, results, SEARCH_TTL);
+  await geoCache.set(key, results, SEARCH_TTL);
   return results;
 }
 
@@ -280,7 +280,7 @@ export async function geolocateIp(ip) {
   }
 
   const key = `ip:${clean}`;
-  const hit = geoCache.get(key);
+  const hit = await geoCache.get(key);
   if (hit) return hit;
 
   const d = await getJSON(IP_ENDPOINT.replace('{ip}', encodeURIComponent(clean)));

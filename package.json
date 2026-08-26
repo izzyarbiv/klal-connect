@@ -13,7 +13,7 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "preview": "vite preview",
-    "test": "KC_DATA_DIR=${TMPDIR:-/tmp}/kc-geotest node server/geocode.test.mjs",
+    "test": "DATABASE_URL=${KC_TEST_DATABASE_URL:-postgres://localhost:5432/klal_connect_test} node server/geocode.test.mjs",
     "create-admin": "node --env-file-if-exists=.env.local server/create-admin.js"
   },
   "dependencies": {
