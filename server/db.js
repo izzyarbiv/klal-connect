@@ -13,26 +13,70 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-const connectionString =
+const rawConnectionString =
   process.env.DATABASE_URL ||
   process.env.POSTGRES_URL ||
   'postgres://localhost:5432/klal_connect_dev';
 
-// Supabase (and most hosted Postgres) require TLS; a local dev server does not.
-const isLocal = /localhost|127\.0\.0\.1/.test(connectionString);
+// pg merges the parsed connection string OVER the config object, and
+// pg-connection-string replaces ssl with {} whenever any sslmode/sslcert param
+// is present. So a URL ending in ?sslmode=require silently discards the ssl
+// settings below. Strip those params and configure TLS in code instead.
+function stripSslParams(url) {
+  try {
+    const parsed = new URL(url);
+    let found = false;
+    for (const key of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert']) {
+      if (parsed.searchParams.has(key)) { parsed.searchParams.delete(key); found = true; }
+    }
+    if (found) {
+      console.warn('[db] stripped sslmode/ssl* from the connection string; TLS is configured in code');
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+const connectionString = stripSslParams(rawConnectionString);
+
+// A hosted Postgres requires TLS; a local dev server does not.
+const isLocal = /@?(localhost|127\.0\.0\.1)[:/]/.test(connectionString);
 
 export const pool = new Pool({
   connectionString,
-  // Keep this low: every warm serverless instance holds its own pool, and the
-  // pooler's connection budget is shared across all of them.
-  max: Number(process.env.KC_PG_POOL_MAX || (process.env.VERCEL ? 1 : 10)),
-  idleTimeoutMillis: 10_000,
+  // Certificates are verified. Supabase's pooler presents a publicly trusted
+  // cert, so there is no reason to accept an unverified one — doing that would
+  // leave the connection open to interception.
+  ssl: isLocal ? false : { rejectUnauthorized: true },
+  // Not 1: a single instance serves concurrent requests, so a pool of one
+  // serializes them. Not 10 either — the pooler's budget is shared across every
+  // warm instance.
+  max: Number(process.env.KC_PG_POOL_MAX || (process.env.VERCEL ? 3 : 10)),
+  idleTimeoutMillis: process.env.VERCEL ? 5_000 : 10_000,
   connectionTimeoutMillis: 10_000,
-  ssl: isLocal ? false : { rejectUnauthorized: false },
+  // A query that hangs would otherwise hold a pooler backend until the function
+  // times out, starving every other instance.
+  statement_timeout: 15_000,
+  allowExitOnIdle: true,
 });
+
+// Lets Vercel drain the pool before freezing an instance. Optional dependency:
+// absent locally, present on Vercel.
+if (process.env.VERCEL) {
+  try {
+    const { attachDatabasePool } = await import('@vercel/functions');
+    attachDatabasePool(pool);
+  } catch {
+    /* not installed — the pool still works, it just is not drained early */
+  }
+}
 
 pool.on('error', (err) => console.error('[db] idle client error', err.message));
 
+// Deliberately positional-only. Passing a `name` here would turn on server-side
+// prepared statements, which Supabase's transaction pooler does not support
+// ("prepared statement ... already exists").
 export const query = (text, params) => pool.query(text, params);
 
 export const nowISO = () => new Date().toISOString();

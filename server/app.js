@@ -261,15 +261,21 @@ app.post('/api/functions/:name', async (req, res, next) => {
 
 // Buffered in memory rather than written to disk: on a serverless host there
 // is no durable disk to write to, and the storage layer needs the bytes anyway.
+//
+// 4MB, not 8: Vercel rejects any request body over 4.5MB at the platform edge
+// with an opaque 413 before the function runs. Staying under that means the
+// user gets our message instead of a Vercel error page.
+const MAX_UPLOAD_MB = Number(process.env.KC_MAX_UPLOAD_MB || 4);
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 },
   fileFilter: (_req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
 });
 
 app.post('/api/upload', requireAuth, upload.single('file'), async (req, res, next) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Please choose an image file under 8MB.' });
+    if (!req.file) return res.status(400).json({ error: `Please choose an image file under ${MAX_UPLOAD_MB}MB.` });
     res.json({ file_url: await putFile(req.file.buffer, req.file.mimetype) });
   } catch (err) { next(err); }
 });
@@ -322,6 +328,9 @@ app.get('/api/health', async (_req, res, next) => {
 });
 
 app.use((err, _req, res, _next) => {
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: `That image is too large. Please choose one under ${MAX_UPLOAD_MB}MB.` });
+  }
   console.error('[api]', err);
   res.status(err.statusCode || 500).json({ error: err.message || 'Server error' });
 });
