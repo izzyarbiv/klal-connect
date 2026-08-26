@@ -2,13 +2,21 @@
   "name": "Klal Connect",
   "short_name": "Klal Connect",
   "description": "A community-powered platform for finding trusted Jewish professionals, businesses, and resources in your area. Connect with your community, discover local services, and support those who help us grow, all in one place.",
-  "icons": [
-    { "src": "/brand/logo.jpg", "sizes": "192x192", "type": "image/jpeg" },
-    { "src": "/brand/logo.jpg", "sizes": "512x512", "type": "image/jpeg" }
-  ],
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "theme_color": "#0D3B44",
-  "background_color": "#0B1F24",
-  "scope": "/"
+  "background_color": "#101C1E",
+  "categories": ["business", "social", "lifestyle"],
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Directory", "short_name": "Directory", "url": "/directory", "icons": [{ "src": "/brand/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Community feed", "short_name": "Feed", "url": "/feed", "icons": [{ "src": "/brand/icon-192.png", "sizes": "192x192" }] }
+  ]
 }
