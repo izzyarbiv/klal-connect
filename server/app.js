@@ -13,6 +13,8 @@ import {
   hashPassword, checkPassword, signToken, deliverCode,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
+import { isDemoMode } from './db.js';
+import { ensureDemoData } from './demo-seed.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 
@@ -23,6 +25,11 @@ const app = express();
 if (process.env.KC_TRUST_PROXY === '1') app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
+// A demo instance seeds itself on first request; every cold start is empty.
+if (isDemoMode) {
+  app.use((req, res, next) => { ensureDemoData().then(() => next(), next); });
+}
+
 app.use(attachUser);
 
 // ---------------------------------------------------------------- entities --

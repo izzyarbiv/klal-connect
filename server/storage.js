@@ -23,7 +23,26 @@ const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'uploads';
 export const usingObjectStorage = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
 const UPLOAD_DIR = process.env.KC_UPLOAD_DIR || path.join(__dirname, 'uploads');
-if (!usingObjectStorage) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// Created on first write, not at import. A serverless filesystem is read-only,
+// so doing this at module load crashed the entire API — including every read —
+// on a deployment that simply had not configured object storage yet.
+let localDirReady = false;
+function ensureLocalDir() {
+  if (localDirReady) return;
+  try {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    localDirReady = true;
+  } catch (err) {
+    const e = new Error(
+      'Uploads are not configured: this filesystem is read-only. ' +
+      'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to store files in object storage.'
+    );
+    e.statusCode = 503;
+    e.cause = err;
+    throw e;
+  }
+}
 
 const EXT_BY_TYPE = {
   'image/jpeg': '.jpg',
@@ -60,6 +79,7 @@ async function putSupabase(buffer, mimetype) {
 }
 
 async function putLocal(buffer, mimetype) {
+  ensureLocalDir();
   const name = safeName(mimetype);
   await fs.promises.writeFile(path.join(UPLOAD_DIR, name), buffer);
   return `/api/files/${name}`;
