@@ -200,6 +200,26 @@ let configPromise = null;
 // Cached for the page's lifetime — it is static per deployment.
 const getConfig = () => (configPromise ??= request('GET', '/config').catch(() => ({})));
 
+/**
+ * On a demo instance, adopt the shared guest session so a visitor can browse the
+ * signed-in parts of the app without hitting a login wall. Does nothing on a
+ * real deployment, and never replaces an existing session.
+ * @returns {Promise<boolean>} whether a demo session was adopted
+ */
+export async function adoptDemoSession() {
+  if (tokenStore.get()) return false;
+  const { demoMode } = await getConfig();
+  if (!demoMode) return false;
+  try {
+    const res = await request('POST', '/auth/demo-session');
+    if (!res?.access_token) return false;
+    tokenStore.set(res.access_token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ------------------------------------------------------------ integrations --
 
 const integrations = {
