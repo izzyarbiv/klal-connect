@@ -11,6 +11,11 @@ import { hashPassword } from './auth.js';
 const DEMO_EMAIL = process.env.KC_DEMO_EMAIL || 'demo@klalconnect.app';
 const DEMO_PASSWORD = process.env.KC_DEMO_PASSWORD || 'demo1234';
 
+// Visitors are signed in as this account so they can browse the whole app
+// without a login wall. Deliberately an ordinary member, not the admin: the
+// admin tools stay behind the password.
+export const GUEST_EMAIL = 'guest@klalconnect.app';
+
 let started = null;
 
 export function ensureDemoData() {
@@ -30,6 +35,15 @@ export function ensureDemoData() {
         verified: true,
         full_name: 'Demo Admin',
         headline: 'Klal Connect demo account',
+      });
+      await users.create({
+        id: stableId('demo-user', GUEST_EMAIL),
+        email: GUEST_EMAIL,
+        password_hash: hashPassword(DEMO_PASSWORD),
+        role: 'user',
+        verified: true,
+        full_name: 'Guest',
+        headline: 'Browsing the Klal Connect demo',
       });
       await seedAll({ id: admin.id, email: admin.email });
       await seedCommunity(admin);

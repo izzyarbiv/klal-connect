@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { api, tokenStore } from '@/api/client';
+import { api, tokenStore, adoptDemoSession } from '@/api/client';
 
 // Session state for the app.
 //
@@ -16,6 +16,12 @@ export const AuthProvider = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
 
   const checkUserAuth = useCallback(async () => {
+    // A demo instance hands out a guest session so the whole app is browsable
+    // without signing in. Returns false everywhere else, leaving the flow below
+    // untouched.
+    if (!tokenStore.get()) {
+      try { await adoptDemoSession(); } catch { /* fall through to signed-out */ }
+    }
     if (!tokenStore.get()) {
       setUser(null);
       setIsAuthenticated(false);

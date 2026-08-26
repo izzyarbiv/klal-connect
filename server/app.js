@@ -14,7 +14,7 @@ import {
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
 import { isDemoMode } from './db.js';
-import { ensureDemoData } from './demo-seed.js';
+import { ensureDemoData, GUEST_EMAIL } from './demo-seed.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 
@@ -178,6 +178,27 @@ app.get('/api/users/:id', async (req, res, next) => {
 });
 
 // -------------------------------------------------------------------- auth --
+
+// Public runtime config. Lets the client discover it is talking to a demo
+// instance without baking that into the build.
+app.get('/api/config', (_req, res) => res.json({ demoMode: isDemoMode }));
+
+// Issues a session for the shared guest account so a demo visitor can browse
+// the signed-in parts of the app without a login wall.
+//
+// Only mounted when KC_DEMO_MODE is on, where the data is in-memory and
+// disposable. On a real deployment this route does not exist at all.
+if (isDemoMode) {
+  app.post('/api/auth/demo-session', async (_req, res, next) => {
+    try {
+      const guest = await users.byEmail(GUEST_EMAIL);
+      if (!guest) return res.status(503).json({ error: 'Demo data is still loading.' });
+      res.json({ access_token: signToken(guest), user: userToPublic(guest) });
+    } catch (err) {
+      next(err);
+    }
+  });
+}
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json(req.user));
 
