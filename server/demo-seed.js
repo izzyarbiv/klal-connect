@@ -8,13 +8,13 @@ import { stableId } from './db-shared.js';
 import { seedAll } from './seed-data.js';
 import { hashPassword } from './auth.js';
 
-const DEMO_EMAIL = process.env.KC_DEMO_EMAIL || 'demo@klalconnect.app';
+const DEMO_EMAIL = process.env.KC_DEMO_EMAIL || 'demo@klal.app';
 const DEMO_PASSWORD = process.env.KC_DEMO_PASSWORD || 'demo1234';
 
 // Visitors are signed in as this account so they can browse the whole app
 // without a login wall. Deliberately an ordinary member, not the admin: the
 // admin tools stay behind the password.
-export const GUEST_EMAIL = 'guest@klalconnect.app';
+export const GUEST_EMAIL = 'guest@klal.app';
 
 let started = null;
 
@@ -34,7 +34,7 @@ export function ensureDemoData() {
         role: 'admin',
         verified: true,
         full_name: 'Demo Admin',
-        headline: 'Klal Connect demo account',
+        headline: 'Klal demo account',
       });
       await users.create({
         id: stableId('demo-user', GUEST_EMAIL),
@@ -43,7 +43,7 @@ export function ensureDemoData() {
         role: 'user',
         verified: true,
         full_name: 'Guest',
-        headline: 'Browsing the Klal Connect demo',
+        headline: 'Browsing the Klal demo',
       });
       await seedAll({ id: admin.id, email: admin.email });
       await seedCommunity(admin);

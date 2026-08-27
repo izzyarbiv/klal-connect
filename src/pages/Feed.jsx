@@ -15,7 +15,7 @@ export default function Feed(){
       <div className="mx-auto w-full max-w-2xl space-y-5">
         <FeedComposer onPosted={load} user={user}/>
         {loading&&<div className="loading">Loading feed…</div>}
-        {!loading&&posts?.length===0&&<div className="empty"><p>Be the first to post to the Klal Connect feed.</p></div>}
+        {!loading&&posts?.length===0&&<div className="empty"><p>Be the first to post to the Klal feed.</p></div>}
         {posts?.map(p=><FeedPostItem key={p.id} post={p} user={user}/>)}
       </div>
       <aside className="hidden space-y-5 lg:block">

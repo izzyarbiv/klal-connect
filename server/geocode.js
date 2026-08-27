@@ -18,7 +18,7 @@ import { geoCache } from './db.js';
 const PROVIDER = (process.env.KC_GEOCODER || 'nominatim').toLowerCase();
 const API_KEY = process.env.KC_GEOCODER_KEY || '';
 const CONTACT = process.env.KC_GEOCODER_CONTACT || 'admin@example.com';
-const USER_AGENT = process.env.KC_GEOCODER_UA || `KlalConnect/1.0 (${CONTACT})`;
+const USER_AGENT = process.env.KC_GEOCODER_UA || `Klal/1.0 (${CONTACT})`;
 
 const REVERSE_TTL = 30 * 24 * 60 * 60 * 1000; // a place's name rarely changes
 const SEARCH_TTL = 7 * 24 * 60 * 60 * 1000;

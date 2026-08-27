@@ -1,4 +1,4 @@
-// Klal Connect API client.
+// Klal API client.
 //
 // One object — entities / auth / functions / integrations — is the app's entire
 // interface to the server. Components import `api` and never touch fetch, so

@@ -8,7 +8,7 @@ export default function Home(){
     <section className="hero"><div className="page-shell py-16 md:py-28">
       <span className="eyebrow">BUILT BY THE COMMUNITY, FOR THE COMMUNITY</span>
       <h1 className="mt-5 max-w-3xl font-display text-4xl font-bold tracking-tight text-white md:text-6xl">Helping each other grow.<br/><span className="text-[#F3C66A]">Strengthening our communities.</span></h1>
-      <p className="mt-5 max-w-2xl text-lg text-white/85">Klal Connect is a single home for the frum Jewish community to find trusted businesses, services, and resources — and to put your own business in front of the klal.</p>
+      <p className="mt-5 max-w-2xl text-lg text-white/85">Klal is a single home for the frum Jewish community to find trusted businesses, services, and resources — and to put your own business in front of the klal.</p>
       <div className="mt-8"><SearchPanel/></div>
       <div className="mt-5 flex flex-wrap gap-3">
         <Link to="/directory" className="inline-flex items-center gap-2 rounded-xl bg-[#F3C66A] px-5 py-3 font-bold text-brand-navy"><Search size={17}/>Browse the directory</Link>
@@ -19,7 +19,7 @@ export default function Home(){
     <div className="page-shell space-y-16 py-14">
       <section className="mx-auto max-w-3xl text-center">
         <h2 className="title">One platform. Two ways to use it.</h2>
-        <p className="mt-4 text-lg leading-8 text-brand-body">You don't have to choose. Some people come to Klal Connect just to <strong className="text-brand-navy">find what they need</strong>. Others use it to <strong className="text-brand-navy">grow their business and be seen</strong>. Do whichever fits you.</p>
+        <p className="mt-4 text-lg leading-8 text-brand-body">You don't have to choose. Some people come to Klal just to <strong className="text-brand-navy">find what they need</strong>. Others use it to <strong className="text-brand-navy">grow their business and be seen</strong>. Do whichever fits you.</p>
       </section>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -39,7 +39,7 @@ export default function Home(){
       <section className="rounded-[2rem] bg-brand-canvas p-7 text-center ring-1 ring-brand-line md:p-12">
         <ShieldCheck size={28} className="mx-auto text-brand-teal"/>
         <h2 className="mt-4 title">Built on trust, not reviews</h2>
-        <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews, no rating wars. Klal Connect shows community usage and positive experiences, with corrections handled privately. Good connections support families, livelihoods, and local institutions.</p>
+        <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews, no rating wars. Klal shows community usage and positive experiences, with corrections handled privately. Good connections support families, livelihoods, and local institutions.</p>
         <Link to="/add" className="mt-6 inline-flex items-center gap-2 primary"><ArrowRight size={16}/>Add your listing</Link>
       </section>
     </div>

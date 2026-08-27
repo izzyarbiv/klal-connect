@@ -1,4 +1,4 @@
-// Klal Connect API — entities, auth, business functions and uploads.
+// Klal API — entities, auth, business functions and uploads.
 //
 // Exports the Express app without listening, so the same code serves both the
 // local dev server (server/index.js) and a serverless function (api/index.js).

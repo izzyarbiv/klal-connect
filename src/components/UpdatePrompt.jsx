@@ -33,7 +33,7 @@ export default function UpdatePrompt() {
   return (
     <div className="fixed inset-x-3 bottom-3 z-[110] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-brand-navy px-4 py-3 text-sm text-white shadow-lg">
       <RefreshCw size={16} className="shrink-0" />
-      <span className="flex-1">A new version of Klal Connect is ready.</span>
+      <span className="flex-1">A new version of Klal is ready.</span>
       <button
         onClick={() => update?.(true)}
         className="shrink-0 rounded-xl bg-brand-gold px-3 py-1.5 text-xs font-bold text-brand-gold-ink"

@@ -47,7 +47,7 @@ export default function ProviderDetail(){
         <PositiveForm provider={provider}/>
       </div>
       <aside className="space-y-5">
-        <section className="panel"><ProviderActions provider={provider}/><div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 text-center"><Stat n={provider.usage_count||0} label="Community uses"/><Stat n={provider.save_count||0} label="Saves"/></div><p className="mt-4 text-xs text-brand-muted">Verified status, when shown, is controlled by Klal Connect administrators.</p></section>
+        <section className="panel"><ProviderActions provider={provider}/><div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5 text-center"><Stat n={provider.usage_count||0} label="Community uses"/><Stat n={provider.save_count||0} label="Saves"/></div><p className="mt-4 text-xs text-brand-muted">Verified status, when shown, is controlled by Klal administrators.</p></section>
         <ReportForm provider={provider}/>
         <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>
       </aside>

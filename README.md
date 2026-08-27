@@ -1,4 +1,4 @@
-# Klal Connect
+# Klal
 
 A community-powered platform for finding trusted Jewish professionals, businesses, and
 resources in your area.
@@ -106,7 +106,7 @@ are stored as documents (a JSON blob per record), so adding a field is not a mig
 **https://klal-connect.vercel.app** — no sign-in needed. Visitors are given a shared
 guest session automatically, so the whole app (feed, people, messages, saved, profile)
 is browsable straight away. To see the admin screens, sign in as
-`demo@klalconnect.app` / `demo1234`.
+`demo@klal.app` / `demo1234`.
 
 This deployment runs with `KC_DEMO_MODE=1`: there is no database attached, so the
 data lives in each serverless instance's memory. It seeds itself on cold start, and

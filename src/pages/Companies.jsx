@@ -30,7 +30,7 @@ export default function Companies(){
       <div>
         <span className="eyebrow dark">COMMUNITY</span>
         <h1 className="title">Companies</h1>
-        <p className="helper">Company pages from across the Klal Connect community.</p>
+        <p className="helper">Company pages from across Klal.</p>
       </div>
       <Link to="/create-company" className="primary"><Plus size={16}/>Create a page</Link>
     </div>
