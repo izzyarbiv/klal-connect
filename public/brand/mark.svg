@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="Klal">
+  <!-- A kaf, the initial of כלל, holding a single point.
+       klal u'prat: the whole, and the individual within it. -->
+  <path d="M17 17 H39 Q49 17 49 28 V36 Q49 47 39 47 H17"
+        stroke="currentColor" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="30" cy="32" r="4.6" fill="#E9B44C"/>
+</svg>
