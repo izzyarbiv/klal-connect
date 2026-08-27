@@ -3,7 +3,7 @@ import { api } from '@/api/client';
 import { Search, LocateFixed } from 'lucide-react';
 
 export default function LocationPicker({ user }) {
-  const [lat, setLat] = useState(user.latitude ?? null),[lon, setLon] = useState(user.longitude ?? null),[tz, setTz] = useState(user.timezone || ''),[city, setCity] = useState(user.city || ''),[country, setCountry] = useState(user.country_code || ''),[candle, setCandle] = useState(user.candle_lighting_offset_minutes != null ? String(user.candle_lighting_offset_minutes) : 'auto'),[havdalah, setHavdalah] = useState(user.havdalah_method || '50'),[readOnly, setReadOnly] = useState(!!user.shabbos_read_only),[q, setQ] = useState(''),[results, setResults] = useState([]),[busy, setBusy] = useState(false),[saved, setSaved] = useState(false),[status, setStatus] = useState(null),[err, setErr] = useState('');
+  const [lat, setLat] = useState(user.latitude ?? null),[lon, setLon] = useState(user.longitude ?? null),[tz, setTz] = useState(user.timezone || ''),[city, setCity] = useState(user.city || ''),[country, setCountry] = useState(user.country_code || ''),[candle, setCandle] = useState(user.candle_lighting_offset_minutes != null ? String(user.candle_lighting_offset_minutes) : 'auto'),[havdalah, setHavdalah] = useState(user.havdalah_method || '50'),[readOnly, setReadOnly] = useState(user.shabbos_full_lock !== true),[q, setQ] = useState(''),[results, setResults] = useState([]),[busy, setBusy] = useState(false),[saved, setSaved] = useState(false),[status, setStatus] = useState(null),[err, setErr] = useState('');
 
   const loadStatus = async () => {try {const r = await api.functions.invoke('getShabbosStatus', {});setStatus(r.data);} catch {}};
   useEffect(() => {loadStatus();}, []);
@@ -60,7 +60,7 @@ export default function LocationPicker({ user }) {
   const save = async () => {
     setErr('');
     if (lat == null || lon == null || !tz) {setErr('Location and timezone are required.');return;}
-    await api.auth.updateMe({ latitude: lat, longitude: lon, timezone: tz, city, country_code: country, candle_lighting_offset_minutes: candle === 'auto' ? null : Number(candle), havdalah_method: havdalah, shabbos_read_only: readOnly, shabbos_mode_source: 'manual' });
+    await api.auth.updateMe({ latitude: lat, longitude: lon, timezone: tz, city, country_code: country, candle_lighting_offset_minutes: candle === 'auto' ? null : Number(candle), havdalah_method: havdalah, shabbos_full_lock: !readOnly, shabbos_mode_source: 'manual' });
     setSaved(true);setTimeout(() => setSaved(false), 1500);loadStatus();
   };
   const fmt = (ms) => {if (!ms || !status?.tzid) return '—';try {return new Intl.DateTimeFormat('en-US', { timeZone: status.tzid, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(ms));} catch {return new Date(ms).toLocaleString();}};
@@ -83,7 +83,7 @@ export default function LocationPicker({ user }) {
       <label>Timezone (IANA)<input className="field" value={tz} onChange={(e) => setTz(e.target.value)} placeholder="America/New_York" /></label>
       <label>Candle lighting offset<select className="field" value={candle} onChange={(e) => setCandle(e.target.value)}><option value="auto">Auto (city default)</option><option value="15">15 min</option><option value="18">18 min</option><option value="20">20 min</option><option value="22">22 min</option><option value="30">30 min</option><option value="40">40 min</option></select></label>
       <label>Havdalah method<select className="field" value={havdalah} onChange={(e) => setHavdalah(e.target.value)}><option value="42">42 min</option><option value="50">50 min</option><option value="72">72 min</option><option value="tzeis_8_5">Tzeis 8.5°</option></select></label>
-      <label>Shabbos mode<select className="field" value={readOnly ? 'read' : 'lock'} onChange={(e) => setReadOnly(e.target.value === 'read')}><option value="lock">Full lock (default)</option><option value="read">Read-only</option></select></label>
+      <label>Shabbos mode<select className="field" value={readOnly ? 'read' : 'lock'} onChange={(e) => setReadOnly(e.target.value === 'read')}><option value="read">Read-only (default) — browse, but nothing can be posted</option><option value="lock">Full lock — the app closes entirely</option></select></label>
     </div>
     {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
     <div className="flex items-center gap-3"><button onClick={save} className="primary">Save location</button>{saved && <span className="text-sm font-semibold text-brand-teal">Saved</span>}</div>

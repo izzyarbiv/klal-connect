@@ -8,6 +8,20 @@ import { store } from './db.js';
 
 const DAY = 86_400_000;
 
+// The global override is read on every status call and changes about once a
+// year, so a short cache removes a database round trip from the hottest path
+// while still letting an admin's change take effect promptly.
+const OVERRIDE_TTL_MS = Number(process.env.KC_SHABBOS_OVERRIDE_TTL_MS || 30_000);
+let overrideCache = { value: false, readAt: 0 };
+
+async function readGlobalOverride() {
+  const now = Date.now();
+  if (now - overrideCache.readAt < OVERRIDE_TTL_MS) return overrideCache.value;
+  const value = (await store.filter('Setting', { key: 'shabbos_global_override' }))[0]?.value === 'true';
+  overrideCache = { value, readAt: now };
+  return value;
+}
+
 function locationFor(profile) {
   const { latitude, longitude, timezone, city, country_code } = profile;
   if (latitude == null || longitude == null) return null;
@@ -41,8 +55,7 @@ function havdalahOptions(method) {
  * @param now epoch ms
  */
 export async function computeShabbosStatus(profile = {}, now = Date.now()) {
-  const globalOverride =
-    (await store.filter('Setting', { key: 'shabbos_global_override' }))[0]?.value === 'true';
+  const globalOverride = await readGlobalOverride();
 
   if (globalOverride || profile.admin_override) {
     return { adminOverride: true, isRestricted: false, hasLocation: true };
@@ -114,7 +127,11 @@ export async function computeShabbosStatus(profile = {}, now = Date.now()) {
     hasLocation: true,
     adminOverride: false,
     isRestricted,
-    readOnly: !!profile.shabbos_read_only,
+    // Read-only unless the user has explicitly asked for a full lock. Reading is
+    // not melacha, and a hard lock on a community directory is worst exactly
+    // when it matters most — someone looking up a doctor or the medical
+    // equipment gemach on Shabbos. The write-gate is what this feature is for.
+    readOnly: profile.shabbos_full_lock !== true,
     startsAt,
     endsAt,
     nextChange,

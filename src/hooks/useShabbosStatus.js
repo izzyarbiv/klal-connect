@@ -15,6 +15,7 @@ import { api } from "@/api/client";
 // doing the tampering, and the real gate is assertWritable on the server,
 // which refuses writes regardless of what the client believes.
 const CACHE_KEY = "kc_shabbos_last";
+const POLL_MS = 30 * 60 * 1000;
 
 // Location and zmanim settings change which times apply, so a cached answer is
 // only reusable for the profile it was computed for.
@@ -68,7 +69,13 @@ export function useShabbosStatus() {
   useEffect(() => {
     alive.current = true;
     refresh();
-    const id = setInterval(refresh, 60_000);
+    // Polling is a safety net, not the mechanism. The response carries absolute
+    // boundaries, shabbosState decides from the clock, and there is a timer
+    // aligned to the next boundary plus wake listeners below — so a 60s poll
+    // bought nothing and cost an API call per user per minute (1.4M/day at a
+    // thousand users). This interval only exists to pick up a changed location
+    // or an admin override.
+    const id = setInterval(refresh, POLL_MS);
 
     // Timers are throttled or frozen in a backgrounded tab — iOS freezes a
     // standalone PWA's JS within seconds — so returning to the app must

@@ -87,6 +87,19 @@ async function seedCommunity(admin) {
     }));
   }
 
+  // Connect the guest to everyone, so the demo shows the connections list and
+  // messaging rather than an empty state.
+  const guest = await users.byEmail(GUEST_EMAIL);
+  for (const member of authors) {
+    if (!guest || member.id === guest.id) continue;
+    await store.create('Connection', {
+      id: stableId('demo-conn', guest.id, member.id),
+      requester_id: guest.id,
+      recipient_id: member.id,
+      status: 'accepted',
+    }, { id: guest.id, email: guest.email });
+  }
+
   for (const [i, post] of POSTS.entries()) {
     const author = authors[(i + 1) % authors.length];
     await store.create('FeedPost', {

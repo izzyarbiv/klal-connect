@@ -23,6 +23,16 @@ const fail = (message, statusCode = 400) => {
 
 // Author fields are denormalized onto posts/comments because the feed renders
 // them without a second lookup.
+async function canMessage(senderId, recipientId) {
+  const [outbound, inbound] = await Promise.all([
+    store.filter('Connection', { requester_id: senderId, recipient_id: recipientId, status: 'accepted' }),
+    store.filter('Connection', { requester_id: recipientId, recipient_id: senderId, status: 'accepted' }),
+  ]);
+  if (outbound.length || inbound.length) return true;
+  const existing = await store.filter('Message', { sender_id: recipientId, recipient_id: senderId });
+  return existing.length > 0;
+}
+
 const authorFields = (user) => ({
   author_name: user.full_name || user.email,
   author_headline: user.headline || '',
@@ -241,6 +251,15 @@ export const functions = {
     if (!text) fail('Write a message first.');
     if (recipient_id === user.id) fail('You cannot message yourself.');
     if (!(await users.byId(recipient_id))) fail('That member could not be found.', 404);
+
+    // Only people you are connected to. The UI already hides the message button
+    // otherwise, but that is not enforcement — without this a direct POST could
+    // reach anyone, which is how a community app turns into a cold-outreach
+    // channel. An existing thread also qualifies, so a conversation started
+    // before a connection lapsed can still be replied to.
+    if (!(await canMessage(user.id, recipient_id))) {
+      fail('You can only message people you are connected with.', 403);
+    }
 
     const message = await store.create(
       'Message',

@@ -1,3 +1,16 @@
+@font-face {
+  /* Self-hosted: no third-party font CDN, so no extra DNS/TLS hop on first
+     paint and nothing leaks to another host. Variable file, latin subset only —
+     one 66KB request covers every weight the app uses. */
+  font-family: 'Fraunces';
+  src: url('/brand/fonts/fraunces.woff2') format('woff2-variations');
+  font-weight: 400 700;
+  font-style: normal;
+  /* swap, not block: headings render immediately in the fallback and reflow
+     once the face arrives, rather than leaving the page blank. */
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -29,9 +42,9 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.9rem;
-    --font-heading: ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Fraunces', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
     --font-body: ui-sans-serif, system-ui, sans-serif;
-    --font-display: ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Fraunces', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
