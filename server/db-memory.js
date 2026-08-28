@@ -10,6 +10,14 @@
 // app; it is not a database.
 import { nowISO, newId, userToPublic } from './db-shared.js';
 
+/**
+ * Builds an in-memory data layer. `onChange` receives a description of each
+ * mutation — { op: 'put' | 'del', kind: 'record' | 'user', row | id } — which is
+ * how the Blob-backed layer persists without duplicating the query logic below.
+ * Deltas, not snapshots: two instances writing at once must not erase each
+ * other's work when their writes are replayed.
+ */
+export function createMemoryStore({ onChange = () => {} } = {}) {
 const records = [];
 const userRows = [];
 const otpRows = [];
@@ -56,14 +64,14 @@ function matches(record, query = {}) {
 
 const rowsFor = (entity) => records.filter((r) => r.entity === entity).map(toRecord);
 
-export const pool = { end: async () => {} };
-export const query = async () => {
+const pool = { end: async () => {} };
+const query = async () => {
   throw new Error('Raw SQL is not available in demo mode.');
 };
-export function ready() { return Promise.resolve(); }
-export function migrate() { return Promise.resolve(); }
+function ready() { return Promise.resolve(); }
+function migrate() { return Promise.resolve(); }
 
-export const store = {
+const store = {
   async list(entity, sort, limit) {
     const sorted = applySort(rowsFor(entity), sort || '-created_date');
     return limit ? sorted.slice(0, Number(limit)) : sorted;
@@ -88,6 +96,7 @@ export const store = {
       created_by: obj.created_by ?? actor?.email ?? null,
     };
     records.push(row);
+    onChange({ op: 'put', kind: 'record', row });
     return toRecord(row);
   },
   async update(entity, id, patch = {}) {
@@ -95,12 +104,14 @@ export const store = {
     if (!row) return null;
     row.data = { ...row.data, ...splitFields(patch) };
     row.updated_date = nowISO();
+    onChange({ op: 'put', kind: 'record', row });
     return toRecord(row);
   },
   async delete(entity, id) {
     const i = records.findIndex((r) => r.entity === entity && r.id === id);
     if (i === -1) return false;
     records.splice(i, 1);
+    onChange({ op: 'del', kind: 'record', id });
     return true;
   },
   async updateMany(entity, query, patch = {}) {
@@ -114,7 +125,7 @@ export const store = {
   },
 };
 
-export const users = {
+const users = {
   async byEmail(email) {
     const wanted = String(email || '').trim().toLowerCase();
     return userRows.find((u) => u.email.toLowerCase() === wanted) || null;
@@ -129,6 +140,7 @@ export const users = {
       verified: !!verified, data: rest, created_date: ts, updated_date: ts,
     };
     userRows.push(row);
+    onChange({ op: 'put', kind: 'user', row });
     return row;
   },
   async update(id, patch = {}) {
@@ -141,6 +153,7 @@ export const users = {
     if (password_hash !== undefined) row.password_hash = password_hash;
     row.data = { ...row.data, ...rest };
     row.updated_date = nowISO();
+    onChange({ op: 'put', kind: 'user', row });
     return row;
   },
   async all() {
@@ -148,7 +161,7 @@ export const users = {
   },
 };
 
-export const otp = {
+const otp = {
   async issue(email, purpose, ttlMinutes = 15) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const key = String(email).trim().toLowerCase();
@@ -169,7 +182,7 @@ export const otp = {
   },
 };
 
-export const geoCache = {
+const geoCache = {
   async get(key) {
     const hit = geoRows.get(key);
     if (!hit) return null;
@@ -182,4 +195,26 @@ export const geoCache = {
   },
 };
 
+  // Replays a mutation without re-emitting it — used when rebuilding state
+  // from a log. Upsert by id, so replaying the same entry twice is harmless.
+  function apply(event) {
+    if (!event) return;
+    const target = event.kind === 'user' ? userRows : records;
+    if (event.op === 'del') {
+      const i = target.findIndex((r) => r.id === event.id);
+      if (i !== -1) target.splice(i, 1);
+      return;
+    }
+    if (!event.row) return;
+    const i = target.findIndex((r) => r.id === event.row.id);
+    if (i === -1) target.push(event.row);
+    else target[i] = event.row;
+  }
+
+  return { pool, query, ready, migrate, store, users, otp, geoCache, apply, _raw: { records, userRows, otpRows, geoRows } };
+}
+
+// The plain in-memory layer: a store with no persistence behind it.
+const singleton = createMemoryStore();
+export const { pool, query, ready, migrate, store, users, otp, geoCache } = singleton;
 export { nowISO, newId, userToPublic };
