@@ -141,6 +141,12 @@ export async function flush() {
 
 // ---- interface --------------------------------------------------------------
 
+// Methods that change state must not return until the write is durable.
+// A serverless instance is frozen the moment it responds, so anything left
+// running in the background is simply lost — the first version of this appended
+// after responding, and writes silently vanished on the next deploy.
+const MUTATING = new Set(['create', 'update', 'delete', 'updateMany', 'issue', 'verify', 'set']);
+
 // Every read waits for the initial load; after that `ready()` is a resolved
 // promise, so this costs nothing per call.
 const guarded = (obj) =>
@@ -149,7 +155,9 @@ const guarded = (obj) =>
       name,
       async (...args) => {
         await ready();
-        return fn.apply(obj, args);
+        const result = await fn.apply(obj, args);
+        if (MUTATING.has(name)) await flush();
+        return result;
       },
     ])
   );
