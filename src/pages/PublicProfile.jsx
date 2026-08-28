@@ -9,6 +9,7 @@ import WorkExperienceTimeline from '@/components/WorkExperienceTimeline';
 import PeopleYouMayKnow from '@/components/PeopleYouMayKnow';
 import { loadMyConnections, suggestSimilar, connectedIds, topJob } from '@/lib/connections';
 import Headline from '@/components/Headline';
+import ProfileBanner from '@/components/ProfileBanner';
 
 export default function PublicProfile(){
   const { id } = useParams();
@@ -39,11 +40,15 @@ export default function PublicProfile(){
   return <div className="page-shell max-w-3xl py-8">
     <Link to="/people" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to people</Link>
 
-    <section className="panel space-y-4">
-      <div className="flex flex-wrap items-center gap-5">
+    <section className="overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
+      <ProfileBanner url={user.banner_url}/>
+      {/* Pulled up over the banner, the way a cover photo and avatar overlap. */}
+      {/* relative + z-10: without a stacking context the banner paints over the
+          avatar and name that are pulled up beneath it. */}
+      <div className="relative z-10 -mt-12 flex flex-wrap items-end gap-5 px-6 pb-6 sm:-mt-14">
         {user.avatar_url
-          ? <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full ring-2 ring-brand-line"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24"/></div>
-          : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-full bg-brand-tint text-2xl font-bold text-brand-teal">{initials}</div>}
+          ? <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full ring-4 ring-brand-surface"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24"/></div>
+          : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-full bg-brand-tint text-2xl font-bold text-brand-teal ring-4 ring-brand-surface">{initials}</div>}
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-brand-ink">{user.full_name || 'Community member'}</h1>
           <Headline text={user.headline} variant="header"/>
@@ -53,7 +58,7 @@ export default function PublicProfile(){
         </div>
         <div className="flex flex-wrap items-center gap-2"><ConnectButton targetId={user.id} me={me} connections={connections} onReload={reload}/><MessageButton targetId={user.id} me={me} connections={connections}/></div>
       </div>
-      {user.bio && <p className="whitespace-pre-line leading-7 text-[#536863]">{user.bio}</p>}
+      {user.bio && <p className="whitespace-pre-line px-6 pb-6 leading-7 text-[#536863]">{user.bio}</p>}
     </section>
 
     <section className="panel space-y-4">

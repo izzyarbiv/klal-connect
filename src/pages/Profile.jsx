@@ -3,6 +3,7 @@ import { api } from '@/api/client';
 import ManageListings from '@/components/ManageListings';
 import ManageCompanies from '@/components/ManageCompanies';
 import ProfileAvatar from '@/components/ProfileAvatar';
+import ProfileBannerEditor from '@/components/ProfileBannerEditor';
 import WorkExperienceEditor from '@/components/WorkExperienceEditor';
 import NotificationSettings from '@/components/NotificationSettings';
 import LocationPicker from '@/components/LocationPicker';
@@ -12,7 +13,7 @@ import { topJob } from '@/lib/connections';
 
 export default function Profile() {
   const [user, setUser] = useState();
-  const [form, setForm] = useState({ full_name: '', headline: '', profile_type: 'community_member', home_city: '', phone: '', bio: '', avatar_url: '', work_experience: [] });
+  const [form, setForm] = useState({ full_name: '', headline: '', profile_type: 'community_member', home_city: '', phone: '', bio: '', avatar_url: '', banner_url: '', work_experience: [] });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {(async () => {
@@ -22,14 +23,14 @@ export default function Profile() {
       setForm({
         full_name: u.full_name || '', headline: u.headline || '', profile_type: u.profile_type || 'community_member',
         home_city: u.home_city || '', phone: u.phone || '', bio: u.bio || '',
-        avatar_url: u.avatar_url || '', work_experience: Array.isArray(u.work_experience) ? u.work_experience : []
+        avatar_url: u.avatar_url || '', banner_url: u.banner_url || '', work_experience: Array.isArray(u.work_experience) ? u.work_experience : []
       });
     })();}, []);
 
   const submit = async (e) => {
     e.preventDefault();
-    const { profile_type, headline, home_city, phone, bio, avatar_url, work_experience } = form;
-    await api.auth.updateMe({ profile_type, headline, home_city, phone, bio, avatar_url, work_experience });
+    const { profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience } = form;
+    await api.auth.updateMe({ profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience });
     setSaved(true);
   };
 
@@ -53,6 +54,7 @@ export default function Profile() {
 
     <form onSubmit={submit} className="space-y-5">
       <section className="panel space-y-3">
+        <ProfileBannerEditor value={form.banner_url} onChange={(v) => setForm({ ...form, banner_url: v })} />
         <ProfileAvatar user={user} value={form.avatar_url} onChange={(v) => setForm({ ...form, avatar_url: v })} />
       </section>
 
