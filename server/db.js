@@ -12,10 +12,17 @@
 // Both alternatives are explicit opt-ins, never a fallback for a missing
 // DATABASE_URL: silently accepting writes that vanish is worse than refusing to
 // start.
+// Storage and the demo experience are separate choices. KC_DEMO_MODE controls
+// the guest session and seeded content; KC_STORE controls where data lives. A
+// public demo wants both: browsable without signing in, and still persistent.
 const DEMO = process.env.KC_DEMO_MODE === '1';
 const STORE = (process.env.KC_STORE || '').toLowerCase();
 
-const backend = DEMO ? 'memory' : STORE === 'blob' ? 'blob' : 'postgres';
+const backend =
+  STORE === 'blob' ? 'blob' :
+  STORE === 'memory' ? 'memory' :
+  DEMO && !STORE ? 'memory' :
+  'postgres';
 
 const impl = await import(
   backend === 'memory' ? './db-memory.js' : backend === 'blob' ? './db-blob.js' : './db-postgres.js'
