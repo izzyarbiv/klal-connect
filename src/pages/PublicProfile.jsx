@@ -41,7 +41,7 @@ export default function PublicProfile(){
     <Link to="/people" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to people</Link>
 
     <section className="overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
-      <ProfileBanner url={user.banner_url}/>
+      <ProfileBanner url={user.banner_url} className="rounded-t-3xl"/>
       {/* Pulled up over the banner, the way a cover photo and avatar overlap. */}
       {/* relative + z-10: without a stacking context the banner paints over the
           avatar and name that are pulled up beneath it. */}
