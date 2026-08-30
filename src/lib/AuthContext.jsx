@@ -38,8 +38,22 @@ export const AuthProvider = ({ children }) => {
       return currentUser;
     } catch (error) {
       // An expired or tampered token should log the visitor out quietly rather
-      // than trapping them on an error screen.
-      if (error.status === 401 || error.status === 403) tokenStore.set(null);
+      // than trapping them on an error screen. On a demo instance, fall back to
+      // the guest session — otherwise a visitor still holding a token from an
+      // earlier build is stuck at the login wall, because adoptDemoSession
+      // refuses to replace an existing token and nothing else clears it.
+      if (error.status === 401 || error.status === 403) {
+        tokenStore.set(null);
+        try {
+          if (await adoptDemoSession()) {
+            const guest = await api.auth.me();
+            setUser(guest);
+            setIsAuthenticated(true);
+            setAuthError(null);
+            return guest;
+          }
+        } catch { /* fall through to signed-out */ }
+      }
       setUser(null);
       setIsAuthenticated(false);
       return null;

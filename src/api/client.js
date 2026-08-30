@@ -107,11 +107,21 @@ const auth = {
   },
 
   async isAuthenticated() {
+    // No session yet: on a demo instance take the guest one.
+    if (!tokenStore.get()) await adoptDemoSession();
     if (!tokenStore.get()) return false;
     try {
       await request('GET', '/auth/me');
       return true;
-    } catch {
+    } catch (err) {
+      // A token that no longer resolves — the account it referenced is gone, or
+      // it expired. Discard it and try for a guest session, otherwise a visitor
+      // holding a stale token is stuck at the login wall forever: adoptDemoSession
+      // refuses to replace an existing token, and nothing else clears it.
+      if (err.status === 401 || err.status === 403) {
+        tokenStore.set(null);
+        if (await adoptDemoSession()) return true;
+      }
       return false;
     }
   },
