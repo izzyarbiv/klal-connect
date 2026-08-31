@@ -98,7 +98,7 @@ async function seedProviders(owner) {
         status: 'published',   // seeded listings skip the review queue
         claimed: false,
         save_count: 0,
-        use_count: 0,
+        usage_count: 0,
         demo: true,            // flagged so real listings are distinguishable
       },
       owner

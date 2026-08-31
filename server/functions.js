@@ -54,7 +54,7 @@ export const functions = {
     // New listings are never published directly — they go to the review queue.
     const provider = await store.create(
       'Provider',
-      { ...payload, status: 'pending', claimed: false, save_count: 0, use_count: 0 },
+      { ...payload, status: 'pending', claimed: false, save_count: 0, usage_count: 0 },
       user
     );
     return { provider };
@@ -237,7 +237,7 @@ export const functions = {
       active = true;
     }
 
-    const field = activity === 'use' ? 'use_count' : 'save_count';
+    const field = activity === 'use' ? 'usage_count' : 'save_count';
     await store.update('Provider', providerId, { [field]: await store.count(entity, { provider_id: providerId }) });
     return { active };
   },
