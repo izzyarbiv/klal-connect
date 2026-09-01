@@ -5,7 +5,10 @@ export function useTheme(){
     if(typeof window==='undefined') return 'light';
     const stored=localStorage.getItem('kc-theme');
     if(stored==='dark'||stored==='light') return stored;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    // Light unless explicitly chosen — this MUST match the pre-paint script in
+    // index.html. When it did not, the script set light and this hook put dark
+    // straight back on after mount, so the default never actually applied.
+    return 'light';
   });
   useEffect(()=>{
     const root=document.documentElement;

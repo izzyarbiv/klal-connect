@@ -16,15 +16,17 @@
       (function () {
         try {
           var stored = localStorage.getItem('kc-theme');
-          var dark = stored === 'dark' ||
-            (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          // Light unless the visitor has explicitly chosen dark. Following the
+          // OS meant most first impressions were the dark theme, which is not
+          // the face this product should lead with.
+          var dark = stored === 'dark';
           document.documentElement.classList.toggle('dark', dark);
           // Keeps native controls, scrollbars and form widgets in the same theme.
           document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         } catch (e) {}
       })();
     </script>
-    <meta name="theme-color" content="#0D3B44" />
+    <meta name="theme-color" content="#FBFDFD" />
     <!-- iOS does not read the web manifest for these; it needs its own tags. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

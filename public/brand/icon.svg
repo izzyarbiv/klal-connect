@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Klal">
-  <!-- App icon: the mark without the inner point, which closes up below ~24px. -->
-  <rect width="64" height="64" rx="15" fill="#0D3B44"/>
-  <path d="M22 21 H38 Q46 21 46 30 V34 Q46 43 38 43 H22"
-        stroke="#E9B44C" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <rect width="64" height="64" rx="15" fill="#12463F"/>
+  <path d="M21 20 H38 Q45 20 45 28 V36 Q45 44 38 44 H21"
+        fill="none" stroke="#FFFFFF" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

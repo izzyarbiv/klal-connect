@@ -55,19 +55,23 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    --brand-canvas: 45 38% 96%;
+    /* Near-white with a faint cool cast rather than cream: the warm ground was
+       what made the light theme read heavy and dated. */
+    --brand-canvas: 190 24% 99%;
     --brand-surface: 0 0% 100%;
-    --brand-navy: 197 61% 18%;
-    --brand-navy-hover: 176 78% 23%;
-    --brand-teal: 176 78% 23%;
-    --brand-ink: 192 47% 18%;
-    --brand-body: 176 9% 36%;
-    --brand-muted: 165 8% 48%;
-    --brand-line: 146 16% 89%;
-    --brand-tint: 140 22% 91%;
-    --brand-gold: 42 86% 68%;
-    --brand-gold-bg: 46 100% 92%;
-    --brand-gold-ink: 41 64% 32%;
+    --brand-navy: 196 52% 20%;
+    --brand-navy-hover: 191 48% 26%;
+    --brand-teal: 176 72% 28%;
+    --brand-ink: 197 42% 17%;
+    --brand-body: 197 13% 40%;
+    --brand-muted: 197 10% 56%;
+    --brand-line: 195 22% 92%;
+    --brand-tint: 172 38% 96%;
+    /* Deeper than before so gold is legible on white — it is an accent now,
+       not a headline colour. */
+    --brand-gold: 38 78% 48%;
+    --brand-gold-bg: 42 82% 95%;
+    --brand-gold-ink: 34 62% 32%;
     --brand-error: 0 28% 48%;
     --brand-success: 145 64% 24%;
   }
@@ -137,7 +141,21 @@
 
 @layer components {
   .page-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
-  .hero { background: radial-gradient(circle at 82% 15%, #206C6A 0%, #123C4A 46%, #0B2C38 100%); }
+  /* Light hero. The dark slab dominated the page even in light mode, which is
+     what made the whole product feel heavy — the ground is now the same near
+     white as the rest of the page, with a soft teal wash for depth. */
+  .hero {
+    background:
+      radial-gradient(ellipse 80% 70% at 78% 0%, hsl(var(--brand-tint)) 0%, transparent 62%),
+      radial-gradient(ellipse 60% 60% at 8% 100%, hsl(42 82% 96%) 0%, transparent 60%),
+      hsl(var(--brand-canvas));
+    border-bottom: 1px solid hsl(var(--brand-line));
+  }
+  .dark .hero {
+    background:
+      radial-gradient(ellipse 80% 70% at 78% 0%, hsl(190 40% 16%) 0%, transparent 62%),
+      hsl(var(--brand-canvas));
+  }
   .eyebrow { @apply text-[11px] font-bold tracking-[0.18em] text-brand-gold; }
   .eyebrow.dark { @apply text-brand-teal; }
   .title { @apply mt-2 font-heading text-2xl font-bold tracking-tight text-brand-ink; }

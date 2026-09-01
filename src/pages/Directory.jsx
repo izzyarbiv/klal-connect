@@ -55,5 +55,8 @@ export default function Directory(){
 }
 
 function ProviderSection({ title, items }){
+  // A heading with nothing under it reads as broken. Nothing is flagged
+  // featured yet, so that rail simply does not appear until something is.
+  if(!items || items.length===0) return null;
   return <section><div className="section-head"><h2 className="title">{title}</h2><Link to="/browse" className="text-sm font-semibold text-brand-teal">See more</Link></div><div className="grid gap-4 md:grid-cols-3">{items.map(p=><ResourceCard key={p.id} provider={p}/>)}</div></section>;
 }
