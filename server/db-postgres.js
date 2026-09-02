@@ -10,6 +10,9 @@
 // transaction pooler, not the direct connection — a serverless platform opens
 // far more short-lived connections than Postgres will accept directly.
 import pg from 'pg';
+import tls from 'node:tls';
+import fs from 'node:fs';
+import { SUPABASE_CA } from './certs/supabase-ca.js';
 
 const { Pool } = pg;
 
@@ -43,12 +46,23 @@ const connectionString = stripSslParams(rawConnectionString);
 // A hosted Postgres requires TLS; a local dev server does not.
 const isLocal = /@?(localhost|127\.0\.0\.1)[:/]/.test(connectionString);
 
+// Certificates are verified, with hostname checking. Supabase signs its pooler
+// with a private CA ("Supabase Root 2021 CA"), so that root is shipped here and
+// trusted alongside the system roots — the alternative, rejectUnauthorized:
+// false, would accept any certificate and leave the connection open to
+// interception. KC_PG_CA_FILE adds another provider's private CA the same way.
+function trustedRoots() {
+  const roots = [...tls.rootCertificates, SUPABASE_CA];
+  if (process.env.KC_PG_CA_FILE) {
+    try { roots.push(fs.readFileSync(process.env.KC_PG_CA_FILE, 'utf8')); }
+    catch (err) { console.warn(`[db] could not read KC_PG_CA_FILE: ${err.message}`); }
+  }
+  return roots;
+}
+
 export const pool = new Pool({
   connectionString,
-  // Certificates are verified. Supabase's pooler presents a publicly trusted
-  // cert, so there is no reason to accept an unverified one — doing that would
-  // leave the connection open to interception.
-  ssl: isLocal ? false : { rejectUnauthorized: true },
+  ssl: isLocal ? false : { rejectUnauthorized: true, ca: trustedRoots() },
   // Not 1: a single instance serves concurrent requests, so a pool of one
   // serializes them. Not 10 either — the pooler's budget is shared across every
   // warm instance.

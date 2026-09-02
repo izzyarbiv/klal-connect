@@ -121,7 +121,7 @@ It exists to show the app. Attach Postgres before it is anything more than that.
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | Supabase **Transaction pooler** string, port **6543** — not the direct connection, which is IPv6-only and exhausts its connection budget under serverless. Remove any `?sslmode=` (TLS is configured in code). |
+   | `DATABASE_URL` | Supabase **Transaction pooler** string, port **6543** — not the direct connection, which is IPv6-only and exhausts its connection budget under serverless. Remove any `?sslmode=` (TLS is configured in code, with Supabase's root CA pinned in `server/certs/`). |
    | `BLOB_READ_WRITE_TOKEN` | Set by attaching a Vercel Blob store — uploads go there. Or `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` for Supabase Storage. |
    | `KC_JWT_SECRET` | A long random string. The server refuses to boot in production without it. |
    | `KC_GEOCODER` / `KC_GEOCODER_KEY` | `google` and a key restricted to the Geocoding API (or `mapbox` and a token) |
