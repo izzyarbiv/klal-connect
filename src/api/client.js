@@ -46,7 +46,13 @@ async function request(method, path, { body, query, raw } = {}) {
   let data;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
 
-  if (!res.ok) throw new ApiError(data?.error || res.statusText, res.status, data);
+  if (!res.ok) {
+    // The shared guest session tried to write and the server is running with
+    // KC_GUEST_READONLY. The visitor wanted to do something that takes an
+    // account, so send them to get one and bring them back here afterwards.
+    if (res.status === 403 && data?.guest) window.location.href = loginUrl(window.location.href);
+    throw new ApiError(data?.error || res.statusText, res.status, data);
+  }
   return data;
 }
 

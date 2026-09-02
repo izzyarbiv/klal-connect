@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import { Link } from 'react-router-dom';
+import { useIsDark } from '@/hooks/useIsDark';
 
 // Advanced markers need a map ID. DEMO_MAP_ID is Google's documented stand-in
 // for a project that has not created one; a real one (GOOGLE_MAPS_MAP_ID) also
@@ -17,16 +18,23 @@ function FitToListings({ located }) {
       map.setZoom(12);
       return;
     }
-    const bounds = new google.maps.LatLngBounds();
-    for (const p of located) bounds.extend({ lat: p.latitude, lng: p.longitude });
-    map.fitBounds(bounds, 48);
+    // A bounds literal, so this never touches the `google` global — which is
+    // only guaranteed to exist once the API has loaded and the map rendered.
+    const lats = located.map((p) => p.latitude);
+    const lngs = located.map((p) => p.longitude);
+    map.fitBounds({
+      north: Math.max(...lats), south: Math.min(...lats),
+      east: Math.max(...lngs), west: Math.min(...lngs),
+    }, 48);
   }, [map, located]);
   return null;
 }
 
 export default function GoogleMap({ located, center, config }) {
   const [open, setOpen] = useState(null);
-  const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  // colorScheme cannot change on a live map; the library creates a new
+  // instance when it does, which is what we want when the theme is toggled.
+  const dark = useIsDark();
   const selected = located.find((p) => p.id === open);
 
   return (

@@ -3,13 +3,22 @@
 // Only reached when KC_DEMO_MODE=1. Each serverless instance starts empty, so
 // this runs once per cold start and is awaited by the request path — otherwise
 // the first visitor would see an empty directory.
-import { store, users, isDemoMode } from './db.js';
+import { randomBytes } from 'node:crypto';
+import { store, users, isDemoMode, backendName } from './db.js';
 import { stableId } from './db-shared.js';
 import { seedAll } from './seed-data.js';
 import { hashPassword } from './auth.js';
 
 const DEMO_EMAIL = process.env.KC_DEMO_EMAIL || 'demo@klal.app';
-const DEMO_PASSWORD = process.env.KC_DEMO_PASSWORD || 'demo1234';
+
+// A well-known password is fine for an in-memory instance that forgets it on
+// the next cold start. On a database it would be a permanent admin login that
+// is printed in this file, so there the account is created with a password
+// nobody knows unless KC_DEMO_PASSWORD says otherwise; `npm run create-admin`
+// sets a real one.
+const PERSISTENT = backendName !== 'memory';
+const DEMO_PASSWORD = process.env.KC_DEMO_PASSWORD || (PERSISTENT ? null : 'demo1234');
+const unguessable = () => randomBytes(32).toString('hex');
 
 // Visitors are signed in as this account so they can browse the whole app
 // without a login wall. Deliberately an ordinary member, not the admin: the
@@ -30,7 +39,7 @@ export function ensureDemoData() {
         // next, and each instance seeds its own copy of this account.
         id: stableId('demo-user', DEMO_EMAIL),
         email: DEMO_EMAIL,
-        password_hash: hashPassword(DEMO_PASSWORD),
+        password_hash: hashPassword(DEMO_PASSWORD || unguessable()),
         role: 'admin',
         verified: true,
         full_name: 'Demo Admin',
@@ -39,7 +48,9 @@ export function ensureDemoData() {
       await users.create({
         id: stableId('demo-user', GUEST_EMAIL),
         email: GUEST_EMAIL,
-        password_hash: hashPassword(DEMO_PASSWORD),
+        // Sessions for this account come from /api/auth/demo-session; nobody
+        // should be able to log in as the guest with a password.
+        password_hash: hashPassword(unguessable()),
         role: 'user',
         verified: true,
         full_name: 'Guest',
@@ -47,7 +58,8 @@ export function ensureDemoData() {
       });
       await seedAll({ id: admin.id, email: admin.email });
       await seedCommunity(admin);
-      console.log(`[demo] seeded; sign in as ${DEMO_EMAIL}`);
+      if (DEMO_PASSWORD) console.log(`[demo] seeded; sign in as ${DEMO_EMAIL}`);
+      else console.warn(`[demo] seeded; ${DEMO_EMAIL} has no usable password — run: npm run create-admin -- ${DEMO_EMAIL} '<password>'`);
     })().catch((err) => {
       // Let the next request retry rather than caching the failure forever.
       started = null;
@@ -78,7 +90,7 @@ async function seedCommunity(admin) {
     authors.push(await users.create({
       id: stableId('demo-user', member.full_name),
       email: `${member.full_name.toLowerCase().replace(/[^a-z]+/g, '.')}@example.com`,
-      password_hash: hashPassword(DEMO_PASSWORD),
+      password_hash: hashPassword(DEMO_PASSWORD || unguessable()),
       role: 'user',
       verified: true,
       full_name: member.full_name,

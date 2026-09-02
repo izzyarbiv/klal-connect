@@ -98,20 +98,28 @@ the Shabbos write-gate.
 
 ## Data
 
-SQLite at `server/data/klal.db`, uploads in `server/uploads/` — both gitignored. Entities
-are stored as documents (a JSON blob per record), so adding a field is not a migration.
+Postgres (`DATABASE_URL`), locally or Supabase. Entities are stored as documents — one
+`records` row per entity with a JSON `data` column — so adding a field is not a
+migration; accounts live in `users`. Uploads go to Vercel Blob or Supabase Storage in
+production and to `server/uploads/` (gitignored) locally. `server/db.js` picks the
+backend: Postgres by default, `KC_STORE=blob` for the pre-database bridge, and memory
+only for a `KC_DEMO_MODE=1` instance with no database at all.
 
-## Live demo
+## Guest browsing
 
-**https://klal-connect.vercel.app** — no sign-in needed. Visitors are given a shared
-guest session automatically, so the whole app (feed, people, messages, saved, profile)
-is browsable straight away. To see the admin screens, sign in as
-`demo@klal.app` / `demo1234`.
+**https://klalconnect.org** — no sign-in needed. With `KC_DEMO_MODE=1` visitors are
+given a shared guest session automatically, so the whole app (feed, people, messages,
+saved, profile) is browsable straight away.
 
-This deployment runs with `KC_DEMO_MODE=1`: there is no database attached, so the
-data lives in each serverless instance's memory. It seeds itself on cold start, and
-anything written through the UI survives only as long as that instance stays warm.
-It exists to show the app. Attach Postgres before it is anything more than that.
+Everyone who lands on the site shares that one guest account. `KC_GUEST_READONLY=1`
+keeps it read-only: the guest can look at everything a member can, but any write —
+posting, messaging, editing the profile, uploading — is refused with a 403 and the
+client sends the visitor to sign up instead. Without it, anonymous visitors can post
+and message as "Guest" and edit its profile between them.
+
+The seed also creates a `demo@klal.app` admin. On a database it gets a random
+password unless `KC_DEMO_PASSWORD` is set; give it a real one with
+`npm run create-admin -- demo@klal.app '<password>'`.
 
 ## Deploying to Vercel
 
@@ -121,7 +129,7 @@ It exists to show the app. Attach Postgres before it is anything more than that.
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | Supabase **Transaction pooler** string, port **6543** — not the direct connection, which is IPv6-only and exhausts its connection budget under serverless. Remove any `?sslmode=` (TLS is configured in code, with Supabase's root CA pinned in `server/certs/`). |
+   | `DATABASE_URL` | Supabase **Transaction pooler** string, port **6543** — not the direct connection, which is IPv6-only and exhausts its connection budget under serverless. Remove any `?sslmode=` (TLS is configured in code, with Supabase's root CA in `server/certs/` trusted alongside the system roots). |
    | `BLOB_READ_WRITE_TOKEN` | Set by attaching a Vercel Blob store — uploads go there. Or `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` for Supabase Storage. |
    | `KC_JWT_SECRET` | A long random string. The server refuses to boot in production without it. |
    | `KC_GEOCODER` / `KC_GEOCODER_KEY` | `google` and a key restricted to the Geocoding API (or `mapbox` and a token) |
@@ -130,6 +138,7 @@ It exists to show the app. Attach Postgres before it is anything more than that.
    | `KC_AUTO_MIGRATE` | `0` — run `npm run migrate` yourself instead of on every cold start |
    | `NODE_ENV` | `production` |
    | `KC_DEMO_MODE` | `1` keeps the no-login guest session (visitors browse as a shared guest account). With `DATABASE_URL` set the data still lives in Postgres. Remove it once real members should have to sign in. |
+   | `KC_GUEST_READONLY` | `1` so the shared guest can read but not write. See *Guest browsing*. |
    | `KC_STORE` | Remove it once `DATABASE_URL` is set. `blob` was the pre-database bridge. |
 
 3. Run `npm run migrate` once against the production database.
@@ -146,8 +155,9 @@ BLOB_READ_WRITE_TOKEN=… DATABASE_URL=… npm run import-blob
 ```
 
 Every record and account is copied with its original id and timestamps, so
-sessions stay valid. Re-running is safe (existing rows are skipped). Then drop
-`KC_STORE` from the Vercel env and redeploy.
+sessions stay valid. It is insert-only: re-running adds rows that are new on Blob
+and never overwrites one Postgres already has. Then drop `KC_STORE` from the
+Vercel env and redeploy.
 
 The whole API is one function (`api/index.js`), so a warm instance keeps a single
 database pool rather than one per route.

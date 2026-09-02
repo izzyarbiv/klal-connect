@@ -13,3 +13,6 @@ server/uploads
 
 # Vercel
 .vercel
+
+# Old local SQLite store (pre-Postgres); never meant to be tracked.
+server/data/

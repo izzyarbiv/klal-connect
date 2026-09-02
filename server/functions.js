@@ -3,7 +3,7 @@
 // These are functions rather than plain entity writes because each enforces
 // something the client must not be trusted with: moderation status, ownership,
 // counter integrity, or the Shabbos write-gate.
-import { store, users, userToPublic } from './db.js';
+import { store, users } from './db.js';
 import { computeShabbosStatus, assertWritable } from './shabbos.js';
 
 const need = (value, message) => {

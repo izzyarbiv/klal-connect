@@ -9,7 +9,7 @@ import multer from 'multer';
 
 import { store, users, userToPublic, otp } from './db.js';
 import {
-  attachUser, requireAuth, requireAdmin,
+  attachUser, requireAuth,
   hashPassword, checkPassword, signToken, deliverCode,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
@@ -31,6 +31,24 @@ if (isDemoMode) {
 }
 
 app.use(attachUser);
+
+// The shared guest session exists so a visitor can look around without signing
+// in — not so that anonymous visitors can post, message and edit one permanent
+// account between them. With KC_GUEST_READONLY=1 the guest reads everything a
+// member reads, and every write gets a 403 the client can show as "sign in to
+// do that". Off by default so a demo stays fully interactive.
+const GUEST_READONLY = process.env.KC_GUEST_READONLY === '1';
+
+app.use((req, res, next) => {
+  if (!GUEST_READONLY || !req.user || req.user.email !== GUEST_EMAIL) return next();
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  // Signing in or registering as someone else is how a visitor stops being the
+  // guest, so those must go through even with the guest token attached.
+  if (req.path.startsWith('/api/auth/') && req.path !== '/api/auth/me') return next();
+  const fn = req.path.match(/^\/api\/functions\/([^/]+)$/)?.[1];
+  if (fn && publicFunctions.has(fn)) return next();
+  res.status(403).json({ error: 'Sign in to do that.', guest: true });
+});
 
 // ---------------------------------------------------------------- entities --
 
@@ -98,11 +116,25 @@ const parseJSON = (value, fallback) => {
   try { return JSON.parse(value); } catch { return fallback; }
 };
 
+// Everything the client knows how to ask for (src/api/client.js). Anything
+// else is a typo or a probe, and gets a 404 rather than a plausible-looking
+// empty list.
+const ENTITIES = new Set([
+  'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
+  'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
+  'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
+  'ListingReport', 'PrivateReport',
+]);
+
+app.param('entity', (req, res, next, entity) => {
+  if (!ENTITIES.has(entity)) return res.status(404).json({ error: `Unknown entity: ${entity}` });
+  next();
+});
+
 // Registered before the generic :entity route below, which would otherwise
 // shadow it and return an empty list (users don't live in the records table).
 app.get('/api/entities/User', async (req, res, next) => {
-  const all = (await users.all()).map(userToPublic);
-  res.json(req.user?.role === 'admin' ? all : all.map(publicProfile));
+  res.json(await memberList(req.user));
 });
 
 app.get('/api/entities/:entity', async (req, res, next) => {
@@ -160,20 +192,34 @@ app.post('/api/entities/:entity/update-many', requireAuth, async (req, res, next
 
 function publicProfile(user) {
   if (!user) return null;
-  // Never hand a member's contact/location details to other users.
-  const { email, latitude, longitude, timezone, country_code, ...safe } = user;
+  // Never hand a member's contact details, location or Shabbos configuration
+  // to other users. The profile page shows the rest.
+  const {
+    email, phone, latitude, longitude, timezone, country_code,
+    candle_lighting_offset_minutes, havdalah_method, shabbos_full_lock, shabbos_mode_source,
+    ...safe
+  } = user;
   return safe;
 }
 
-app.get('/api/users', async (req, res, next) => {
+// A deactivated account stays in the table (its posts and messages still point
+// at it) but is nobody's business except an admin's.
+const isDisabled = (user) => user.disabled === true;
+
+async function memberList(viewer) {
   const all = (await users.all()).map(userToPublic);
-  res.json(req.user?.role === 'admin' ? all : all.map(publicProfile));
+  if (viewer?.role === 'admin') return all;
+  return all.filter((u) => !isDisabled(u)).map(publicProfile);
+}
+
+app.get('/api/users', async (req, res, next) => {
+  res.json(await memberList(req.user));
 });
 
 app.get('/api/users/:id', async (req, res, next) => {
   const user = userToPublic(await users.byId(req.params.id));
-  if (!user) return res.status(404).json({ error: 'Not found' });
-  const isSelfOrAdmin = req.user && (req.user.id === user.id || req.user.role === 'admin');
+  const isSelfOrAdmin = req.user && user && (req.user.id === user.id || req.user.role === 'admin');
+  if (!user || (isDisabled(user) && !isSelfOrAdmin)) return res.status(404).json({ error: 'Not found' });
   res.json(isSelfOrAdmin ? user : publicProfile(user));
 });
 
@@ -196,11 +242,11 @@ app.get('/api/config', (_req, res) => res.json({
   geocoder: GEO_PROVIDER,
 }));
 
-// Issues a session for the shared guest account so a demo visitor can browse
-// the signed-in parts of the app without a login wall.
+// Issues a session for the shared guest account so a visitor can browse the
+// signed-in parts of the app without a login wall.
 //
-// Only mounted when KC_DEMO_MODE is on, where the data is in-memory and
-// disposable. On a real deployment this route does not exist at all.
+// Only mounted when KC_DEMO_MODE is on. Everyone who lands here shares one
+// account, which is why KC_GUEST_READONLY exists (see the middleware above).
 if (isDemoMode) {
   app.post('/api/auth/demo-session', async (_req, res, next) => {
     try {

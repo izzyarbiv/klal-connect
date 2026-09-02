@@ -23,12 +23,14 @@ const DEMO = process.env.KC_DEMO_MODE === '1';
 const STORE = (process.env.KC_STORE || '').toLowerCase();
 const HAS_DB = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);
 
-const backend =
-  STORE === 'blob' ? 'blob' :
-  STORE === 'memory' ? 'memory' :
-  STORE === 'postgres' ? 'postgres' :
-  DEMO && !HAS_DB ? 'memory' :
-  'postgres';
+const BACKENDS = new Set(['postgres', 'blob', 'memory']);
+if (STORE && !BACKENDS.has(STORE)) {
+  // A typo here must not quietly land on the default and write somewhere
+  // other than where the operator thinks it is writing.
+  throw new Error(`KC_STORE=${process.env.KC_STORE} is not one of: ${[...BACKENDS].join(', ')}`);
+}
+
+const backend = STORE || (DEMO && !HAS_DB ? 'memory' : 'postgres');
 
 const impl = await import(
   backend === 'memory' ? './db-memory.js' : backend === 'blob' ? './db-blob.js' : './db-postgres.js'
@@ -38,6 +40,7 @@ if (backend === 'memory') {
   console.warn('[db] KC_DEMO_MODE=1 — in-memory storage. Nothing is persisted.');
 } else if (backend === 'blob') {
   console.warn('[db] KC_STORE=blob — persisting to Vercel Blob. Set DATABASE_URL for Postgres.');
+  if (HAS_DB) console.warn('[db] DATABASE_URL is set but ignored while KC_STORE=blob. Remove KC_STORE to use it.');
 }
 
 export const isDemoMode = DEMO;

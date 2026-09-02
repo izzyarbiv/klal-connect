@@ -7,7 +7,7 @@ import Headline from '@/components/Headline';
 export default function FeedPostItem({ post, user }) {
   const [liked,setLiked]=useState(false),[likes,setLikes]=useState(post.like_count||0),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[views,setViews]=useState(post.view_count||0),[likeErr,setLikeErr]=useState('');
   React.useEffect(()=>{(async()=>{if(user){const mine=await api.entities.FeedLike.filter({post_id:post.id});setLiked(mine.length>0);}})();},[post.id,user]);
-  React.useEffect(()=>{if(user&&post.created_by_id!==user.id){api.functions.invoke('recordPostView',{postId:post.id}).then(r=>setViews(r.data.count)).catch(()=>{});}},[post.id,user]);
+  React.useEffect(()=>{if(user&&post.created_by_id!==user.id){api.functions.invoke('recordPostView',{postId:post.id}).then(r=>{if(r.status<400)setViews(r.data.count)}).catch(()=>{});}},[post.id,user]);
 
   const toggleLike=async()=>{
     if(!user)return api.auth.redirectToLogin(location.href);
