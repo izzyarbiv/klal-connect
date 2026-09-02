@@ -79,8 +79,8 @@ export default function LocationPicker({ user }) {
     {results.length > 0 && <div className="max-h-48 overflow-y-auto rounded-xl border border-brand-line">{results.map((r) => <button key={`${r.latitude},${r.longitude}`} onClick={() => pick(r)} className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-brand-tint">{r.label}</button>)}</div>}
     <div className="grid gap-3 sm:grid-cols-2">
       <label>City<input className="field" value={city} onChange={(e) => setCity(e.target.value)} /></label>
-      <label>Country code<input className="field" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} placeholder="US, IL…" /></label>
-      <label>Timezone (IANA)<input className="field" value={tz} onChange={(e) => setTz(e.target.value)} placeholder="America/New_York" /></label>
+      <label>Country<input className="field" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} placeholder="US, IL…" /></label>
+      <label>Time zone<input className="field" value={tz} onChange={(e) => setTz(e.target.value)} placeholder="America/New_York" /></label>
       <label>Candle lighting offset<select className="field" value={candle} onChange={(e) => setCandle(e.target.value)}><option value="auto">Auto (city default)</option><option value="15">15 min</option><option value="18">18 min</option><option value="20">20 min</option><option value="22">22 min</option><option value="30">30 min</option><option value="40">40 min</option></select></label>
       <label>Havdalah method<select className="field" value={havdalah} onChange={(e) => setHavdalah(e.target.value)}><option value="42">42 min</option><option value="50">50 min</option><option value="72">72 min</option><option value="tzeis_8_5">Tzeis 8.5°</option></select></label>
       <label>Shabbos mode<select className="field" value={readOnly ? 'read' : 'lock'} onChange={(e) => setReadOnly(e.target.value === 'read')}><option value="read">Read-only (default) — browse, but nothing can be posted</option><option value="lock">Full lock — the app closes entirely</option></select></label>

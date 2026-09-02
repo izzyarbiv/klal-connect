@@ -29,8 +29,8 @@ export default function Profile() {
 
   const submit = async (e) => {
     e.preventDefault();
-    const { profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience } = form;
-    await api.auth.updateMe({ profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience });
+    const { full_name, profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience } = form;
+    await api.auth.updateMe({ full_name, profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience });
     setSaved(true);
   };
 
@@ -59,9 +59,9 @@ export default function Profile() {
       </section>
 
       <section className="panel space-y-4">
-        <label>Name<input className="field" value={user.full_name || ''} disabled /></label>
+        <label>Name<input className="field" value={form.full_name || ''} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Your name" /></label>
         <HeadlineEdit label="Headline" value={form.headline} onChange={(v) => setForm({ ...form, headline: v })} suggestion={headlineSuggestion}/>
-        <label>Email<input className="field" value={user.email || ''} disabled /></label>
+        <label>Email<input className="field" value={user.email || ''} disabled /><span className="helper">Your sign-in address. Contact us to change it.</span></label>
         <label>Profile type
           <select className="field" value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })}>
             <option value="community_member">Community Member</option>

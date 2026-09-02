@@ -57,20 +57,57 @@ async function fetchJSON(url) {
 // ---- load -------------------------------------------------------------------
 
 let loaded = null;
+// Log entries already applied to this instance's memory.
+const applied = new Set();
+let lastSync = 0;
+let syncing = null;
+
+// How stale an instance may be before it re-reads the log. Several instances
+// serve requests at once, and an instance that was already warm when another
+// one wrote would otherwise never see that write — which reads to the user as
+// "I saved my profile and everything vanished".
+const REFRESH_MS = Number(process.env.KC_BLOB_REFRESH_MS || 4000);
+
+async function applyNewEntries(blobs) {
+  const fresh = blobs
+    .filter((b) => b.pathname.startsWith(LOG_PREFIX) && !applied.has(b.pathname))
+    // Pathnames start with a zero-padded timestamp, so lexical order is chronological.
+    .sort((a, b) => a.pathname.localeCompare(b.pathname));
+  for (const entry of fresh) {
+    applied.add(entry.pathname);
+    replay(await fetchJSON(entry.url));
+  }
+  return fresh.length;
+}
 
 async function load() {
   const { blobs } = await list({ prefix: 'klal/' });
   const snap = blobs.find((b) => b.pathname === SNAPSHOT);
   if (snap) restore(await fetchJSON(snap.url));
-
-  // Replay anything appended after the snapshot was taken. Pathnames start with
-  // a zero-padded timestamp, so lexical order is chronological.
-  const entries = blobs.filter((b) => b.pathname.startsWith(LOG_PREFIX)).sort((a, b) => a.pathname.localeCompare(b.pathname));
-  for (const entry of entries) {
-    replay(await fetchJSON(entry.url));
+  const n = await applyNewEntries(blobs);
+  lastSync = Date.now();
+  console.log(`[blob] loaded ${raw.records.length} records, ${raw.userRows.length} users (${n} log entries)`);
+  if (n >= COMPACT_AFTER) {
+    await compact(blobs.filter((b) => b.pathname.startsWith(LOG_PREFIX)));
   }
-  console.log(`[blob] loaded ${raw.records.length} records, ${raw.userRows.length} users (${entries.length} log entries)`);
-  if (entries.length >= COMPACT_AFTER) await compact(entries);
+}
+
+// Pull in anything other instances have written since we last looked. One list
+// call, and only unseen entries are fetched.
+function sync() {
+  if (syncing) return syncing;
+  syncing = (async () => {
+    try {
+      const { blobs } = await list({ prefix: LOG_PREFIX });
+      await applyNewEntries(blobs);
+      lastSync = Date.now();
+    } catch (err) {
+      console.error('[blob] sync failed, serving possibly stale data:', err.message);
+    } finally {
+      syncing = null;
+    }
+  })();
+  return syncing;
 }
 
 export function ready() {
@@ -80,8 +117,9 @@ export function ready() {
       loaded = null;
       throw err;
     });
+    return loaded;
   }
-  return loaded;
+  return loaded.then(() => (Date.now() - lastSync > REFRESH_MS ? sync() : undefined));
 }
 
 // ---- write ------------------------------------------------------------------
@@ -104,6 +142,7 @@ function enqueue(event) {
       // A unique pathname per write, so two instances appending at the same
       // moment produce two objects instead of overwriting one.
       const name = `${LOG_PREFIX}${String(Date.now()).padStart(14, '0')}-${newId()}.json`;
+      applied.add(name);
       await put(name, JSON.stringify({ v: 1, at: nowISO(), events }), {
         access: 'public',
         contentType: 'application/json',

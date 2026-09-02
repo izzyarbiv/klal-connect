@@ -27,7 +27,9 @@ export default function WorkExperienceEditor({ value=[], onChange }){
                   <In label="Location" value={job.location} onChange={v=>upd(i,{location:v})}/>
                   <div/>
                   <In label="Start date" type="month" value={job.start_date} onChange={v=>upd(i,{start_date:v})}/>
-                  <In label="End date" type="month" value={job.end_date} disabled={job.current} onChange={v=>upd(i,{end_date:v})}/>
+                  {job.current
+                    ? <label className="text-sm font-medium text-brand-body">End date<div className="field flex items-center text-brand-muted">Present</div></label>
+                    : <In label="End date" type="month" value={job.end_date} onChange={v=>upd(i,{end_date:v})}/>}
                 </div>
                 <label className="flex items-center gap-2 text-sm font-medium text-brand-body"><input type="checkbox" checked={!!job.current} onChange={e=>upd(i,{current:e.target.checked,end_date:''})}/>I currently work here</label>
                 <Area label="Description" value={job.description} onChange={v=>upd(i,{description:v})}/>

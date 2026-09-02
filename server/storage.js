@@ -10,6 +10,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { put as putBlob } from '@vercel/blob';
 import { newId } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -20,7 +21,12 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'uploads';
 
-export const usingObjectStorage = Boolean(SUPABASE_URL && SUPABASE_KEY);
+// Vercel Blob is used whenever its token is present, which it is on any
+// deployment with a Blob store attached. Supabase remains supported for a
+// self-hosted deployment that prefers it.
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || '';
+
+export const usingObjectStorage = Boolean((SUPABASE_URL && SUPABASE_KEY) || BLOB_TOKEN);
 
 const UPLOAD_DIR = process.env.KC_UPLOAD_DIR || path.join(__dirname, 'uploads');
 
@@ -35,8 +41,8 @@ function ensureLocalDir() {
     localDirReady = true;
   } catch (err) {
     const e = new Error(
-      'Uploads are not configured: this filesystem is read-only. ' +
-      'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to store files in object storage.'
+      'Uploads are not configured on this deployment. Attach a Vercel Blob store, ' +
+      'or set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.'
     );
     e.statusCode = 503;
     e.cause = err;
@@ -85,9 +91,21 @@ async function putLocal(buffer, mimetype) {
   return `/api/files/${name}`;
 }
 
+async function putVercelBlob(buffer, mimetype) {
+  const { url } = await putBlob(`uploads/${safeName(mimetype)}`, buffer, {
+    access: 'public',
+    contentType: mimetype,
+    addRandomSuffix: false,
+    token: BLOB_TOKEN,
+  });
+  return url;
+}
+
 /** @returns {Promise<string>} a URL the browser can load the file from */
 export function put(buffer, mimetype) {
-  return usingObjectStorage ? putSupabase(buffer, mimetype) : putLocal(buffer, mimetype);
+  if (SUPABASE_URL && SUPABASE_KEY) return putSupabase(buffer, mimetype);
+  if (BLOB_TOKEN) return putVercelBlob(buffer, mimetype);
+  return putLocal(buffer, mimetype);
 }
 
 export { UPLOAD_DIR };
