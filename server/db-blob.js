@@ -209,3 +209,5 @@ export const pool = { end: async () => { await flush(); } };
 export const query = async () => { throw new Error('Raw SQL is not available on the Blob store.'); };
 export async function migrate() { await ready(); }
 export { nowISO, newId, userToPublic };
+// For the one-off import into Postgres (import-blob.js). Not for the app.
+export const _raw = raw;

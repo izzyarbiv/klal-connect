@@ -1,5 +1,5 @@
 // Exercises each geocoder adapter against a recorded response shape, so the
-// three we cannot hit live (no API key) are still known to parse correctly.
+// four we cannot hit live (no API key) are still known to parse correctly.
 const FIXTURES = {
   mapbox: {
     reverse: { features: [{ text: 'Lakewood', place_name: 'Lakewood, New Jersey, United States',
@@ -16,6 +16,20 @@ const FIXTURES = {
     reverse: { address: { city: 'Lakewood', country_code: 'us' }, display_name: 'Lakewood, Ocean County, NJ, USA' },
     search: [{ lat: '40.0959', lon: '-74.2179', display_name: 'Lakewood, Ocean County, NJ, USA',
       address: { city: 'Lakewood', country_code: 'us' } }],
+  },
+  google: {
+    reverse: { status: 'OK', results: [{ formatted_address: 'Lakewood, NJ, USA',
+      address_components: [
+        { long_name: 'Lakewood', short_name: 'Lakewood', types: ['locality', 'political'] },
+        { long_name: 'Ocean County', short_name: 'Ocean County', types: ['administrative_area_level_2', 'political'] },
+        { long_name: 'United States', short_name: 'US', types: ['country', 'political'] },
+      ] }] },
+    search: { status: 'OK', results: [{ formatted_address: 'Lakewood, NJ, USA',
+      geometry: { location: { lat: 40.0959, lng: -74.2179 } },
+      address_components: [
+        { long_name: 'Lakewood', short_name: 'Lakewood', types: ['locality', 'political'] },
+        { long_name: 'United States', short_name: 'US', types: ['country', 'political'] },
+      ] }] },
   },
   nominatim: {
     reverse: { address: { town: 'Lakewood', country_code: 'us' }, display_name: 'Lakewood, Ocean County, NJ, USA' },

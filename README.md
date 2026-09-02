@@ -115,24 +115,39 @@ It exists to show the app. Attach Postgres before it is anything more than that.
 
 ## Deploying to Vercel
 
-1. **Supabase** — create a project, then a **public** Storage bucket named `uploads`.
+1. **Supabase** — create a project. Uploads can go to Supabase Storage (a
+   **public** bucket named `uploads`) or to Vercel Blob; either works.
 2. **Vercel** — import the repo and set these environment variables:
 
    | Variable | Value |
    | --- | --- |
    | `DATABASE_URL` | Supabase **Transaction pooler** string, port **6543** — not the direct connection, which is IPv6-only and exhausts its connection budget under serverless. Remove any `?sslmode=` (TLS is configured in code). |
-   | `SUPABASE_URL` | `https://<ref>.supabase.co` |
-   | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API. Server-side only. |
+   | `BLOB_READ_WRITE_TOKEN` | Set by attaching a Vercel Blob store — uploads go there. Or `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` for Supabase Storage. |
    | `KC_JWT_SECRET` | A long random string. The server refuses to boot in production without it. |
-   | `KC_GEOCODER` / `KC_GEOCODER_KEY` | `mapbox` and your token |
+   | `KC_GEOCODER` / `KC_GEOCODER_KEY` | `google` and a key restricted to the Geocoding API (or `mapbox` and a token) |
+   | `GOOGLE_MAPS_BROWSER_KEY` | A *separate* key restricted to the site's referrers and the Maps JavaScript API. Without it the map falls back to OpenStreetMap tiles. |
    | `KC_TRUST_PROXY` | `1` — Vercel terminates TLS in front of us, so `req.ip` comes from `X-Forwarded-For` |
    | `KC_AUTO_MIGRATE` | `0` — run `npm run migrate` yourself instead of on every cold start |
    | `NODE_ENV` | `production` |
-   | `KC_DEMO_MODE` | Remove it. It swaps Postgres for in-memory storage and opens a guest-session route, neither of which belongs on a real deployment. |
+   | `KC_DEMO_MODE` | `1` keeps the no-login guest session (visitors browse as a shared guest account). With `DATABASE_URL` set the data still lives in Postgres. Remove it once real members should have to sign in. |
+   | `KC_STORE` | Remove it once `DATABASE_URL` is set. `blob` was the pre-database bridge. |
 
 3. Run `npm run migrate` once against the production database.
 4. `npm run create-admin` against it too — with no email provider wired up, the
    signup flow cannot be completed, so this is the only way in.
+
+### Moving off the Blob bridge
+
+A deployment that ran with `KC_STORE=blob` before a database existed keeps its
+data with one command:
+
+```sh
+BLOB_READ_WRITE_TOKEN=… DATABASE_URL=… npm run import-blob
+```
+
+Every record and account is copied with its original id and timestamps, so
+sessions stay valid. Re-running is safe (existing rows are skipped). Then drop
+`KC_STORE` from the Vercel env and redeploy.
 
 The whole API is one function (`api/index.js`), so a warm instance keeps a single
 database pool rather than one per route.
@@ -151,10 +166,11 @@ under `/api` is ever cached — see the invariants in `vite.config.js`.
 - **Native app builds** — Capacitor wrappers for the App Store and Play Store are
   not set up. Apple's guideline 4.2 rejects thin web wrappers, so this needs
   native capabilities (push, geolocation) before it is worth submitting.
-- **Map tiles** — still OpenStreetMap's public tiles, whose policy does not cover
-  production app traffic. `KC_TILE_URL` repoints them without a rebuild.
+- **Map** — Google Maps once `GOOGLE_MAPS_BROWSER_KEY` is set; until then
+  OpenStreetMap's public tiles, whose policy does not cover production app
+  traffic.
 
 ## Stack
 
 React 18 · Vite 6 · Tailwind 3 · shadcn/ui (Radix) · react-router-dom 6 · TanStack Query ·
-react-leaflet · framer-motion · lucide-react · Express 5 · Postgres · @hebcal/core
+@vis.gl/react-google-maps (react-leaflet fallback) · framer-motion · lucide-react · Express 5 · Postgres · @hebcal/core

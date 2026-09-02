@@ -179,9 +179,22 @@ app.get('/api/users/:id', async (req, res, next) => {
 
 // -------------------------------------------------------------------- auth --
 
-// Public runtime config. Lets the client discover it is talking to a demo
-// instance without baking that into the build.
-app.get('/api/config', (_req, res) => res.json({ demoMode: isDemoMode }));
+// Public runtime config: what the browser needs to know before it renders,
+// none of it secret. Kept server-side so any of it can change with an env var
+// instead of a rebuild.
+//
+// GOOGLE_MAPS_BROWSER_KEY is meant to ship to the client — restrict it in the
+// Cloud console to this site's referrers and to the Maps JavaScript API only.
+// The server-side geocoding key (KC_GEOCODER_KEY) is a different key and never
+// leaves this process.
+app.get('/api/config', (_req, res) => res.json({
+  demoMode: isDemoMode,
+  googleMapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || '',
+  googleMapsMapId: process.env.GOOGLE_MAPS_MAP_ID || '',
+  tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  tileAttribution: process.env.KC_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors',
+  geocoder: GEO_PROVIDER,
+}));
 
 // Issues a session for the shared guest account so a demo visitor can browse
 // the signed-in parts of the app without a login wall.
@@ -337,16 +350,6 @@ app.get('/api/geo/ip', requireAuth, async (req, res, next) => {
     // X-Forwarded-For is only believed when we are actually behind a proxy.
     res.json(await geolocateIp(req.ip));
   } catch (err) { next(err); }
-});
-
-// Runtime config the browser needs before it can render. Kept server-side so
-// tiles can be repointed with an env var instead of a rebuild.
-app.get('/api/config', async (_req, res, next) => {
-  res.json({
-    tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    tileAttribution: process.env.KC_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors',
-    geocoder: GEO_PROVIDER,
-  });
 });
 
 app.get('/api/health', async (_req, res, next) => {

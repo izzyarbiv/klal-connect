@@ -1,43 +1,39 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import { Link } from 'react-router-dom';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { api } from '@/api/client';
-import 'leaflet/dist/leaflet.css';
 
-// OpenStreetMap's tile policy does not cover production app traffic. The source
-// is read from runtime config so it can be pointed at a paid tile provider with
-// an env var, without a rebuild.
+// Google Maps when the deployment has a key, OpenStreetMap via Leaflet when it
+// does not. Which one is decided at runtime from /api/config, so the switch is
+// an env var — and each map library is only downloaded if it is the one in use.
+const GoogleMap = lazy(() => import('./map/GoogleMap.jsx'));
+const LeafletMap = lazy(() => import('./map/LeafletMap.jsx'));
+
 const OSM_FALLBACK = {
+  googleMapsKey: '',
   tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   tileAttribution: '&copy; OpenStreetMap contributors',
 };
 
 export default function DirectoryMap({ providers }) {
-  const [config, setConfig] = useState(OSM_FALLBACK);
+  const [config, setConfig] = useState(null);
   useEffect(() => {
     let alive = true;
     api.getConfig()
-      .then((c) => { if (alive && c?.tileUrl) setConfig(c); })
-      .catch(() => {});
+      .then((c) => { if (alive) setConfig({ ...OSM_FALLBACK, ...(c || {}) }); })
+      .catch(() => { if (alive) setConfig(OSM_FALLBACK); });
     return () => { alive = false; };
   }, []);
 
   const located = providers.filter((p) => p.latitude && p.longitude);
   const center = located.length ? [located[0].latitude, located[0].longitude] : [40.7128, -74.006];
+  const MapImpl = config?.googleMapsKey ? GoogleMap : LeafletMap;
 
   return (
-    <div className="h-[60vh] overflow-hidden rounded-3xl ring-1 ring-brand-line">
-      <MapContainer center={center} zoom={9} className="h-full w-full">
-        <TileLayer attribution={config.tileAttribution} url={config.tileUrl} />
-        {located.map((p) => (
-          <Marker key={p.id} position={[p.latitude, p.longitude]}>
-            <Popup>
-              <strong>{p.name}</strong><br />{p.city}<br />
-              <Link to={`/provider/${p.id}`}>View profile</Link>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+    <div className="h-[60vh] overflow-hidden rounded-3xl ring-1 ring-brand-line bg-brand-surface">
+      {config && (
+        <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-brand-muted">Loading map…</div>}>
+          <MapImpl located={located} center={center} config={config} />
+        </Suspense>
+      )}
     </div>
   );
 }

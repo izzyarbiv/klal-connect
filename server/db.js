@@ -15,13 +15,19 @@
 // Storage and the demo experience are separate choices. KC_DEMO_MODE controls
 // the guest session and seeded content; KC_STORE controls where data lives. A
 // public demo wants both: browsable without signing in, and still persistent.
+//
+// With no KC_STORE, demo mode only falls back to memory when there is no
+// database to talk to. Once DATABASE_URL is set, the guest session and the
+// seeded content live in Postgres like everything else.
 const DEMO = process.env.KC_DEMO_MODE === '1';
 const STORE = (process.env.KC_STORE || '').toLowerCase();
+const HAS_DB = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);
 
 const backend =
   STORE === 'blob' ? 'blob' :
   STORE === 'memory' ? 'memory' :
-  DEMO && !STORE ? 'memory' :
+  STORE === 'postgres' ? 'postgres' :
+  DEMO && !HAS_DB ? 'memory' :
   'postgres';
 
 const impl = await import(

@@ -13,12 +13,13 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "preview": "vite preview",
-    "test": "node src/lib/shabbosState.test.mjs && DATABASE_URL=${KC_TEST_DATABASE_URL:-postgres://localhost:5432/klal_connect_test} node server/geocode.test.mjs",
+    "test": "node src/lib/shabbosState.test.mjs && KC_STORE=memory node server/geocode.test.mjs",
     "create-admin": "node --env-file-if-exists=.env.local server/create-admin.js",
     "migrate": "node --env-file-if-exists=.env.local server/migrate.js",
     "test:gate": "node scripts/shabbos-gate-check.mjs ${KC_TEST_EMAIL:-} ${KC_TEST_PASSWORD:-}",
     "test:offline": "node scripts/sw-offline-check.mjs ${KC_TEST_EMAIL:-} ${KC_TEST_PASSWORD:-}",
-    "clear-demo": "node server/clear-demo.js"
+    "clear-demo": "node server/clear-demo.js",
+    "import-blob": "node --env-file-if-exists=.env.local server/import-blob.js"
   },
   "dependencies": {
     "@hebcal/core": "^6.9.2",
@@ -55,6 +56,8 @@
     "@stripe/stripe-js": "^5.2.0",
     "@tanstack/react-query": "^5.84.1",
     "@vercel/blob": "^2.8.0",
+    "@vercel/functions": "^3.9.5",
+    "@vis.gl/react-google-maps": "^1.9.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "canvas-confetti": "^1.9.4",

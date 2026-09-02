@@ -54,7 +54,7 @@ async function getJSON(url) {
       if (res.status === 403 && PROVIDER === 'nominatim') {
         throw new GeoError(
           'OpenStreetMap declined the request. Nominatim is not usable for production traffic — ' +
-          'set KC_GEOCODER (mapbox, geoapify or locationiq) and KC_GEOCODER_KEY.',
+          'set KC_GEOCODER (google, mapbox, geoapify or locationiq) and KC_GEOCODER_KEY.',
           503
         );
       }
@@ -117,6 +117,28 @@ function place(latitude, longitude, { city, country_code, label } = {}) {
     country_code: (country_code || '').toUpperCase(),
     timezone: tzFor(lat, lon),
     label: label || city || '',
+  };
+}
+
+// Google reports failures in the body with a 200, so a bad key or a billing
+// problem would otherwise read as "no results".
+function googleStatus(d) {
+  const status = d?.status;
+  if (status === 'OK' || status === 'ZERO_RESULTS') return;
+  const detail = d?.error_message ? ` — ${d.error_message}` : '';
+  throw new GeoError(`Google Geocoding: ${status || 'no status'}${detail}`, status === 'REQUEST_DENIED' ? 500 : 502);
+}
+
+function googleComponents(result) {
+  const pick = (type) => (result.address_components || []).find((c) => c.types.includes(type));
+  return {
+    city: firstOf(
+      pick('locality')?.long_name,
+      pick('postal_town')?.long_name,
+      pick('sublocality')?.long_name,
+      pick('administrative_area_level_2')?.long_name
+    ),
+    country_code: pick('country')?.short_name,
   };
 }
 
@@ -187,6 +209,35 @@ const providers = {
       return (d.results || []).map((r) =>
         place(r.lat, r.lon, { city: firstOf(r.city, r.county), country_code: r.country_code, label: r.formatted })
       );
+    },
+  },
+
+  // Google's Geocoding API. Both directions return the same shape: a list of
+  // results, each with address_components typed by kind. City is the
+  // "locality" component, falling back to the wider administrative areas for
+  // places that are not incorporated as one.
+  google: {
+    async reverse(lat, lon) {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&result_type=locality|postal_town|administrative_area_level_2&key=${API_KEY}`;
+      const d = await getJSON(url);
+      googleStatus(d);
+      const r = (d.results || [])[0];
+      if (!r) return place(lat, lon);
+      const c = googleComponents(r);
+      return place(lat, lon, { city: c.city, country_code: c.country_code, label: r.formatted_address });
+    },
+    async search(q, limit) {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${API_KEY}`;
+      const d = await getJSON(url);
+      googleStatus(d);
+      return (d.results || []).slice(0, limit).map((r) => {
+        const c = googleComponents(r);
+        return place(r.geometry.location.lat, r.geometry.location.lng, {
+          city: c.city || (r.formatted_address || '').split(',')[0],
+          country_code: c.country_code,
+          label: r.formatted_address,
+        });
+      });
     },
   },
 
