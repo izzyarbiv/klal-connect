@@ -7,12 +7,12 @@ export default function Home(){
   return <>
     <section className="hero"><div className="page-shell py-16 md:py-28">
       <span className="eyebrow">BUILT BY THE COMMUNITY, FOR THE COMMUNITY</span>
-      <h1 className="mt-5 max-w-3xl font-display text-4xl font-bold tracking-tight text-brand-ink md:text-6xl">Helping each other grow.<br/><span className="text-brand-teal">Strengthening our communities.</span></h1>
-      <p className="mt-5 max-w-2xl text-lg text-brand-body">Klal is a single home for the frum Jewish community to find trusted businesses, services, and resources — and to put your own business in front of the klal.</p>
+      <h1 className="mt-5 max-w-3xl font-display text-4xl font-bold tracking-tight text-white md:text-6xl">Helping each other grow.<br/><span className="hero-gold">Strengthening our communities.</span></h1>
+      <p className="mt-5 max-w-2xl text-lg text-white/85">Klal is a single home for the frum Jewish community to find trusted businesses, services, and resources — and to put your own business in front of the klal.</p>
       <div className="mt-8"><SearchPanel/></div>
       <div className="mt-5 flex flex-wrap gap-3">
-        <Link to="/directory" className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-navy-hover"><Search size={17}/>Browse the directory</Link>
-        <Link to="/feed" className="inline-flex items-center gap-2 rounded-xl border border-brand-line bg-brand-surface px-5 py-3 font-semibold text-brand-ink transition hover:bg-brand-tint"><MessageSquare size={17}/>Open the community feed</Link>
+        <Link to="/directory" className="inline-flex items-center gap-2 rounded-xl bg-[#f3c66a] px-5 py-3 font-bold text-[#0b2c38] shadow-sm transition hover:bg-[#f6d187]"><Search size={17}/>Browse the directory</Link>
+        <Link to="/feed" className="inline-flex items-center gap-2 rounded-xl border border-white/40 px-5 py-3 font-semibold text-white transition hover:bg-white/10"><MessageSquare size={17}/>Open the community feed</Link>
       </div>
     </div></section>
 

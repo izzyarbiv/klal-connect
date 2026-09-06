@@ -59,8 +59,8 @@
        what made the light theme read heavy and dated. */
     --brand-canvas: 190 24% 99%;
     --brand-surface: 0 0% 100%;
-    --brand-navy: 196 52% 20%;
-    --brand-navy-hover: 191 48% 26%;
+    --brand-navy: 197 61% 18%;
+    --brand-navy-hover: 197 55% 25%;
     --brand-teal: 176 72% 28%;
     --brand-ink: 197 42% 17%;
     --brand-body: 197 13% 40%;
@@ -141,21 +141,18 @@
 
 @layer components {
   .page-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
-  /* Light hero. The dark slab dominated the page even in light mode, which is
-     what made the whole product feel heavy — the ground is now the same near
-     white as the rest of the page, with a soft teal wash for depth. */
+  /* The navy hero: deep navy with a teal glow in one corner, the one dark
+     band on an otherwise white page. Text inside it is set in white and the
+     bright gold (see .hero-gold) — the on-white gold token is too dark here. */
   .hero {
-    background:
-      radial-gradient(ellipse 80% 70% at 78% 0%, hsl(var(--brand-tint)) 0%, transparent 62%),
-      radial-gradient(ellipse 60% 60% at 8% 100%, hsl(42 82% 96%) 0%, transparent 60%),
-      hsl(var(--brand-canvas));
-    border-bottom: 1px solid hsl(var(--brand-line));
+    background: radial-gradient(circle at 82% 15%, #1d6a68 0%, #123c4a 46%, #0b2c38 100%);
+    color: #fff;
   }
   .dark .hero {
-    background:
-      radial-gradient(ellipse 80% 70% at 78% 0%, hsl(190 40% 16%) 0%, transparent 62%),
-      hsl(var(--brand-canvas));
+    background: radial-gradient(circle at 82% 15%, #17514f 0%, #0f323d 46%, #08222c 100%);
   }
+  .hero-gold { color: #f3c66a; }
+  .hero .eyebrow { color: #f3c66a; }
   .eyebrow { @apply text-[11px] font-bold tracking-[0.18em] text-brand-gold; }
   .eyebrow.dark { @apply text-brand-teal; }
   .title { @apply mt-2 font-heading text-2xl font-bold tracking-tight text-brand-ink; }
