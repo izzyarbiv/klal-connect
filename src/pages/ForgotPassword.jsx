@@ -11,17 +11,23 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [unavailable, setUnavailable] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       await api.auth.resetPasswordRequest(email);
-    } catch {
-      // Always show success regardless
+      setSent(true);
+    } catch (err) {
+      // 503 means the server has no way to email a code at all; say so
+      // instead of promising a link that will never arrive. Any other failure
+      // still shows the neutral "if an account exists" message, so the form
+      // never reveals which addresses are registered.
+      if (err?.status === 503) setUnavailable(err.message);
+      else setSent(true);
     } finally {
       setLoading(false);
-      setSent(true);
     }
   };
 
@@ -36,7 +42,9 @@ export default function ForgotPassword() {
         </Link>
       }
     >
-      {sent ? (
+      {unavailable ? (
+        <p className="text-sm text-foreground text-center">{unavailable}</p>
+      ) : sent ? (
         <p className="text-sm text-foreground text-center">
           If an account exists with that email, you'll receive a password reset link shortly.
         </p>
