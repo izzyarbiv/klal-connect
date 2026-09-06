@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import UpdatePrompt from '@/components/UpdatePrompt';
+import InstallPrompt from '@/components/InstallPrompt';
 import AppLayout from '@/components/AppLayout';
 import Home from '@/pages/Home';
 import Browse from '@/pages/Browse';
@@ -95,6 +96,7 @@ function App() {
         </Router>
         <Toaster />
         <UpdatePrompt />
+        <InstallPrompt />
       </QueryClientProvider>
     </AuthProvider>
   )

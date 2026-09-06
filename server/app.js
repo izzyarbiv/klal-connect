@@ -79,6 +79,7 @@ const OWNER_SCOPED = {
   SavedProvider: (row, user) => row.created_by_id === user.id,
   ProviderUsage: (row, user) => row.created_by_id === user.id,
   FeedLike: (row, user) => row.created_by_id === user.id,
+  CommentVote: (row, user) => row.created_by_id === user.id,
   PrivateReport: (row, user) => row.created_by_id === user.id,
   ListingReport: (row, user) => row.created_by_id === user.id,
   ClaimRequest: (row, user) => row.created_by_id === user.id,
@@ -127,7 +128,7 @@ const ENTITIES = new Set([
   'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
-  'ListingReport', 'PrivateReport', 'Vouch',
+  'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote',
 ]);
 
 app.param('entity', (req, res, next, entity) => {

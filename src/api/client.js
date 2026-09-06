@@ -74,7 +74,7 @@ const ENTITY_NAMES = [
   'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
-  'ListingReport', 'PrivateReport', 'Vouch', 'User',
+  'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'User',
 ];
 
 function entityApi(name) {

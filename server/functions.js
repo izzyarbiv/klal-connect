@@ -185,6 +185,60 @@ export const functions = {
     return { comment, comment_count };
   },
 
+  // ---- asks: answers with upvotes, and the asker's "this helped" ---------
+
+  async toggleAnswerVote({ comment_id }, user) {
+    await assertWritable(user);
+    need(comment_id, 'Missing answer.');
+    const comment = await store.get('Comment', comment_id);
+    if (!comment) fail('Answer not found.', 404);
+    if (comment.created_by_id === user.id) fail('You cannot upvote your own answer.');
+    const existing = await store.filter('CommentVote', { comment_id, created_by_id: user.id });
+    let voted;
+    if (existing.length) {
+      for (const v of existing) await store.delete('CommentVote', v.id);
+      voted = false;
+    } else {
+      await store.create('CommentVote', { comment_id, post_id: comment.post_id }, user);
+      voted = true;
+    }
+    const vote_count = await store.count('CommentVote', { comment_id });
+    await store.update('Comment', comment_id, { vote_count });
+    return { voted, vote_count };
+  },
+
+  // Only the person who asked can say what helped. One answer at a time;
+  // choosing another moves the mark, choosing the same one again clears it.
+  async markHelpful({ post_id, comment_id }, user) {
+    await assertWritable(user);
+    need(post_id, 'Missing post.');
+    const post = await store.get('FeedPost', post_id);
+    if (!post) fail('Post not found.', 404);
+    if (post.created_by_id !== user.id) fail('Only the person who asked can mark an answer as helpful.', 403);
+    const previous = post.helpful_comment_id || null;
+    const next = previous === comment_id ? null : comment_id;
+    if (next) {
+      const comment = await store.get('Comment', next);
+      if (!comment || comment.post_id !== post_id) fail('Answer not found.', 404);
+    }
+    if (previous) await store.update('Comment', previous, { helpful: false });
+    if (next) await store.update('Comment', next, { helpful: true });
+    await store.update('FeedPost', post_id, { helpful_comment_id: next });
+    if (next) {
+      const comment = await store.get('Comment', next);
+      if (comment.created_by_id !== user.id) {
+        await notify(comment.created_by_id, {
+          type: 'helpful',
+          actor_name: user.full_name || user.email,
+          target_type: 'post',
+          target_id: post_id,
+          message: `${user.full_name || 'Someone'} marked your answer as helpful`,
+        });
+      }
+    }
+    return { helpful_comment_id: next };
+  },
+
   async toggleLike({ post_id }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');

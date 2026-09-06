@@ -11,6 +11,8 @@ import Headline from '@/components/Headline';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import { topJob } from '@/lib/connections';
 import GuestPrompt from '@/components/GuestPrompt';
+import CompletenessRing from '@/components/CompletenessRing';
+import { profileCompleteness } from '@/lib/completeness';
 
 export default function Profile() {
   const [user, setUser] = useState();
@@ -46,12 +48,15 @@ export default function Profile() {
     <h1 className="title text-3xl">Community profile</h1>
     <p className="helper mb-7">Keep a simple profile and an optional general home city. Your exact location is never displayed.</p>
 
-    <div className="panel mb-5 flex items-center gap-3">
-      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">{(user.full_name||'?').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
-      <div className="min-w-0">
-        <p className="font-bold text-brand-ink">{user.full_name}</p>
-        <Headline text={form.headline} variant="header"/>
+    <div className="panel mb-5 flex flex-wrap items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">{(user.full_name||'?').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+        <div className="min-w-0">
+          <p className="font-bold text-brand-ink">{user.full_name}</p>
+          <Headline text={form.headline} variant="header"/>
+        </div>
       </div>
+      {(() => { const c = profileCompleteness({ ...user, ...form }); return <CompletenessRing percent={c.percent} next={c.next} label="Profile" onAction={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}/>; })()}
     </div>
 
     <form onSubmit={submit} className="space-y-5">

@@ -1,6 +1,8 @@
 import React,{useEffect,useState} from 'react';
 import { api } from '@/api/client';
 import HeadlineEdit from '@/components/HeadlineEdit';
+import CompletenessRing from '@/components/CompletenessRing';
+import { listingCompleteness } from '@/lib/completeness';
 
 export default function ManageListings({user}){
   const [items,setItems]=useState([]);
@@ -37,12 +39,13 @@ export default function ManageListings({user}){
           {items.map(p=>(
             <div key={p.id} className="space-y-2 rounded-2xl border border-brand-line p-4">
               <div className="flex items-center justify-between"><p className="font-semibold text-brand-ink">{p.name}</p><span className="text-xs font-semibold text-brand-muted">{p.status}</span></div>
+              {(() => { const c = listingCompleteness(p); return <CompletenessRing percent={c.percent} next={c.next} label="Listing" onAction={() => { setSelected(p.id); setChanges((t) => t || `${c.next.action}: `); document.getElementById('listing-change-request')?.scrollIntoView({ behavior: 'smooth' }); }}/>; })()}
               <HeadlineEdit label="Tagline" value={taglineFor[p.id]!=null?taglineFor[p.id]:(p.tagline||'')} onChange={v=>setTaglineFor({...taglineFor,[p.id]:v})} helper="Appears under your listing name across the app."/>
               <button onClick={()=>saveTagline(p.id)} disabled={savingId===p.id} className="primary text-sm">{savingId===p.id?'Saving…':'Save tagline'}{savedId===p.id?' ✓':''}</button>
             </div>
           ))}
         </div>
-        <form onSubmit={submit} className="space-y-3 border-t border-brand-line pt-4">
+        <form id="listing-change-request" onSubmit={submit} className="space-y-3 border-t border-brand-line pt-4">
           <h3 className="font-semibold text-brand-ink">Request a larger change</h3>
           <p className="helper">Significant changes are sent to the administrative team before publication.</p>
           <select required className="field" value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Choose your listing</option>{items.map(p=><option key={p.id} value={p.id}>{p.name} — {p.status}</option>)}</select>
