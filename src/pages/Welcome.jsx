@@ -15,10 +15,14 @@ export default function Welcome() {
   const [me, setMe] = useState(null);
   const [step, setStep] = useState(0);
   const [type, setType] = useState('community_member');
+  const [name, setName] = useState('');
   const [city, setCity] = useState('');
   const [affiliation, setAffiliation] = useState('');
   const [nearby, setNearby] = useState(null);
-  const done = safeReturnTo() === '/welcome' ? '/feed' : safeReturnTo();
+  // Where "Done" goes: wherever sign-up was headed, else the feed — the
+  // first thing a new member should see is the community, not the brochure.
+  const rt = safeReturnTo();
+  const done = rt === '/' || rt === '/welcome' ? '/feed' : rt;
 
   useEffect(() => {
     (async () => {
@@ -26,6 +30,7 @@ export default function Welcome() {
       const u = await api.auth.me();
       setMe(u);
       setType(u.profile_type || 'community_member');
+      setName(u.full_name || '');
       setCity(u.home_city || u.city || '');
       setAffiliation(u.affiliation || '');
     })();
@@ -48,9 +53,11 @@ export default function Welcome() {
     {dots}
     <div className="panel mt-6 space-y-6">
       {step === 0 && <>
-        <div><span className="eyebrow dark">WELCOME{me.full_name ? `, ${me.full_name.split(' ')[0].toUpperCase()}` : ''}</span><h1 className="title text-3xl">What brings you to Klal?</h1><p className="helper">You can do all three. This just picks where we start.</p></div>
+        <div><span className="eyebrow dark">WELCOME</span><h1 className="title text-3xl">First, your name</h1><p className="helper">Vouches, answers and invites carry your name — that is what makes them worth something here.</p></div>
+        <label>Your name<input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="As people in the community know you" autoFocus/></label>
+        <div><h2 className="section-title">What brings you to Klal?</h2><p className="helper">You can do all three. This just picks where we start.</p></div>
         <div className="grid gap-3">{PROFILE_TYPES.map((t) => { const I = ICONS[t.id]; return <button key={t.id} type="button" onClick={() => setType(t.id)} className={`flex items-start gap-3 rounded-2xl p-4 text-left ring-1 transition ${type === t.id ? 'bg-brand-tint ring-brand-teal' : 'bg-brand-surface ring-brand-line hover:bg-brand-tint/50'}`}><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${type === t.id ? 'bg-brand-navy text-white' : 'bg-brand-tint text-brand-teal'}`}><I size={20}/></span><span><span className="block font-semibold text-brand-ink">{t.label}</span><span className="block text-sm text-brand-body">{t.blurb}</span></span></button>; })}</div>
-        <div className="flex justify-end"><button type="button" onClick={() => next({ profile_type: type })} className="primary">Continue<ArrowRight size={16}/></button></div>
+        <div className="flex justify-end"><button type="button" disabled={!name.trim()} onClick={() => next({ profile_type: type, full_name: name.trim() })} className="primary disabled:opacity-50">Continue<ArrowRight size={16}/></button></div>
       </>}
 
       {step === 1 && <>
