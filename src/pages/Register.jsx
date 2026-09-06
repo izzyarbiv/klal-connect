@@ -11,6 +11,10 @@ import GoogleIcon from "@/components/GoogleIcon";
 import { toast } from "@/components/ui/use-toast";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
+// A new account goes through the welcome cards first, then on to wherever
+// it was headed.
+const welcomeUrl = () => { const rt = safeReturnTo(); return '/welcome' + (rt !== '/' && rt !== '/welcome' ? '?returnTo=' + encodeURIComponent(rt) : ''); };
+
 export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +36,7 @@ export default function Register() {
     setLoading(true);
     try {
       const result = await api.auth.register({ email, password });
-      if (result?.access_token) { window.location.href = safeReturnTo(); return; }
+      if (result?.access_token) { window.location.href = welcomeUrl(); return; }
       setShowOtp(true);
     } catch (err) {
       setError(err.message || "Registration failed");
@@ -49,7 +53,7 @@ export default function Register() {
       if (result?.access_token) {
         api.auth.setToken(result.access_token);
       }
-      window.location.href = safeReturnTo();
+      window.location.href = welcomeUrl();
     } catch (err) {
       setError(err.message || "Invalid verification code");
     } finally {

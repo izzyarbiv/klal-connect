@@ -24,7 +24,7 @@ function HeaderAccount() {
     </>;
   }
   return <>
-    {user.role === 'admin' && <NavLink to="/admin" className="ml-2 p-2 text-brand-muted hover:text-brand-teal" aria-label="Admin"><ShieldCheck size={19}/></NavLink>}
+    {(user.role === 'admin' || user.role === 'moderator') && <NavLink to="/admin" className="ml-2 p-2 text-brand-muted hover:text-brand-teal" aria-label="Admin"><ShieldCheck size={19}/></NavLink>}
     <button type="button" onClick={() => logout()} className="ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-brand-muted hover:bg-brand-surface hover:text-brand-ink" aria-label="Log out"><LogOut size={16}/><span className="hidden lg:inline">Log out</span></button>
   </>;
 }

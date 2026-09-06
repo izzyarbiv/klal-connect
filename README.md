@@ -90,6 +90,17 @@ These are server-side rather than direct entity writes because each enforces som
 the client must not be trusted with: moderation status, ownership, counter integrity, or
 the Shabbos write-gate.
 
+## Roles
+
+- **user** — a member. Reads everything public, writes their own.
+- **moderator** — the review queues (pending listings, claims, positive notes, reports,
+  edits). Can approve, reject and resolve, and leave notes. Cannot delete, verify,
+  rename, or see messages, saves, categories or users.
+- **admin** — everything, including verification, badges, categories and roles.
+  Roles are changed from Admin → Users; you cannot change your own.
+
+Every status change by staff is recorded as a `moderation` activity event.
+
 ## Access rules
 
 - **Public**: published listings, companies, categories, published community notes.
@@ -98,6 +109,10 @@ the Shabbos write-gate.
 - **Admin only**: platform settings (including the global Shabbos override), the report queue.
 - **Shabbos**: the server refuses writes during Shabbos and Yom Tov, so a stale tab or a
   wrong client clock can't slip one through.
+- **Listing owners** edit their listing's content; `status`, `verified`, confirmed badges
+  and the counters are set only by the server or staff.
+- **Invites**: every member has one personal link (`/join/<code>`). Whoever joins through
+  it is recorded as invited by them; the inviter is told.
 
 ## Data
 

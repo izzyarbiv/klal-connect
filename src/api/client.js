@@ -74,7 +74,7 @@ const ENTITY_NAMES = [
   'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
-  'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'User',
+  'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'User',
 ];
 
 function entityApi(name) {
@@ -175,7 +175,11 @@ const auth = {
   },
 
   async register({ email, password, full_name }) {
-    const res = await request('POST', '/auth/register', { body: { email, password, full_name } });
+    // An invite code remembered from a /join/<code> link, if any.
+    let invite_code = null;
+    try { invite_code = localStorage.getItem('kc_invite_code') || null; } catch { /* fine */ }
+    const res = await request('POST', '/auth/register', { body: { email, password, full_name, invite_code } });
+    try { if (res.ok) localStorage.removeItem('kc_invite_code'); } catch { /* fine */ }
     // With no mail provider the server signs the new account in directly.
     if (res.access_token) tokenStore.set(res.access_token);
     return res;
@@ -280,6 +284,8 @@ const integrations = {
   },
 };
 
-export const api = { entities, auth, functions: functionsApi, integrations, geo, getConfig };
+export const api = {
+  invites: { get: (code) => request('GET', `/invites/${encodeURIComponent(code)}`) },
+  admin: { setRole: (id, role) => request('PUT', `/users/${encodeURIComponent(id)}/role`, { body: { role } }) }, entities, auth, functions: functionsApi, integrations, geo, getConfig };
 export { ApiError };
 export default api;

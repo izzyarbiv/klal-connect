@@ -1,0 +1,83 @@
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Compass, Wrench, Store, MapPin, Handshake, Plus } from 'lucide-react';
+import { api } from '@/api/client';
+import { safeReturnTo } from '@/lib/authReturnTo';
+import { AFFILIATIONS, PROFILE_TYPES } from '@/lib/affiliations';
+import InviteButton from '@/components/InviteButton';
+import ResourceCard from '@/components/ResourceCard';
+
+// The ninety seconds after sign-up: one question per card, every card
+// skippable, and the value (nearby listings) shown before the ask (invites).
+const ICONS = { community_member: Compass, provider: Wrench, business_owner: Store };
+
+export default function Welcome() {
+  const [me, setMe] = useState(null);
+  const [step, setStep] = useState(0);
+  const [type, setType] = useState('community_member');
+  const [city, setCity] = useState('');
+  const [affiliation, setAffiliation] = useState('');
+  const [nearby, setNearby] = useState(null);
+  const done = safeReturnTo() === '/welcome' ? '/feed' : safeReturnTo();
+
+  useEffect(() => {
+    (async () => {
+      if (!(await api.auth.hasAccount())) return api.auth.redirectToLogin('/welcome');
+      const u = await api.auth.me();
+      setMe(u);
+      setType(u.profile_type || 'community_member');
+      setCity(u.home_city || u.city || '');
+      setAffiliation(u.affiliation || '');
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (step !== 2 || nearby) return;
+    api.entities.Provider.filter({ status: 'published' }, '-vouch_count', 5).then(setNearby).catch(() => setNearby([]));
+  }, [step, nearby]);
+
+  const save = async (patch) => { try { await api.auth.updateMe(patch); } catch { /* keep going; the profile page can fix it later */ } };
+  const next = async (patch) => { if (patch) await save(patch); setStep((s) => s + 1); };
+  const finish = async () => { await save({ onboarded: true }); window.location.href = done; };
+
+  if (!me) return <div className="loading">Setting things up…</div>;
+
+  const dots = <div className="flex justify-center gap-1.5">{[0, 1, 2, 3].map((i) => <span key={i} className={`h-1.5 w-6 rounded-full ${i === step ? 'bg-brand-navy' : i < step ? 'bg-brand-teal' : 'bg-brand-line'}`} />)}</div>;
+
+  return <div className="page-shell max-w-2xl py-8 md:py-14">
+    {dots}
+    <div className="panel mt-6 space-y-6">
+      {step === 0 && <>
+        <div><span className="eyebrow dark">WELCOME{me.full_name ? `, ${me.full_name.split(' ')[0].toUpperCase()}` : ''}</span><h1 className="title text-3xl">What brings you to Klal?</h1><p className="helper">You can do all three. This just picks where we start.</p></div>
+        <div className="grid gap-3">{PROFILE_TYPES.map((t) => { const I = ICONS[t.id]; return <button key={t.id} type="button" onClick={() => setType(t.id)} className={`flex items-start gap-3 rounded-2xl p-4 text-left ring-1 transition ${type === t.id ? 'bg-brand-tint ring-brand-teal' : 'bg-brand-surface ring-brand-line hover:bg-brand-tint/50'}`}><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${type === t.id ? 'bg-brand-navy text-white' : 'bg-brand-tint text-brand-teal'}`}><I size={20}/></span><span><span className="block font-semibold text-brand-ink">{t.label}</span><span className="block text-sm text-brand-body">{t.blurb}</span></span></button>; })}</div>
+        <div className="flex justify-end"><button type="button" onClick={() => next({ profile_type: type })} className="primary">Continue<ArrowRight size={16}/></button></div>
+      </>}
+
+      {step === 1 && <>
+        <div><span className="eyebrow dark">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first. Your affiliation is optional and only ever used to show you what people in your community use.</p></div>
+        <label>City<div className="relative"><MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted"/><input className="field pl-9" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Lakewood, Brooklyn, Monsey…"/></div></label>
+        <div><p className="text-sm font-semibold text-brand-ink">Community</p><div className="mt-2 flex flex-wrap gap-2">{AFFILIATIONS.map((a) => <button key={a.id} type="button" onClick={() => setAffiliation(a.id === affiliation ? '' : a.id)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ring-1 transition ${affiliation === a.id ? 'bg-brand-navy text-white ring-brand-navy' : 'bg-brand-surface text-brand-body ring-brand-line hover:text-brand-ink'}`}>{a.label}</button>)}</div></div>
+        <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" onClick={() => next({ home_city: city, affiliation })} className="primary">Continue<ArrowRight size={16}/></button></div>
+      </>}
+
+      {step === 2 && <>
+        <div><span className="eyebrow dark">{type === 'community_member' ? 'NEAR YOU' : 'YOUR LISTING'}</span>
+          <h1 className="title text-3xl">{type === 'community_member' ? 'Trusted by the community' : 'Put yourself in front of the klal'}</h1>
+          <p className="helper">{type === 'community_member' ? 'The most-vouched listings on Klal right now. Vouches come from named members — never anonymous.' : 'Your listing goes to a quick review, then members can find it, vouch for it, and message you on WhatsApp.'}</p></div>
+        {type === 'community_member'
+          ? (nearby === null ? <div className="loading min-h-24">Loading…</div>
+            : nearby.length === 0
+              ? <div className="empty min-h-32"><Handshake className="text-brand-teal"/><p>The directory is just getting started{city ? ` in ${city}` : ''}. Know a business the community trusts? Add it and be its first vouch.</p><Link to="/add" className="primary"><Plus size={16}/>Add a listing</Link></div>
+              : <div className="grid gap-3">{nearby.map((p) => <ResourceCard key={p.id} provider={p}/>)}</div>)
+          : <div className="grid gap-3 sm:grid-cols-2"><Link to="/add" className="panel flex items-start gap-3 hover:bg-brand-tint/40"><Plus className="mt-0.5 shrink-0 text-brand-teal"/><span><span className="block font-semibold text-brand-ink">Create your listing</span><span className="block text-sm text-brand-body">Takes five minutes. Add a WhatsApp number and badges.</span></span></Link><Link to="/directory" className="panel flex items-start gap-3 hover:bg-brand-tint/40"><Compass className="mt-0.5 shrink-0 text-brand-teal"/><span><span className="block font-semibold text-brand-ink">Already listed?</span><span className="block text-sm text-brand-body">Find your business in the directory and claim it.</span></span></Link></div>}
+        <div className="flex justify-end"><button type="button" onClick={() => next()} className="primary">Continue<ArrowRight size={16}/></button></div>
+      </>}
+
+      {step === 3 && <>
+        <div><span className="eyebrow dark">GROW YOUR COMMUNITY</span><h1 className="title text-3xl">Invite three people you trust</h1><p className="helper">Klal works when your community is on it — vouches from people you know, asks answered by people you trust. Your invite link is yours; anyone who joins through it is connected to you.</p></div>
+        <InviteButton/>
+        <div className="flex items-center justify-between"><button type="button" onClick={finish} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip for now</button><button type="button" onClick={finish} className="primary">Done<ArrowRight size={16}/></button></div>
+      </>}
+    </div>
+  </div>;
+}

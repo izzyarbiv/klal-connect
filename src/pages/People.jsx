@@ -5,6 +5,7 @@ import { Search } from 'lucide-react';
 import UserCard from '@/components/UserCard';
 import PeopleYouMayKnow from '@/components/PeopleYouMayKnow';
 import { loadMyConnections, suggestSimilar, sentThisWeekCount, connectedIds, topJob, WEEKLY_CAP } from '@/lib/connections';
+import InviteButton from '@/components/InviteButton';
 
 export default function People(){
   const [me,setMe]=useState();
@@ -57,6 +58,7 @@ export default function People(){
         <Link to="/companies" className="hover:underline">Browse companies →</Link>
         <Link to="/messages" className="hover:underline">Messages →</Link>
       </div>
+      <div className="mt-4 rounded-2xl bg-brand-tint p-4"><p className="text-sm font-semibold text-brand-ink">Know someone who should be here?</p><p className="mb-3 text-sm text-brand-body">Klal gets better with every person from your community. Anyone who joins through your link is connected to you.</p><InviteButton/></div>
     </div>
 
     <div className="relative">

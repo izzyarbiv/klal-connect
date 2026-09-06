@@ -13,6 +13,8 @@ import { topJob } from '@/lib/connections';
 import GuestPrompt from '@/components/GuestPrompt';
 import CompletenessRing from '@/components/CompletenessRing';
 import { profileCompleteness } from '@/lib/completeness';
+import { AFFILIATIONS, PROFILE_TYPES } from '@/lib/affiliations';
+import InviteButton from '@/components/InviteButton';
 
 export default function Profile() {
   const [user, setUser] = useState();
@@ -25,15 +27,15 @@ export default function Profile() {
       setUser(u);
       setForm({
         full_name: u.full_name || '', headline: u.headline || '', profile_type: u.profile_type || 'community_member',
-        home_city: u.home_city || '', phone: u.phone || '', bio: u.bio || '',
+        home_city: u.home_city || '', phone: u.phone || '', bio: u.bio || '', affiliation: u.affiliation || '',
         avatar_url: u.avatar_url || '', banner_url: u.banner_url || '', work_experience: Array.isArray(u.work_experience) ? u.work_experience : []
       });
     })();}, []);
 
   const submit = async (e) => {
     e.preventDefault();
-    const { full_name, profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience } = form;
-    await api.auth.updateMe({ full_name, profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience });
+    const { full_name, profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience, affiliation } = form;
+    await api.auth.updateMe({ full_name, profile_type, headline, home_city, phone, bio, avatar_url, banner_url, work_experience, affiliation });
     setSaved(true);
   };
 
@@ -59,6 +61,8 @@ export default function Profile() {
       {(() => { const c = profileCompleteness({ ...user, ...form }); return <CompletenessRing percent={c.percent} next={c.next} label="Profile" onAction={() => document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' })}/>; })()}
     </div>
 
+    <div className="panel mb-5"><p className="font-semibold text-brand-ink">Invite people from your community</p><p className="mb-3 text-sm text-brand-body">Klal works when the people you trust are on it. Your link is yours; anyone who joins through it is connected to you.</p><InviteButton/></div>
+
     <form onSubmit={submit} className="space-y-5">
       <section className="panel space-y-3">
         <ProfileBannerEditor value={form.banner_url} onChange={(v) => setForm({ ...form, banner_url: v })} />
@@ -71,10 +75,10 @@ export default function Profile() {
         <label>Email<input className="field" value={user.email || ''} disabled /><span className="helper">Your sign-in address. Contact us to change it.</span></label>
         <label>Profile type
           <select className="field" value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })}>
-            <option value="community_member">Community Member</option>
-            <option value="provider">Business or Service Provider</option>
+            {PROFILE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </label>
+        <label>Community<select className="field" value={form.affiliation || ''} onChange={(e) => setForm({ ...form, affiliation: e.target.value })}><option value="">Not set</option>{AFFILIATIONS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</select><span className="helper">Optional. Used to show you what people in your community use.</span></label>
         <label>General home city<input className="field" value={form.home_city || ''} onChange={(e) => setForm({ ...form, home_city: e.target.value })} /></label>
         <label>Phone<input className="field" value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
         <label>Short bio<textarea className="field min-h-24" value={form.bio || ''} onChange={(e) => setForm({ ...form, bio: e.target.value })} /></label>

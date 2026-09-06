@@ -9,7 +9,7 @@ import multer from 'multer';
 
 import { store, users, userToPublic, otp } from './db.js';
 import {
-  attachUser, requireAuth,
+  attachUser, requireAuth, requireAdmin,
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
@@ -80,6 +80,7 @@ const OWNER_SCOPED = {
   ProviderUsage: (row, user) => row.created_by_id === user.id,
   FeedLike: (row, user) => row.created_by_id === user.id,
   CommentVote: (row, user) => row.created_by_id === user.id,
+  Invite: (row, user) => row.created_by_id === user.id,
   PrivateReport: (row, user) => row.created_by_id === user.id,
   ListingReport: (row, user) => row.created_by_id === user.id,
   ClaimRequest: (row, user) => row.created_by_id === user.id,
@@ -93,8 +94,14 @@ const CLIENT_WRITABLE = new Set([
   'SavedProvider', 'ListingChangeRequest', 'Category',
 ]);
 
+// Entities a moderator works: the review queues and what they moderate.
+// A moderator never sees messages, saves, or anyone's private notifications.
+const MODERATED_BY_STAFF = new Set(['Provider', 'CommunityNote', 'ClaimRequest', 'ListingChangeRequest', 'ListingReport', 'PrivateReport']);
+const isModerator = (user) => user?.role === 'moderator';
+
 function readable(entity, rows, user) {
   if (user?.role === 'admin') return rows;
+  if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
   if (!user && !PUBLIC_READ.has(entity)) return [];
   const scope = OWNER_SCOPED[entity];
   let visible = scope ? rows.filter((row) => scope(row, user)) : rows;
@@ -105,6 +112,9 @@ function readable(entity, rows, user) {
 function canWrite(entity, user, row) {
   if (!user) return false;
   if (user.role === 'admin') return true;
+  // Moderators change the state of existing rows in the queues; they do not
+  // create listings on anyone's behalf or delete anything.
+  if (isModerator(user) && row && MODERATED_BY_STAFF.has(entity)) return true;
   if (!CLIENT_WRITABLE.has(entity)) return false;
   // Settings are platform-wide (e.g. the global Shabbos override) — admin only.
   if (entity === 'Setting') return false;
@@ -128,7 +138,7 @@ const ENTITIES = new Set([
   'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
-  'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote',
+  'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite',
 ]);
 
 app.param('entity', (req, res, next, entity) => {
@@ -171,6 +181,7 @@ const PROTECTED_FIELDS = new Set([
   'status', 'verified', 'verified_at', 'verified_by', 'verified_badges', 'claimed', 'demo',
   'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
 ]);
+const MODERATOR_FIELDS = new Set(['status', 'admin_notes', 'resolved_at', 'resolved_by']);
 const stripProtected = (body) => Object.fromEntries(Object.entries(body || {}).filter(([k]) => !PROTECTED_FIELDS.has(k)));
 
 app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
@@ -178,14 +189,31 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   const existing = await store.get(entity, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!canWrite(entity, req.user, existing)) return res.status(403).json({ error: 'Not permitted' });
-  const patch = req.user.role === 'admin' ? req.body : stripProtected(req.body);
-  res.json(await store.update(entity, id, patch));
+  let patch = req.body;
+  if (req.user.role !== 'admin') {
+    if (isModerator(req.user) && MODERATED_BY_STAFF.has(entity) && existing.created_by_id !== req.user.id) {
+      // A moderator's job on someone else's row is exactly its state: the
+      // status, their notes, and the resolution stamp. Nothing else changes.
+      patch = Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => MODERATOR_FIELDS.has(k)));
+    } else {
+      patch = stripProtected(req.body);
+    }
+  }
+  const updated = await store.update(entity, id, patch);
+  // Every status change by staff leaves a trace: who, what, from, to.
+  if (MODERATED.has(entity) || MODERATED_BY_STAFF.has(entity)) {
+    if (patch.status !== undefined && patch.status !== existing.status && (req.user.role === 'admin' || isModerator(req.user))) {
+      await store.create('ActivityEvent', { type: 'moderation', entity, target_id: id, from: existing.status || null, to: patch.status, actor_role: req.user.role }, req.user);
+    }
+  }
+  res.json(updated);
 });
 
 app.delete('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   const { entity, id } = req.params;
   const existing = await store.get(entity, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (isModerator(req.user) && existing.created_by_id !== req.user.id) return res.status(403).json({ error: 'Moderators cannot delete.' });
   if (!canWrite(entity, req.user, existing)) return res.status(403).json({ error: 'Not permitted' });
   await store.delete(entity, id);
   res.json({ ok: true });
@@ -228,6 +256,21 @@ async function memberList(viewer) {
 
 app.get('/api/users', async (req, res, next) => {
   res.json(await memberList(req.user));
+});
+
+// Admin only: user | moderator | admin. You cannot change your own role, so
+// there is always at least the admin who is doing the changing.
+const ROLES = new Set(['user', 'moderator', 'admin']);
+app.put('/api/users/:id/role', requireAdmin, async (req, res, next) => {
+  const { role } = req.body || {};
+  if (!ROLES.has(role)) return res.status(400).json({ error: 'Role must be user, moderator or admin.' });
+  if (req.params.id === req.user.id) return res.status(400).json({ error: 'You cannot change your own role.' });
+  const target = await users.byId(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Not found' });
+  if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account cannot have a role.' });
+  const updated = await users.update(target.id, { role });
+  await store.create('ActivityEvent', { type: 'role_change', target_id: target.id, from: target.role, to: role }, req.user);
+  res.json(userToPublic(updated));
 });
 
 app.get('/api/users/:id', async (req, res, next) => {
@@ -291,8 +334,18 @@ app.post('/api/auth/login', async (req, res, next) => {
   res.json({ access_token: signToken(row), user: userToPublic(row) });
 });
 
+// Public, unauthenticated: who an invite link is from, so the join page can
+// say "Miriam invited you" before there is an account. Names only.
+app.get('/api/invites/:code', async (req, res, next) => {
+  try {
+    const [invite] = await store.filter('Invite', { code: String(req.params.code).toLowerCase() });
+    if (!invite) return res.status(404).json({ error: 'That invite link is not valid.' });
+    res.json({ code: invite.code, inviter_name: invite.inviter_name || 'A community member', for_business: invite.provider_name || null });
+  } catch (err) { next(err); }
+});
+
 app.post('/api/auth/register', async (req, res, next) => {
-  const { email, password, full_name } = req.body || {};
+  const { email, password, full_name, invite_code } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
   if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   if (await users.byEmail(email)) return res.status(409).json({ error: 'That email is already registered' });
@@ -304,15 +357,38 @@ app.post('/api/auth/register', async (req, res, next) => {
   // receive a verification code, so a new account is signed in straight away
   // rather than parked on a screen waiting for an email that never comes.
   // Login never required verification anyway; this just stops pretending.
+  // An invite link, if the visitor arrived through one. Recorded on both
+  // sides so the profile can say "Invited by" and the inviter gets credit.
+  const invited = invite_code ? (await store.filter('Invite', { code: String(invite_code).toLowerCase() }))[0] : null;
+  const invitedBy = invited ? { invited_by_id: invited.created_by_id, invited_by_name: invited.inviter_name || '' } : {};
+
   if (!canDeliverCodes()) {
-    const row = await users.create({ email, password_hash: hashPassword(password), role, verified: true, full_name: full_name || '' });
+    const row = await users.create({ email, password_hash: hashPassword(password), role, verified: true, full_name: full_name || '', ...invitedBy });
+    await acceptInvite(invited, row);
     return res.status(201).json({ ok: true, otp_sent: false, access_token: signToken(row), user: sessionUser(userToPublic(row)) });
   }
 
-  await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '' });
+  const row = await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '', ...invitedBy });
+  await acceptInvite(invited, row);
   const code = await otp.issue(String(email).trim(), 'verify');
   res.status(201).json({ ok: true, otp_sent: true, dev_code: deliverCode(email, 'verify', code) });
 });
+
+// Marks an invite as joined and tells the inviter. Invite rows are reusable
+// links (one per member), so this appends to a list rather than closing it.
+async function acceptInvite(invite, newUser) {
+  if (!invite) return;
+  const joined = [...(invite.joined_user_ids || []), newUser.id];
+  await store.update('Invite', invite.id, { joined_user_ids: joined, joined_count: joined.length });
+  if (invite.created_by_id && invite.created_by_id !== newUser.id) {
+    await store.create('Notification', {
+      recipient_id: invite.created_by_id, read: false, type: 'invite_joined',
+      actor_name: newUser.data?.full_name || newUser.email,
+      target_type: 'user', target_id: newUser.id,
+      message: `${newUser.data?.full_name || 'Someone'} joined Klal from your invite`,
+    }, { id: newUser.id, email: newUser.email });
+  }
+}
 
 app.post('/api/auth/verify-otp', async (req, res, next) => {
   const { email, otpCode } = req.body || {};

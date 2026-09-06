@@ -9,6 +9,7 @@ import WorkExperienceTimeline from '@/components/WorkExperienceTimeline';
 import PeopleYouMayKnow from '@/components/PeopleYouMayKnow';
 import { loadMyConnections, suggestSimilar, connectedIds, topJob } from '@/lib/connections';
 import Headline from '@/components/Headline';
+import { AFFILIATION_BY_ID, PROFILE_TYPES } from '@/lib/affiliations';
 import ProfileBanner from '@/components/ProfileBanner';
 
 export default function PublicProfile(){
@@ -52,7 +53,8 @@ export default function PublicProfile(){
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-brand-ink">{user.full_name || 'Community member'}</h1>
           <Headline text={user.headline} variant="header"/>
-          <p className="mt-1 capitalize text-brand-teal">{(user.profile_type || 'community_member').replace('_', ' ')}</p>
+          <p className="mt-1 text-brand-teal">{PROFILE_TYPES.find((t) => t.id === user.profile_type)?.label || 'Community member'}{user.affiliation && AFFILIATION_BY_ID[user.affiliation] && user.affiliation !== 'private' ? ` · ${AFFILIATION_BY_ID[user.affiliation].label}` : ''}</p>
+          {user.invited_by_name && <p className="mt-1 text-xs text-brand-muted">Invited to Klal by {user.invited_by_id ? <Link to={`/profile/${user.invited_by_id}`} className="font-semibold text-brand-teal hover:underline">{user.invited_by_name}</Link> : user.invited_by_name}</p>}
           {job && <p className="mt-1.5 flex items-center gap-2 text-sm text-brand-body"><Briefcase size={14} className="text-brand-teal"/>{job.title}{job.company ? `, ${job.company}` : ''}</p>}
           {user.home_city && <p className="mt-1 flex items-center gap-2 text-sm text-brand-body"><MapPin size={14} className="text-brand-teal"/>{user.home_city}</p>}
         </div>

@@ -51,6 +51,16 @@ const authorFields = (user) => ({
   author_avatar_url: user.avatar_url || '',
 });
 
+// e.g. "miriam-4k7x": a first name people recognise plus four characters
+// that make it unique. Lower-case, URL-safe.
+function inviteCode(user) {
+  const first = String(user.full_name || 'klal').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, '').slice(0, 12) || 'klal';
+  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let tail = '';
+  for (let i = 0; i < 4; i++) tail += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return `${first}-${tail}`;
+}
+
 const ACTIVITIES = {
   save: { entity: 'SavedProvider', field: 'save_count' },
   use: { entity: 'ProviderUsage', field: 'usage_count' },
@@ -183,6 +193,23 @@ export const functions = {
       });
     }
     return { comment, comment_count };
+  },
+
+  // ---- invites -------------------------------------------------------------
+
+  // Every member has one personal invite link; asking again returns it. The
+  // code is short and memorable enough to read out loud.
+  async myInvite(_payload, user) {
+    if (user.email === 'guest@klal.app') fail('Create an account to invite people.', 403);
+    const [existing] = await store.filter('Invite', { created_by_id: user.id, provider_id: null });
+    if (existing) return { invite: existing };
+    let code;
+    for (let i = 0; i < 5; i++) {
+      code = inviteCode(user);
+      if (!(await store.filter('Invite', { code })).length) break;
+    }
+    const invite = await store.create('Invite', { code, inviter_name: user.full_name || '', provider_id: null, provider_name: null, joined_user_ids: [], joined_count: 0 }, user);
+    return { invite };
   },
 
   // ---- asks: answers with upvotes, and the asker's "this helped" ---------
