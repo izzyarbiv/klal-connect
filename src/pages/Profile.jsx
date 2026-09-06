@@ -84,7 +84,7 @@ export default function Profile() {
       </section>
 
       <div className="flex items-center gap-3">
-        <button className="primary -mt-2">Save profile</button>
+        <div className="-mt-2 flex flex-wrap items-center gap-3"><button className="primary">Save profile</button><button type="button" onClick={() => api.auth.logout('/')} className="text-sm font-medium text-brand-muted hover:text-brand-ink hover:underline">Log out</button></div>
         {saved && <span className="text-sm font-semibold text-brand-teal">Saved</span>}
       </div>
     </form>

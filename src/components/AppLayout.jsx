@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users } from 'lucide-react';
+import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut } from 'lucide-react';
 import Brand from '@/components/Brand';
 import ThemeToggle from '@/components/ThemeToggle';
 import MobileNotificationBell from '@/components/MobileNotificationBell';
@@ -14,9 +14,8 @@ import { useAuth } from '@/lib/AuthContext';
 const Home = HomeIcon;
 const links = [['Home','/',Home],['Resources','/directory',LayoutGrid],['Feed','/feed',Newspaper],['People','/people',Users],['Saved','/saved',Bookmark],['Profile','/profile',UserRound]];
 function HeaderAccount() {
-  const { user, isGuest, authChecked } = useAuth();
+  const { user, isGuest, authChecked, logout } = useAuth();
   if (!authChecked) return null;
-  if (user?.role === 'admin') return <NavLink to="/admin" className="ml-2 p-2 text-brand-muted hover:text-brand-teal" aria-label="Admin"><ShieldCheck size={19}/></NavLink>;
   if (!user || isGuest) {
     const links = accountLinks(window.location.pathname + window.location.search);
     return <>
@@ -24,7 +23,10 @@ function HeaderAccount() {
       <NavLink to={links.register} className="rounded-full bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:opacity-90">Sign up</NavLink>
     </>;
   }
-  return null;
+  return <>
+    {user.role === 'admin' && <NavLink to="/admin" className="ml-2 p-2 text-brand-muted hover:text-brand-teal" aria-label="Admin"><ShieldCheck size={19}/></NavLink>}
+    <button type="button" onClick={() => logout()} className="ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-brand-muted hover:bg-brand-surface hover:text-brand-ink" aria-label="Log out"><LogOut size={16}/><span className="hidden lg:inline">Log out</span></button>
+  </>;
 }
 
 export default function AppLayout() {
