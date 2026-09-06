@@ -39,6 +39,12 @@ const authorFields = (user) => ({
   author_avatar_url: user.avatar_url || '',
 });
 
+const ACTIVITIES = {
+  save: { entity: 'SavedProvider', field: 'save_count' },
+  use: { entity: 'ProviderUsage', field: 'usage_count' },
+  vouch: { entity: 'Vouch', field: 'vouch_count' },
+};
+
 async function notify(recipientId, payload) {
   if (!recipientId) return;
   await store.create('Notification', { recipient_id: recipientId, read: false, ...payload });
@@ -215,31 +221,57 @@ export const functions = {
 
   // ---- provider activity ----------------------------------------------------
 
+  // save   → SavedProvider  (private to the member: their own list)
+  // use    → ProviderUsage   (private signal, public count)
+  // vouch  → Vouch           (public, and carries the member's name: a vouch
+  //                           is a statement, not a bookmark)
   async toggleCommunityActivity({ providerId, activity }, user) {
     await assertWritable(user);
     need(providerId, 'Missing listing.');
     const provider = await store.get('Provider', providerId);
     if (!provider) fail('Listing not found.', 404);
 
-    const entity = activity === 'use' ? 'ProviderUsage' : 'SavedProvider';
-    const existing = await store.filter(entity, { provider_id: providerId, created_by_id: user.id });
+    const kind = ACTIVITIES[activity];
+    if (!kind) fail('Unknown activity.');
+    if (activity === 'vouch' && (provider.created_by_id === user.id || provider.owner_id === user.id)) {
+      fail('You cannot vouch for your own listing.');
+    }
+    const existing = await store.filter(kind.entity, { provider_id: providerId, created_by_id: user.id });
 
     let active;
     if (existing.length) {
-      for (const row of existing) await store.delete(entity, row.id);
+      for (const row of existing) await store.delete(kind.entity, row.id);
       active = false;
     } else {
       await store.create(
-        entity,
-        { provider_id: providerId, provider_name: provider.name, category: provider.category },
+        kind.entity,
+        {
+          provider_id: providerId, provider_name: provider.name, category: provider.category,
+          ...(activity === 'vouch' ? authorFields(user) : {}),
+        },
         user
       );
       active = true;
     }
 
-    const field = activity === 'use' ? 'usage_count' : 'save_count';
-    await store.update('Provider', providerId, { [field]: await store.count(entity, { provider_id: providerId }) });
-    return { active };
+    const count = await store.count(kind.entity, { provider_id: providerId });
+    await store.update('Provider', providerId, { [kind.field]: count });
+
+    // The business hears who vouched — the strongest nudge there is to claim
+    // and complete a listing.
+    if (activity === 'vouch' && active) {
+      const owner = provider.owner_id || provider.created_by_id;
+      if (owner && owner !== user.id) {
+        await notify(owner, {
+          type: 'vouch',
+          actor_name: user.full_name || user.email,
+          target_type: 'provider',
+          target_id: providerId,
+          message: `${user.full_name || 'A community member'} vouched for ${provider.name}`,
+        });
+      }
+    }
+    return { active, count };
   },
 
   // ---- messaging ------------------------------------------------------------

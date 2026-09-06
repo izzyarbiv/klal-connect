@@ -58,7 +58,7 @@ app.use((req, res, next) => {
 
 // Which entities a signed-out visitor may read. The directory is public by
 // design; everything else (messages, notifications, reports…) is not.
-const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote']);
+const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch']);
 
 // Entities that carry a moderation status. Everyone except an admin sees only
 // published rows — plus their own submissions, so an author can still find the
@@ -127,7 +127,7 @@ const ENTITIES = new Set([
   'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
-  'ListingReport', 'PrivateReport',
+  'ListingReport', 'PrivateReport', 'Vouch',
 ]);
 
 app.param('entity', (req, res, next, entity) => {
@@ -164,12 +164,21 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   res.status(201).json(await store.create(entity, req.body, req.user));
 });
 
+// Fields only the server or an admin may set. A listing's author may edit
+// their listing, but not publish it, verify it, or inflate its counts.
+const PROTECTED_FIELDS = new Set([
+  'status', 'verified', 'verified_at', 'verified_by', 'verified_badges', 'claimed', 'demo',
+  'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
+]);
+const stripProtected = (body) => Object.fromEntries(Object.entries(body || {}).filter(([k]) => !PROTECTED_FIELDS.has(k)));
+
 app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   const { entity, id } = req.params;
   const existing = await store.get(entity, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!canWrite(entity, req.user, existing)) return res.status(403).json({ error: 'Not permitted' });
-  res.json(await store.update(entity, id, req.body));
+  const patch = req.user.role === 'admin' ? req.body : stripProtected(req.body);
+  res.json(await store.update(entity, id, patch));
 });
 
 app.delete('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
