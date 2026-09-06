@@ -4,7 +4,7 @@ import { api } from '@/api/client';
 import { Image } from '@/components/ui/image';
 import { ArrowLeft, MapPin, Globe, Mail, Phone, Building2, Pencil, Calendar } from 'lucide-react';
 import CompanyEditor from '@/components/CompanyEditor';
-import ShareButton from '@/components/ShareButton';
+import ShareButton, { WhatsAppShare } from '@/components/ShareButton';
 import PublicListingCTA from '@/components/PublicListingCTA';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import Headline from '@/components/Headline';
@@ -63,6 +63,7 @@ function CompanyView({company,isOwner,onEdit}){
       </div>
       <div className="flex gap-2">
         <ShareButton title={company.name}/>
+        <WhatsAppShare title={`${company.name} on Klal`}/>
         {isOwner && <button onClick={onEdit} className="secondary"><Pencil size={16}/>Edit page</button>}
       </div>
     </div>

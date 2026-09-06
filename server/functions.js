@@ -5,6 +5,18 @@
 // counter integrity, or the Shabbos write-gate.
 import { store, users } from './db.js';
 import { computeShabbosStatus, assertWritable } from './shabbos.js';
+import { BADGES } from '../src/lib/badges.js';
+
+const BADGE_IDS = new Set(BADGES.map((b) => b.id));
+// What a member may say about their own listing. Verification, status and
+// the counters are the server's and an admin's to set.
+function listingInput(payload) {
+  const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, owner_id, ...rest } = payload || {};
+  const badges = Array.isArray(rest.badges) ? [...new Set(rest.badges.filter((b) => BADGE_IDS.has(b)))] : [];
+  // WhatsApp wants the number as digits with the country code, no plus.
+  const whatsapp = rest.whatsapp ? String(rest.whatsapp).replace(/\D/g, '').replace(/^1?(\d{10})$/, '1$1') : '';
+  return { ...rest, badges, whatsapp };
+}
 
 const need = (value, message) => {
   if (value === undefined || value === null || String(value).trim() === '') {
@@ -60,7 +72,7 @@ export const functions = {
     // New listings are never published directly — they go to the review queue.
     const provider = await store.create(
       'Provider',
-      { ...payload, status: 'pending', claimed: false, save_count: 0, usage_count: 0 },
+      { ...listingInput(payload), status: 'pending', claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },
       user
     );
     return { provider };
