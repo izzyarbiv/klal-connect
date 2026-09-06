@@ -14,9 +14,13 @@ export default function AdminBadgePanel({ provider, onChange }) {
 
   const declared = BADGES.filter((b) => (provider.badges || []).includes(b.id));
   const verified = new Set(provider.verified_badges || []);
+  // The checkbox reflects the change at once and the request follows; if the
+  // request fails the server's version comes back and the box reverts.
   const save = async (patch) => {
     setBusy(true);
+    onChange({ ...provider, ...patch });
     try { onChange(await api.entities.Provider.update(provider.id, patch)); }
+    catch { onChange(await api.entities.Provider.get(provider.id).catch(() => provider)); }
     finally { setBusy(false); }
   };
   const toggleBadge = (id) => {
