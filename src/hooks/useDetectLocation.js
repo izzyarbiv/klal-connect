@@ -22,7 +22,7 @@ export function useDetectLocation(){
     let cancelled=false;
     (async()=>{
       try{
-        if(!await api.auth.isAuthenticated()) return;
+        if(!(await api.auth.hasAccount())) return;
         const me=await api.auth.me();
         if(me.latitude!=null && me.longitude!=null) return;
         if(navigator.geolocation){

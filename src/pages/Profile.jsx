@@ -10,6 +10,7 @@ import LocationPicker from '@/components/LocationPicker';
 import Headline from '@/components/Headline';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import { topJob } from '@/lib/connections';
+import GuestPrompt from '@/components/GuestPrompt';
 
 export default function Profile() {
   const [user, setUser] = useState();
@@ -35,6 +36,7 @@ export default function Profile() {
   };
 
   if (!user) return <div className="loading">Loading profile…</div>;
+  if (user.guest) return <GuestPrompt title="Your profile starts with an account" body="You're browsing as a guest, so there is nothing to edit here yet. Create a free account to set up your profile, add work experience, and manage your listings."/>;
 
   const recentJob = topJob(user);
   const headlineSuggestion = recentJob ? `${recentJob.title}${recentJob.company ? ` — ${recentJob.company}` : ''}` : null;

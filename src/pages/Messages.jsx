@@ -4,6 +4,7 @@ import { api } from '@/api/client';
 import { Image } from '@/components/ui/image';
 import Headline from '@/components/Headline';
 import { loadMyConnections, connectedIds } from '@/lib/connections';
+import GuestPrompt from '@/components/GuestPrompt';
 
 export default function Messages(){
   const [me,setMe]=useState();
@@ -14,6 +15,7 @@ export default function Messages(){
   useEffect(()=>{(async()=>{
     if(!await api.auth.isAuthenticated()) return api.auth.redirectToLogin(location.href);
     const u=await api.auth.me(); setMe(u);
+    if(u.guest){ setLoading(false); return; }
     const [sent, received, users, myConnections] = await Promise.all([
       api.entities.Message.filter({ sender_id: u.id }, '-created_date', 500),
       api.entities.Message.filter({ recipient_id: u.id }, '-created_date', 500),
@@ -41,6 +43,7 @@ export default function Messages(){
   })()},[]);
 
   if(loading) return <div className="loading">Loading messages…</div>;
+  if(me?.guest) return <GuestPrompt title="Messages are for members" body="Create a free account to connect with people and message them privately."/>;
   if(!me) return null;
 
   return <div className="page-shell max-w-2xl py-9">

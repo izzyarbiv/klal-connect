@@ -2,6 +2,7 @@ import React,{useState} from 'react';
 import { api } from '@/api/client';
 import { ImagePlus, Send } from 'lucide-react';
 import Headline from '@/components/Headline';
+import { AccountButtons } from '@/components/GuestPrompt';
 
 export default function FeedComposer({ onPosted, user }) {
   const [body,setBody]=useState(''),[type,setType]=useState('post'),[uploading,setUploading]=useState(false),[imgs,setImgs]=useState([]),[busy,setBusy]=useState(false),[err,setErr]=useState('');
@@ -13,13 +14,18 @@ export default function FeedComposer({ onPosted, user }) {
   const submit=async e=>{
     e.preventDefault();
     if(!body.trim())return;
-    if(!(await api.auth.isAuthenticated()))return api.auth.redirectToLogin(location.href);
+    if(!(await api.auth.requireAccount()))return;
     setBusy(true);
     const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs});
     if(r.status>=400){ setErr(r.data?.error||'Could not post'); setBusy(false); return; }
     setErr(''); setBody(''); setImgs([]); setBusy(false);
     onPosted?.();
   };
+  if(user?.guest) return <div className="panel space-y-3">
+    <p className="font-semibold text-brand-ink">Join the conversation</p>
+    <p className="text-sm text-brand-body">You're browsing the feed as a guest. Create a free account to post, like and comment.</p>
+    <AccountButtons returnTo="/feed" compact/>
+  </div>;
   return <form onSubmit={submit} className="panel space-y-3">
     <div className="flex gap-3">
       <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">You</div>

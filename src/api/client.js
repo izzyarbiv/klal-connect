@@ -46,15 +46,25 @@ async function request(method, path, { body, query, raw } = {}) {
   let data;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
 
-  if (!res.ok) {
-    // The shared guest session tried to write and the server is running with
-    // KC_GUEST_READONLY. The visitor wanted to do something that takes an
-    // account, so send them to get one and bring them back here afterwards.
-    if (res.status === 403 && data?.guest) window.location.href = loginUrl(window.location.href);
-    throw new ApiError(data?.error || res.statusText, res.status, data);
-  }
+  if (!res.ok) throw new ApiError(data?.error || res.statusText, res.status, data);
   return data;
 }
+
+// ------------------------------------------------------------ account gate --
+
+// Visitors browse as a shared guest account. Anything that would write —
+// posting, liking, connecting, saving, editing a profile — needs an account of
+// their own. Components call api.auth.requireAccount() before such an action;
+// for a guest it raises this event, which AccountRequiredModal (mounted once in
+// AppLayout) turns into a "create an account" prompt. The server refuses guest
+// writes regardless (KC_GUEST_READONLY), so this is the polite layer, not the
+// enforcement.
+export const ACCOUNT_REQUIRED_EVENT = 'kc:account-required';
+export const promptForAccount = () => window.dispatchEvent(new CustomEvent(ACCOUNT_REQUIRED_EVENT));
+
+// The last session the server described, so a gate does not need a round
+// trip on every click. Refreshed by every me() call.
+let lastMe = null;
 
 // ---------------------------------------------------------------- entities --
 
@@ -109,7 +119,25 @@ function toSamePath(target) {
 
 const auth = {
   async me() {
-    return request('GET', '/auth/me');
+    lastMe = await request('GET', '/auth/me');
+    return lastMe;
+  },
+
+  // True for a signed-in member with their own account — not the shared
+  // guest session. Reads work for the guest; writes do not.
+  async hasAccount() {
+    if (!(await this.isAuthenticated())) return false;
+    const me = lastMe || await this.me();
+    return !me?.guest;
+  },
+
+  // Gate for anything that writes. Signed out → login page (and back here
+  // afterwards); guest → the "create an account" prompt; member → true.
+  async requireAccount() {
+    if (!(await this.isAuthenticated())) { this.redirectToLogin(window.location.href); return false; }
+    if (await this.hasAccount()) return true;
+    promptForAccount();
+    return false;
   },
 
   async isAuthenticated() {
@@ -147,7 +175,10 @@ const auth = {
   },
 
   async register({ email, password, full_name }) {
-    return request('POST', '/auth/register', { body: { email, password, full_name } });
+    const res = await request('POST', '/auth/register', { body: { email, password, full_name } });
+    // With no mail provider the server signs the new account in directly.
+    if (res.access_token) tokenStore.set(res.access_token);
+    return res;
   },
 
   async verifyOtp({ email, otpCode }) {
@@ -174,6 +205,7 @@ const auth = {
   },
 
   logout(redirectTo) {
+    lastMe = null;
     tokenStore.set(null);
     window.location.href = redirectTo ? toSamePath(redirectTo) : '/';
   },

@@ -65,7 +65,7 @@ export function useTravelCheck(){
     let cancelled=false;
     const run=async()=>{
       try{
-        if(!await api.auth.isAuthenticated()) return;
+        if(!(await api.auth.hasAccount())) return;
         const me=await api.auth.me();
         if(me.latitude==null || me.longitude==null) return; // no saved location yet — handled by the "location required" prompt
         const fresh=await freshLocation();

@@ -79,6 +79,8 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         isAuthenticated,
+        // The shared guest session: signed in for reading, not a member.
+        isGuest: !!user?.guest,
         isLoadingAuth,
         // Retained so existing consumers keep working; nothing blocks on it now.
         isLoadingPublicSettings: false,

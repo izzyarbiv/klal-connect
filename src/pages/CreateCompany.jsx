@@ -23,7 +23,7 @@ export default function CreateCompany(){
   };
   const submit=async e=>{
     e.preventDefault();
-    if(!await api.auth.isAuthenticated()) return api.auth.redirectToLogin(location.href);
+    if(!(await api.auth.requireAccount())) return;
     setSaving(true);
     const slug=await uniqueSlugFor(api.entities.Company,data.name);
     const c=await api.entities.Company.create({...data,slug,logo_url:logo,status:'published'});

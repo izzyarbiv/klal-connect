@@ -10,7 +10,7 @@ export default function FeedCommentList({ postId, user, authorId, onCount }) {
   const submit=async e=>{
     e.preventDefault();
     if(!text.trim())return;
-    if(!user)return api.auth.redirectToLogin(location.href);
+    if(!(await api.auth.requireAccount()))return;
     setBusy(true);
     const r=await api.functions.invoke('createComment',{post_id:postId,body:text});
     if(r.status>=400){setErr(r.data?.error||'Action unavailable');setBusy(false);return;}

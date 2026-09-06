@@ -61,8 +61,14 @@ export function requireAdmin(req, res, next) {
 // production. Returning a code to an unauthenticated caller in production would
 // let anyone register under someone else's address and verify it themselves,
 // so the dangerous case must require two positive signals, never a default.
+const DEV_CODES = process.env.KC_EMAIL_DELIVERY === 'dev' && process.env.NODE_ENV !== 'production';
+
+// Whether a verification or reset code can actually reach the person: either a
+// real mail provider, or the local dev mode that hands the code back.
+export const canDeliverCodes = () => process.env.KC_EMAIL_DELIVERY === 'real' || DEV_CODES;
+
 export function deliverCode(email, purpose, code) {
-  const expose = process.env.KC_EMAIL_DELIVERY === 'dev' && process.env.NODE_ENV !== 'production';
+  const expose = DEV_CODES;
   console.log(`[auth] ${purpose} code for ${email}: ${expose ? code : '(withheld)'}`);
   return expose ? code : undefined;
 }

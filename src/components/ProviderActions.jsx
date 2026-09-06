@@ -6,7 +6,7 @@ const event=(type,p)=>api.entities.ActivityEvent.create({type,provider_id:p.id,c
 export default function ProviderActions({provider}) {
  const [saved,setSaved]=useState(null),[used,setUsed]=useState(null);
  useEffect(()=>{(async()=>{if(await api.auth.isAuthenticated()){const [s,u]=await Promise.all([api.entities.SavedProvider.filter({provider_id:provider.id}),api.entities.ProviderUsage.filter({provider_id:provider.id})]);setSaved(s[0]||false);setUsed(u[0]||false)}})()},[provider.id]);
- const gate=async()=>{if(!await api.auth.isAuthenticated()){api.auth.redirectToLogin(window.location.href);return false}return true};
+ const gate=()=>api.auth.requireAccount();
  const toggleSave=async()=>{if(!await gate())return;const {data}=await api.functions.invoke('toggleCommunityActivity',{providerId:provider.id,activity:'save'});setSaved(data.active?{id:'active'}:false);if(data.active&&provider.created_by_id){let me={};try{me=await api.auth.me();}catch{};if(me.id!==provider.created_by_id)notify({recipient_id:provider.created_by_id,type:'save',actor:me,target_type:'provider',target_id:provider.id,message:`${me?.full_name||'Someone'} saved your listing`});}};
  const toggleUsed=async()=>{if(!await gate())return;const {data}=await api.functions.invoke('toggleCommunityActivity',{providerId:provider.id,activity:'use'});setUsed(data.active?{id:'active'}:false)};
  const buttons=[['Call Now',Phone,`tel:${provider.phone}`,'call'],['Text Now',MessageCircle,`sms:${provider.text_phone||provider.phone}`,'text'],['Visit Website',Globe,provider.website,'profile_view']];

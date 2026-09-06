@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '@/api/client';
+import { api, promptForAccount } from '@/api/client';
 import { ShieldCheck, X, Loader2 } from 'lucide-react';
 
 const REASONS = [
@@ -31,7 +31,7 @@ export default function ReportIssueModal({ provider }) {
     const params = new URLSearchParams(window.location.search);
     if (params.get('report') !== '1') return;
     (async () => {
-      if (await api.auth.isAuthenticated()) {
+      if (await api.auth.hasAccount()) {
         setOpen(true);
         params.delete('report');
         const qs = params.toString();
@@ -41,7 +41,8 @@ export default function ReportIssueModal({ provider }) {
   }, []);
 
   const openOrLogin = async () => {
-    if (await api.auth.isAuthenticated()) { setOpen(true); return; }
+    if (await api.auth.hasAccount()) { setOpen(true); return; }
+    if (await api.auth.isAuthenticated()) { promptForAccount(); return; }
     const url = new URL(window.location.href);
     url.searchParams.set('report', '1');
     const returnTo = url.pathname + url.search;

@@ -21,8 +21,9 @@ export default function ConnectButton({ targetId, me, connections, onReload, siz
     <button type="button" disabled={busy} onClick={()=>act(()=>api.entities.Connection.update(st.conn.id, { status: 'declined' }))} className={`inline-flex items-center gap-1.5 rounded-xl border border-brand-line bg-brand-surface font-semibold text-brand-muted ${pad}`}><X size={15}/>Decline</button>
   </div>;
 
-  const send = () => {
+  const send = async () => {
     setCapMsg('');
+    if(!(await api.auth.requireAccount())) return;
     const used = sentThisWeekCount(connections?.sent);
     if (used >= WEEKLY_CAP){ setCapMsg(`Weekly limit reached (${used}/${WEEKLY_CAP}). Try again next week.`); return; }
     act(async ()=>{const conn=await api.entities.Connection.create({ requester_id: me.id, recipient_id: targetId, status: 'pending' });await notify({recipient_id:targetId,type:'connection_request',actor:me,target_type:'connection',target_id:conn.id,message:`${me.full_name||'Someone'} sent you a connection request`});});

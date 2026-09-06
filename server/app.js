@@ -10,7 +10,7 @@ import multer from 'multer';
 import { store, users, userToPublic, otp } from './db.js';
 import {
   attachUser, requireAuth,
-  hashPassword, checkPassword, signToken, deliverCode,
+  hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
 import { isDemoMode } from './db.js';
@@ -38,9 +38,13 @@ app.use(attachUser);
 // member reads, and every write gets a 403 the client can show as "sign in to
 // do that". Off by default so a demo stays fully interactive.
 const GUEST_READONLY = process.env.KC_GUEST_READONLY === '1';
+const isGuest = (user) => !!user && user.email === GUEST_EMAIL;
+// What a session handed to the client looks like: the profile plus a flag the
+// UI uses to show "create an account" instead of the guest's own settings.
+const sessionUser = (user) => (user ? { ...user, guest: isGuest(user) } : null);
 
 app.use((req, res, next) => {
-  if (!GUEST_READONLY || !req.user || req.user.email !== GUEST_EMAIL) return next();
+  if (!GUEST_READONLY || !isGuest(req.user)) return next();
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
   // Signing in or registering as someone else is how a visitor stops being the
   // guest, so those must go through even with the guest token attached.
@@ -240,6 +244,7 @@ app.get('/api/config', (_req, res) => res.json({
   tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   tileAttribution: process.env.KC_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors',
   geocoder: GEO_PROVIDER,
+  guestReadOnly: GUEST_READONLY,
 }));
 
 // Issues a session for the shared guest account so a visitor can browse the
@@ -252,14 +257,14 @@ if (isDemoMode) {
     try {
       const guest = await users.byEmail(GUEST_EMAIL);
       if (!guest) return res.status(503).json({ error: 'Demo data is still loading.' });
-      res.json({ access_token: signToken(guest), user: userToPublic(guest) });
+      res.json({ access_token: signToken(guest), user: sessionUser(userToPublic(guest)) });
     } catch (err) {
       next(err);
     }
   });
 }
 
-app.get('/api/auth/me', requireAuth, (req, res) => res.json(req.user));
+app.get('/api/auth/me', requireAuth, (req, res) => res.json(sessionUser(req.user)));
 
 app.put('/api/auth/me', requireAuth, async (req, res, next) => {
   // Role and verification are server-owned; a user cannot promote themselves.
@@ -284,6 +289,16 @@ app.post('/api/auth/register', async (req, res, next) => {
 
   // First account bootstraps the admin; there is no other way in yet.
   const role = (await users.all()).length === 0 ? 'admin' : 'user';
+
+  // Until a mail provider is wired up (KC_EMAIL_DELIVERY=real) nobody can
+  // receive a verification code, so a new account is signed in straight away
+  // rather than parked on a screen waiting for an email that never comes.
+  // Login never required verification anyway; this just stops pretending.
+  if (!canDeliverCodes()) {
+    const row = await users.create({ email, password_hash: hashPassword(password), role, verified: true, full_name: full_name || '' });
+    return res.status(201).json({ ok: true, otp_sent: false, access_token: signToken(row), user: sessionUser(userToPublic(row)) });
+  }
+
   await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '' });
   const code = await otp.issue(String(email).trim(), 'verify');
   res.status(201).json({ ok: true, otp_sent: true, dev_code: deliverCode(email, 'verify', code) });
@@ -309,6 +324,9 @@ app.post('/api/auth/resend-otp', async (req, res, next) => {
 
 app.post('/api/auth/reset-password-request', async (req, res, next) => {
   const { email } = req.body || {};
+  if (!canDeliverCodes()) {
+    return res.status(503).json({ error: 'Password reset by email is not available yet. Please contact us and we will reset it for you.' });
+  }
   if (!(await users.byEmail(email))) return res.json({ ok: true });
   const code = await otp.issue(String(email).trim(), 'reset');
   res.json({ ok: true, dev_code: deliverCode(email, 'reset', code) });

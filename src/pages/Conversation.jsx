@@ -1,6 +1,7 @@
 import React,{useEffect,useState,useRef} from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '@/api/client';
+import GuestPrompt from '@/components/GuestPrompt';
 import { ArrowLeft, Send } from 'lucide-react';
 import { Image } from '@/components/ui/image';
 import Headline from '@/components/Headline';
@@ -33,6 +34,7 @@ export default function Conversation(){
     if(!await api.auth.isAuthenticated()) return api.auth.redirectToLogin(location.href);
     const [u, target] = await Promise.all([ api.auth.me(), api.entities.User.get(id) ]);
     setMe(u); setOther(target);
+    if(u.guest){ setLoading(false); return; }
     const conn = await loadMyConnections(u.id);
     setConnected(connectionStatusWith(id, conn).status === 'accepted');
     await load(u);
@@ -52,6 +54,7 @@ export default function Conversation(){
   };
 
   if(loading) return <div className="loading">Loading conversation…</div>;
+  if(me?.guest) return <GuestPrompt title="Messages are for members" body="Create a free account to connect with people and message them privately."/>;
   if(!other) return <div className="empty">This member could not be found.</div>;
 
   const initials=(other.full_name||other.email||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();

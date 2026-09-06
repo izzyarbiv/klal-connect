@@ -24,6 +24,9 @@ Open http://localhost:5173
 **The first account you register becomes the admin.** There is no other way in, by design.
 Sign-up and password-reset codes are not emailed yet — while `KC_EMAIL_DELIVERY=dev` they
 are printed to the API console and returned to the client so you can finish the flow.
+Anywhere codes cannot be delivered at all (production without a mail provider), sign-up
+skips verification and signs the new account in directly, and password reset reports
+that it is unavailable.
 
 ## Layout
 
@@ -113,9 +116,12 @@ saved, profile) is browsable straight away.
 
 Everyone who lands on the site shares that one guest account. `KC_GUEST_READONLY=1`
 keeps it read-only: the guest can look at everything a member can, but any write —
-posting, messaging, editing the profile, uploading — is refused with a 403 and the
-client sends the visitor to sign up instead. Without it, anonymous visitors can post
-and message as "Guest" and edit its profile between them.
+posting, liking, commenting, connecting, messaging, saving, editing the profile,
+uploading — is refused with a 403. The client knows it is the guest (`guest: true` on
+the session) and shows a "create a free account" prompt before it ever sends the
+request; the profile, messages and saved pages become that prompt. The directory
+stays open to everyone. Without the flag, anonymous visitors can post and message as
+"Guest" and edit its profile between them.
 
 The seed also creates a `demo@klal.app` admin. On a database it gets a random
 password unless `KC_DEMO_PASSWORD` is set; give it a real one with
