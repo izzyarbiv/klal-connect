@@ -15,6 +15,7 @@ import CompletenessRing from '@/components/CompletenessRing';
 import { profileCompleteness } from '@/lib/completeness';
 import { AFFILIATIONS, PROFILE_TYPES } from '@/lib/affiliations';
 import InviteButton from '@/components/InviteButton';
+import ChangePassword from '@/components/ChangePassword';
 
 export default function Profile() {
   const [user, setUser] = useState();
@@ -99,6 +100,7 @@ export default function Profile() {
     </form>
 
     <LocationPicker user={user} />
+    <ChangePassword />
     <NotificationSettings user={user} />
     <ManageListings user={user} />
     <ManageCompanies user={user} />

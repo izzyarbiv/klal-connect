@@ -164,6 +164,10 @@ const auth = {
     return request('PUT', '/auth/me', { body: patch });
   },
 
+  async changePassword(current_password, new_password) {
+    return request('PUT', '/auth/password', { body: { current_password, new_password } });
+  },
+
   setToken(token) {
     tokenStore.set(token);
   },
@@ -286,6 +290,10 @@ const integrations = {
 
 export const api = {
   invites: { get: (code) => request('GET', `/invites/${encodeURIComponent(code)}`) },
-  admin: { setRole: (id, role) => request('PUT', `/users/${encodeURIComponent(id)}/role`, { body: { role } }) }, entities, auth, functions: functionsApi, integrations, geo, getConfig };
+  admin: {
+    setRole: (id, role) => request('PUT', `/users/${encodeURIComponent(id)}/role`, { body: { role } }),
+    resetPassword: (id) => request('POST', `/users/${encodeURIComponent(id)}/reset-password`),
+    updateUser: (id, patch) => request('PUT', `/users/${encodeURIComponent(id)}`, { body: patch }),
+  }, entities, auth, functions: functionsApi, integrations, geo, getConfig };
 export { ApiError };
 export default api;

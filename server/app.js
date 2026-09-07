@@ -6,6 +6,7 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import { randomBytes } from 'node:crypto';
 
 import { store, users, userToPublic, otp } from './db.js';
 import {
@@ -38,6 +39,7 @@ app.use(attachUser);
 // member reads, and every write gets a 403 the client can show as "sign in to
 // do that". Off by default so a demo stays fully interactive.
 const GUEST_READONLY = process.env.KC_GUEST_READONLY === '1';
+const GUEST_BLOCKED_AUTH = new Set(['/api/auth/me', '/api/auth/password']);
 const isGuest = (user) => !!user && user.email === GUEST_EMAIL;
 // What a session handed to the client looks like: the profile plus a flag the
 // UI uses to show "create an account" instead of the guest's own settings.
@@ -48,7 +50,7 @@ app.use((req, res, next) => {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
   // Signing in or registering as someone else is how a visitor stops being the
   // guest, so those must go through even with the guest token attached.
-  if (req.path.startsWith('/api/auth/') && req.path !== '/api/auth/me') return next();
+  if (req.path.startsWith('/api/auth/') && !GUEST_BLOCKED_AUTH.has(req.path)) return next();
   const fn = req.path.match(/^\/api\/functions\/([^/]+)$/)?.[1];
   if (fn && publicFunctions.has(fn)) return next();
   res.status(403).json({ error: 'Sign in to do that.', guest: true });
@@ -258,6 +260,40 @@ app.get('/api/users', async (req, res, next) => {
   res.json(await memberList(req.user));
 });
 
+// Admin only: hand a locked-out member a temporary password. Shown once to
+// the admin, never stored in the clear, and every use is audited. This is
+// the way back in while there is no email to send a reset code to.
+app.post('/api/users/:id/reset-password', requireAdmin, async (req, res, next) => {
+  const target = await users.byId(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Not found' });
+  if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account has no password to reset.' });
+  const temp = tempPassword();
+  await users.update(target.id, { password_hash: hashPassword(temp) });
+  await store.create('ActivityEvent', { type: 'password_reset', target_id: target.id, by: 'admin' }, req.user);
+  res.json({ temp_password: temp, email: target.email });
+});
+
+// Admin only: the basic profile fields, and deactivation. Not role (its own
+// route), not email, not password.
+const ADMIN_PROFILE_FIELDS = new Set(['full_name', 'headline', 'bio', 'home_city', 'phone', 'avatar_url', 'banner_url', 'work_experience', 'profile_type', 'disabled']);
+app.put('/api/users/:id', requireAdmin, async (req, res, next) => {
+  const target = await users.byId(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Not found' });
+  const patch = Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => ADMIN_PROFILE_FIELDS.has(k)));
+  if (target.id === req.user.id && patch.disabled) return res.status(400).json({ error: 'You cannot deactivate yourself.' });
+  const updated = await users.update(target.id, patch);
+  await store.create('ActivityEvent', { type: 'profile_edit', target_id: target.id, fields: Object.keys(patch), by: 'admin' }, req.user);
+  res.json(userToPublic(updated));
+});
+
+const tempPassword = () => {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(12);
+  let s = '';
+  for (const b of bytes) s += alphabet[b % alphabet.length];
+  return `Klal-${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
+};
+
 // Admin only: user | moderator | admin. You cannot change your own role, so
 // there is always at least the admin who is doing the changing.
 const ROLES = new Set(['user', 'moderator', 'admin']);
@@ -325,6 +361,17 @@ app.put('/api/auth/me', requireAuth, async (req, res, next) => {
   res.json(userToPublic(await users.update(req.user.id, safe)));
 });
 
+// A signed-in member changes their own password. Needs the current one, so
+// a session left open on a shared device cannot lock the owner out.
+app.put('/api/auth/password', requireAuth, async (req, res, next) => {
+  const { current_password, new_password } = req.body || {};
+  if (String(new_password || '').length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  const row = await users.byId(req.user.id);
+  if (!checkPassword(current_password, row.password_hash)) return res.status(400).json({ error: 'Your current password is not right' });
+  await users.update(row.id, { password_hash: hashPassword(new_password) });
+  res.json({ ok: true });
+});
+
 app.post('/api/auth/login', async (req, res, next) => {
   const { email, password } = req.body || {};
   const row = await users.byEmail(email);
@@ -371,7 +418,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   const row = await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '', ...invitedBy });
   await acceptInvite(invited, row);
   const code = await otp.issue(String(email).trim(), 'verify');
-  res.status(201).json({ ok: true, otp_sent: true, dev_code: deliverCode(email, 'verify', code) });
+  res.status(201).json({ ok: true, otp_sent: true, dev_code: await deliverCode(email, 'verify', code) });
 });
 
 // Marks an invite as joined and tells the inviter. Invite rows are reusable
@@ -405,7 +452,7 @@ app.post('/api/auth/resend-otp', async (req, res, next) => {
   const { email } = req.body || {};
   if (!(await users.byEmail(email))) return res.json({ ok: true }); // don't reveal who is registered
   const code = await otp.issue(String(email).trim(), 'verify');
-  res.json({ ok: true, dev_code: deliverCode(email, 'verify', code) });
+  res.json({ ok: true, dev_code: await deliverCode(email, 'verify', code) });
 });
 
 app.post('/api/auth/reset-password-request', async (req, res, next) => {
@@ -415,7 +462,7 @@ app.post('/api/auth/reset-password-request', async (req, res, next) => {
   }
   if (!(await users.byEmail(email))) return res.json({ ok: true });
   const code = await otp.issue(String(email).trim(), 'reset');
-  res.json({ ok: true, dev_code: deliverCode(email, 'reset', code) });
+  res.json({ ok: true, dev_code: await deliverCode(email, 'reset', code) });
 });
 
 app.post('/api/auth/reset-password', async (req, res, next) => {

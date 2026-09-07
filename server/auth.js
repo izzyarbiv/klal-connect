@@ -2,6 +2,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { users, userToPublic, otp } from './db.js';
+import { mailConfigured, sendMail, codeEmail } from './mail.js';
 
 const SECRET = process.env.KC_JWT_SECRET || 'kc-dev-secret-change-me';
 const TOKEN_TTL = '30d';
@@ -62,15 +63,31 @@ export function requireAdmin(req, res, next) {
 // let anyone register under someone else's address and verify it themselves,
 // so the dangerous case must require two positive signals, never a default.
 const DEV_CODES = process.env.KC_EMAIL_DELIVERY === 'dev' && process.env.NODE_ENV !== 'production';
+const REAL_MAIL = process.env.KC_EMAIL_DELIVERY === 'real' && mailConfigured();
+
+if (process.env.KC_EMAIL_DELIVERY === 'real' && !mailConfigured()) {
+  console.warn('[auth] KC_EMAIL_DELIVERY=real but RESEND_API_KEY / KC_MAIL_FROM are not set — codes cannot be delivered.');
+}
 
 // Whether a verification or reset code can actually reach the person: either a
 // real mail provider, or the local dev mode that hands the code back.
-export const canDeliverCodes = () => process.env.KC_EMAIL_DELIVERY === 'real' || DEV_CODES;
+export const canDeliverCodes = () => REAL_MAIL || DEV_CODES;
 
-export function deliverCode(email, purpose, code) {
-  const expose = DEV_CODES;
-  console.log(`[auth] ${purpose} code for ${email}: ${expose ? code : '(withheld)'}`);
-  return expose ? code : undefined;
+// Sends the code by email when a provider is configured. In local dev the
+// code is returned to the caller instead; in production without a provider
+// it goes nowhere, and the routes that call this already say so.
+export async function deliverCode(email, purpose, code) {
+  if (DEV_CODES) {
+    console.log(`[auth] ${purpose} code for ${email}: ${code}`);
+    return code;
+  }
+  if (REAL_MAIL) {
+    await sendMail({ to: String(email).trim(), ...codeEmail(purpose, code) });
+    console.log(`[auth] ${purpose} code emailed to ${email}`);
+    return undefined;
+  }
+  console.log(`[auth] ${purpose} code for ${email}: (withheld — no mail provider)`);
+  return undefined;
 }
 
 export { otp };

@@ -160,6 +160,7 @@ password unless `KC_DEMO_PASSWORD` is set; give it a real one with
    | `NODE_ENV` | `production` |
    | `KC_DEMO_MODE` | `1` keeps the no-login guest session (visitors browse as a shared guest account). With `DATABASE_URL` set the data still lives in Postgres. Remove it once real members should have to sign in. |
    | `KC_GUEST_READONLY` | `1` so the shared guest can read but not write. See *Guest browsing*. |
+   | `KC_EMAIL_DELIVERY` / `RESEND_API_KEY` / `KC_MAIL_FROM` | `real`, a Resend API key, and a From address on a domain verified in Resend. Turns on verification and password-reset emails. |
    | `KC_STORE` | Remove it once `DATABASE_URL` is set. `blob` was the pre-database bridge. |
 
 3. Run `npm run migrate` once against the production database.
