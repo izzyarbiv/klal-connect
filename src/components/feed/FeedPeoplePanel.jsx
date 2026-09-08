@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import { api } from '@/api/client';
 import { Users as UsersIcon } from 'lucide-react';
 import UserCard from '@/components/UserCard';
+import InviteButton from '@/components/InviteButton';
 import { loadMyConnections, suggestSimilar, connectedIds } from '@/lib/connections';
 
 export default function FeedPeoplePanel(){
@@ -21,11 +22,22 @@ export default function FeedPeoplePanel(){
   })()},[]);
 
   const top=(suggestions||[]).slice(0,3);
+  if (!suggestions) return null;
+
+  // Nobody to suggest yet: the useful thing to offer is the way to change
+  // that, not an empty module. Guests get nothing here — they have no
+  // invite link and the sign-up prompt is already at the top of the feed.
+  if (suggestions.length===0) {
+    if (!me || me.guest) return null;
+    return <div className="panel space-y-3">
+      <div className="flex items-center gap-2"><UsersIcon size={15} className="text-brand-teal"/><h2 className="text-sm font-bold uppercase tracking-wide text-brand-ink">Bring your people</h2></div>
+      <p className="text-sm leading-6 text-brand-body">People you may know will show up here as your community joins. Anyone who joins through your link is connected to you.</p>
+      <InviteButton/>
+    </div>;
+  }
 
   return <div className="panel space-y-3">
     <div className="flex items-center gap-2"><UsersIcon size={15} className="text-brand-teal"/><h2 className="text-sm font-bold uppercase tracking-wide text-brand-ink">People you may know</h2></div>
-    {!suggestions && <p className="text-sm text-brand-body">Loading…</p>}
-    {suggestions?.length===0 && <p className="text-sm leading-6 text-brand-muted">As more community members join, you'll see people you may know here.</p>}
     {top.map(s=><UserCard key={s.user.id} user={s.user} me={me} connections={connections} onReload={reload}/>)}
   </div>;
 }

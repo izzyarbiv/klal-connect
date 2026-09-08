@@ -162,7 +162,7 @@
   .field { @apply mt-1 block w-full rounded-xl border border-brand-line bg-brand-surface px-3 py-2.5 text-sm text-brand-ink outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/10; }
   .primary { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-navy-hover; }
   .secondary, .action { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-brand-line bg-brand-surface px-4 py-2.5 text-sm font-semibold text-brand-ink hover:bg-brand-tint; }
-  .helper { @apply mt-2 text-sm leading-6 text-brand-body; }
+  .helper { @apply mt-2 block text-sm leading-6 text-brand-body; }
   .success { @apply rounded-xl bg-brand-tint text-sm font-semibold text-brand-success; }
   .form-grid { @apply grid gap-4 sm:grid-cols-2; }
   .info { @apply flex items-center gap-2 text-brand-body; }

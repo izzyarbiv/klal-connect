@@ -46,4 +46,4 @@ if (backend === 'memory') {
 export const isDemoMode = DEMO;
 export const backendName = backend;
 export const { pool, query, ready, migrate, store, users, otp, geoCache } = impl;
-export { nowISO, newId, userToPublic } from './db-shared.js';
+export { nowISO, newId, userToPublic, GUEST_EMAIL } from './db-shared.js';

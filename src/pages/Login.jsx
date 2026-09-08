@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
-import GoogleIcon from "@/components/GoogleIcon";
+import VerifyEmail from "@/components/VerifyEmail";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 export default function Login() {
@@ -14,6 +14,9 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Set when the account registered but never entered its email code; the
+  // server has just sent a fresh one.
+  const [verify, setVerify] = useState(null);
   // Post-login destination (e.g. the MCP OAuth consent page sends users here
   // with returnTo so the grant flow can resume). Same-origin paths only.
   const returnTo = safeReturnTo();
@@ -31,19 +34,14 @@ export default function Login() {
       await api.auth.loginViaEmailPassword(email, password);
       window.location.href = returnTo;
     } catch (err) {
+      if (err.data?.verification_required) { setVerify({ email, devCode: err.data.dev_code }); return; }
       setError(err.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogle = () => {
-    try {
-      api.auth.loginWithProvider("google", returnTo);
-    } catch (err) {
-      setError(err.message || "Google sign-in is unavailable.");
-    }
-  };
+  if (verify) return <VerifyEmail email={verify.email} devCode={verify.devCode} onVerified={() => { window.location.href = returnTo; }} />;
 
   return (
     <AuthLayout
@@ -67,24 +65,6 @@ export default function Login() {
           Please log in to report an issue. Reports are private, but we require an account so our review team can follow up if needed.
         </div>
       )}
-      <Button
-        variant="outline"
-        className="w-full h-12 text-sm font-medium mb-6"
-        onClick={handleGoogle}
-      >
-        <GoogleIcon className="w-5 h-5 mr-2" />
-        Continue with Google
-      </Button>
-
-      <div className="relative mb-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-3 text-muted-foreground">or</span>
-        </div>
-      </div>
-
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
           {error}

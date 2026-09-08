@@ -4,7 +4,7 @@
 // this runs once per cold start and is awaited by the request path — otherwise
 // the first visitor would see an empty directory.
 import { randomBytes } from 'node:crypto';
-import { store, users, isDemoMode, backendName } from './db.js';
+import { store, users, isDemoMode, backendName, GUEST_EMAIL } from './db.js';
 import { stableId } from './db-shared.js';
 import { seedAll } from './seed-data.js';
 import { hashPassword } from './auth.js';
@@ -20,10 +20,10 @@ const PERSISTENT = backendName !== 'memory';
 const DEMO_PASSWORD = process.env.KC_DEMO_PASSWORD || (PERSISTENT ? null : 'demo1234');
 const unguessable = () => randomBytes(32).toString('hex');
 
-// Visitors are signed in as this account so they can browse the whole app
-// without a login wall. Deliberately an ordinary member, not the admin: the
-// admin tools stay behind the password.
-export const GUEST_EMAIL = 'guest@klal.app';
+// Visitors are signed in as the guest account (GUEST_EMAIL, in db-shared.js)
+// so they can browse the whole app without a login wall. Deliberately an
+// ordinary member, not the admin: the admin tools stay behind the password.
+export { GUEST_EMAIL };
 
 let started = null;
 
@@ -79,7 +79,7 @@ const MEMBERS = [
 ];
 
 const POSTS = [
-  { body: 'Reminder: the medical equipment gemach in Monsey now has three new wheelchairs available. No cost, no deposit — just call ahead.', post_type: 'update' },
+  { body: 'Reminder: the medical equipment gemach in Monsey now has three new wheelchairs available. No cost, no deposit — just call ahead.', post_type: 'post' },
   { body: 'Looking for a recommendation for a reliable electrician in the Lakewood area. Anyone used someone recently they were happy with?', post_type: 'question' },
   { body: 'Booking now for the winter season — full-service catering for weddings, bar mitzvahs and sheva brachos. Cholov Yisroel and Pas Yisroel.', post_type: 'promotion' },
 ];

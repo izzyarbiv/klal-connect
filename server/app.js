@@ -8,14 +8,14 @@ import cors from 'cors';
 import multer from 'multer';
 import { randomBytes } from 'node:crypto';
 
-import { store, users, userToPublic, otp } from './db.js';
+import { store, users, userToPublic, otp, GUEST_EMAIL } from './db.js';
 import {
   attachUser, requireAuth, requireAdmin,
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
 import { isDemoMode } from './db.js';
-import { ensureDemoData, GUEST_EMAIL } from './demo-seed.js';
+import { ensureDemoData } from './demo-seed.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 
@@ -41,9 +41,24 @@ app.use(attachUser);
 const GUEST_READONLY = process.env.KC_GUEST_READONLY === '1';
 const GUEST_BLOCKED_AUTH = new Set(['/api/auth/me', '/api/auth/password']);
 const isGuest = (user) => !!user && user.email === GUEST_EMAIL;
+
+// The guest is one row shared by every visitor, and before KC_GUEST_READONLY
+// existed any visitor could write to it — which is how a real member's name,
+// phone and work history ended up on it. So the row's profile fields are never
+// trusted: everywhere the guest is read (its own session, the members list,
+// the profile route, the author fields on anything it creates) this fixed
+// placeholder is used instead. Whatever is stored on the row stays invisible.
+const GUEST_PROFILE = { full_name: 'Guest', headline: 'Browsing Klal as a guest', profile_type: 'community_member' };
+function maskGuest(user) {
+  if (!isGuest(user)) return user;
+  const { id, email, role, verified, created_date, updated_date } = user;
+  return { id, email, role, verified, created_date, updated_date, ...GUEST_PROFILE };
+}
+app.use((req, _res, next) => { req.user = maskGuest(req.user); next(); });
+
 // What a session handed to the client looks like: the profile plus a flag the
 // UI uses to show "create an account" instead of the guest's own settings.
-const sessionUser = (user) => (user ? { ...user, guest: isGuest(user) } : null);
+const sessionUser = (user) => (user ? { ...maskGuest(user), guest: isGuest(user) } : null);
 
 app.use((req, res, next) => {
   if (!GUEST_READONLY || !isGuest(req.user)) return next();
@@ -128,6 +143,20 @@ function canWrite(entity, user, row) {
   return true;
 }
 
+// What the person on the receiving end of a row may change about it, and
+// nothing else. A connection request is answered by its recipient (accept or
+// decline); a message is marked read by its recipient. Neither may touch any
+// other field — the PUT route replaces the body with exactly this patch.
+const RECIPIENT_PATCH = {
+  Connection: (body) => (['accepted', 'declined'].includes(body?.status) ? { status: body.status } : null),
+  Message: (body) => ({ read: !!body?.read }),
+};
+function recipientPatch(entity, user, row, body) {
+  const narrow = RECIPIENT_PATCH[entity];
+  if (!narrow || !row || row.recipient_id !== user.id || row.created_by_id === user.id) return null;
+  return narrow(body);
+}
+
 const parseJSON = (value, fallback) => {
   if (value === undefined) return fallback;
   try { return JSON.parse(value); } catch { return fallback; }
@@ -190,9 +219,12 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   const { entity, id } = req.params;
   const existing = await store.get(entity, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (!canWrite(entity, req.user, existing)) return res.status(403).json({ error: 'Not permitted' });
+  const asRecipient = req.user.role !== 'admin' ? recipientPatch(entity, req.user, existing, req.body) : null;
+  if (!asRecipient && !canWrite(entity, req.user, existing)) return res.status(403).json({ error: 'Not permitted' });
   let patch = req.body;
-  if (req.user.role !== 'admin') {
+  if (asRecipient) {
+    patch = asRecipient;
+  } else if (req.user.role !== 'admin') {
     if (isModerator(req.user) && MODERATED_BY_STAFF.has(entity) && existing.created_by_id !== req.user.id) {
       // A moderator's job on someone else's row is exactly its state: the
       // status, their notes, and the resolution stamp. Nothing else changes.
@@ -253,7 +285,8 @@ const isDisabled = (user) => user.disabled === true;
 async function memberList(viewer) {
   const all = (await users.all()).map(userToPublic);
   if (viewer?.role === 'admin') return all;
-  return all.filter((u) => !isDisabled(u)).map(publicProfile);
+  // The guest is a session, not a member: it is not someone to connect with.
+  return all.filter((u) => !isDisabled(u) && !isGuest(u)).map(publicProfile);
 }
 
 app.get('/api/users', async (req, res, next) => {
@@ -311,8 +344,11 @@ app.put('/api/users/:id/role', requireAdmin, async (req, res, next) => {
 
 app.get('/api/users/:id', async (req, res, next) => {
   const user = userToPublic(await users.byId(req.params.id));
-  const isSelfOrAdmin = req.user && user && (req.user.id === user.id || req.user.role === 'admin');
+  const isAdmin = req.user?.role === 'admin';
+  const isSelfOrAdmin = req.user && user && (req.user.id === user.id || isAdmin);
   if (!user || (isDisabled(user) && !isSelfOrAdmin)) return res.status(404).json({ error: 'Not found' });
+  // Only an admin (who may need to scrub it) sees what is stored on the guest row.
+  if (isGuest(user) && !isAdmin) return res.status(404).json({ error: 'Not found' });
   res.json(isSelfOrAdmin ? user : publicProfile(user));
 });
 
@@ -356,6 +392,10 @@ if (isDemoMode) {
 app.get('/api/auth/me', requireAuth, (req, res) => res.json(sessionUser(req.user)));
 
 app.put('/api/auth/me', requireAuth, async (req, res, next) => {
+  // Every visitor shares the guest; letting one of them write its profile is
+  // how another member's details end up shown to everyone. Refused regardless
+  // of KC_GUEST_READONLY.
+  if (isGuest(req.user)) return res.status(403).json({ error: 'Create an account to have a profile of your own.', guest: true });
   // Role and verification are server-owned; a user cannot promote themselves.
   const { role, verified, password_hash, email, id, ...safe } = req.body || {};
   res.json(userToPublic(await users.update(req.user.id, safe)));
@@ -377,6 +417,15 @@ app.post('/api/auth/login', async (req, res, next) => {
   const row = await users.byEmail(email);
   if (!row || !checkPassword(password, row.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
+  }
+  // An account that registered while email was on but never entered its code
+  // is not in yet. A fresh code goes out and the client shows the same
+  // verification screen sign-up uses. Accounts created before a mail provider
+  // existed were marked verified at creation, so nobody is locked out by this.
+  if (!row.verified && canDeliverCodes()) {
+    const code = await otp.issue(String(email).trim(), 'verify');
+    const dev_code = await deliverCode(email, 'verify', code);
+    return res.status(403).json({ error: 'Please verify your email address first. We just sent you a new code.', verification_required: true, dev_code });
   }
   res.json({ access_token: signToken(row), user: userToPublic(row) });
 });

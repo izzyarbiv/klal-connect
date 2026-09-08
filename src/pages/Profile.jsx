@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Eye } from 'lucide-react';
 import { api } from '@/api/client';
 import ManageListings from '@/components/ManageListings';
 import ManageCompanies from '@/components/ManageCompanies';
@@ -47,8 +49,10 @@ export default function Profile() {
   const headlineSuggestion = recentJob ? `${recentJob.title}${recentJob.company ? ` — ${recentJob.company}` : ''}` : null;
 
   return <div className="page-shell max-w-2xl py-9">
-    <span className="eyebrow dark">YOUR ACCOUNT</span>
-    <h1 className="title text-3xl">Community profile</h1>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><span className="eyebrow dark">YOUR ACCOUNT</span><h1 className="title text-3xl">Community profile</h1></div>
+      <Link to={`/profile/${user.id}`} className="secondary"><Eye size={16}/>View as others see it</Link>
+    </div>
     <p className="helper mb-7">Keep a simple profile and an optional general home city. Your exact location is never displayed.</p>
 
     <div className="panel mb-5 flex flex-wrap items-center justify-between gap-4">

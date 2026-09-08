@@ -207,11 +207,6 @@ const auth = {
     return request('POST', '/auth/reset-password', { body: { email, resetToken, newPassword } });
   },
 
-  // Social sign-in is not configured yet; surface that instead of a dead button.
-  loginWithProvider() {
-    throw new ApiError('Google sign-in is not configured yet. Use email and password.', 501, null);
-  },
-
   logout(redirectTo) {
     lastMe = null;
     tokenStore.set(null);

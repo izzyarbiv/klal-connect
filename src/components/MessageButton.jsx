@@ -6,7 +6,7 @@ import { connectionStatusWith } from '@/lib/connections';
 // Shown only for members you are already connected with (accepted).
 // Links to the private 1:1 conversation thread.
 export default function MessageButton({ targetId, me, connections, size = 'md' }){
-  if (!me || me.id === targetId) return null;
+  if (!me || me.id === targetId || me.guest) return null;
   const st = connectionStatusWith(targetId, connections);
   if (st.status !== 'accepted') return null;
   const pad = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2.5 text-sm';

@@ -22,8 +22,10 @@ npm run dev                                      # API on :4000, web on :5173
 Open http://localhost:5173
 
 **The first account you register becomes the admin.** There is no other way in, by design.
-Sign-up and password-reset codes are not emailed yet — while `KC_EMAIL_DELIVERY=dev` they
-are printed to the API console and returned to the client so you can finish the flow.
+While `KC_EMAIL_DELIVERY=dev`, sign-up and password-reset codes are printed to the API
+console and returned to the client so you can finish the flow locally. With
+`KC_EMAIL_DELIVERY=real` (and Resend configured) they are emailed, sign-up requires the
+code, and an account that never entered its code is asked for one again at log in.
 Anywhere codes cannot be delivered at all (production without a mail provider), sign-up
 skips verification and signs the new account in directly, and password reset reports
 that it is unavailable.
@@ -83,8 +85,9 @@ All routes are under `/api`, and the dev server proxies to the API automatically
 | `POST /api/upload` | Image upload (8MB, images only) |
 
 Functions: `createListing`, `updateListingTagline`, `createClaim`, `createReview`,
-`createReport`, `createPost`, `createComment`, `toggleLike`, `recordPostView`,
-`toggleCommunityActivity`, `sendMessage`, `getShabbosStatus`.
+`createReport`, `createPost`, `createComment`, `toggleLike` (one reaction per member per
+post — see `src/lib/reactions.js`), `toggleAnswerVote`, `markHelpful`, `recordPostView`,
+`reactToMessage`, `toggleCommunityActivity`, `sendMessage`, `myInvite`, `getShabbosStatus`.
 
 These are server-side rather than direct entity writes because each enforces something
 the client must not be trusted with: moderation status, ownership, counter integrity, or
@@ -105,7 +108,10 @@ Every status change by staff is recorded as a `moderation` activity event.
 
 - **Public**: published listings, companies, categories, published community notes.
 - **Moderated**: anything `pending`/`hidden`/`declined` is visible only to its author and admins.
-- **Private**: messages, notifications, saves, and reports are scoped to their owner.
+- **Private**: messages, notifications, saves, and reports are scoped to their owner. The
+  recipient of a connection request may accept or decline it, and the recipient of a
+  message may mark it read; nothing else on someone else's row is editable.
+- **Post views**: counted once per member and shown only to the post's author.
 - **Admin only**: platform settings (including the global Shabbos override), the report queue.
 - **Shabbos**: the server refuses writes during Shabbos and Yom Tov, so a stale tab or a
   wrong client clock can't slip one through.
@@ -131,12 +137,18 @@ saved, profile) is browsable straight away.
 
 Everyone who lands on the site shares that one guest account. `KC_GUEST_READONLY=1`
 keeps it read-only: the guest can look at everything a member can, but any write —
-posting, liking, commenting, connecting, messaging, saving, editing the profile,
-uploading — is refused with a 403. The client knows it is the guest (`guest: true` on
-the session) and shows a "create a free account" prompt before it ever sends the
-request; the profile, messages and saved pages become that prompt. The directory
-stays open to everyone. Without the flag, anonymous visitors can post and message as
-"Guest" and edit its profile between them.
+posting, liking, commenting, connecting, messaging, saving, uploading — is refused
+with a 403. The client knows it is the guest (`guest: true` on the session) and shows
+a "create a free account" prompt before it ever sends the request; the profile,
+messages and saved pages become that prompt. The directory stays open to everyone.
+Without the flag, anonymous visitors can post and message as "Guest".
+
+The guest is a placeholder, never a person. Whatever is stored on its row, the server
+presents it as "Guest" everywhere — its own session, the author fields on anything it
+creates, the profile route — and its profile can never be edited, flag or no flag. It
+is left out of the members list and People You May Know. Only an admin sees the row
+itself (Admin → Users), which is where it gets scrubbed if something was written to
+it before this was enforced.
 
 The seed also creates a `demo@klal.app` admin. On a database it gets a random
 password unless `KC_DEMO_PASSWORD` is set; give it a real one with
@@ -192,9 +204,10 @@ under `/api` is ever cached — see the invariants in `vite.config.js`.
 
 ## Not done yet
 
-- **Email delivery** — OTP and reset codes are console-only until SMTP is configured.
-- **Google sign-in** — the button is present but reports that it isn't configured; it needs
-  OAuth credentials.
+- **Email delivery** — verification and reset codes are console-only until Resend is
+  configured (`KC_EMAIL_DELIVERY=real`, `RESEND_API_KEY`, `KC_MAIL_FROM`).
+- **Google sign-in** — not offered. Adding it needs OAuth credentials and a
+  `/api/auth/google` exchange; the sign-in pages are email and password only until then.
 - **Native app builds** — Capacitor wrappers for the App Store and Play Store are
   not set up. Apple's guideline 4.2 rejects thin web wrappers, so this needs
   native capabilities (push, geolocation) before it is worth submitting.

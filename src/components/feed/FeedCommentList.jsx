@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import { api } from '@/api/client';
 import { Send, ChevronUp, CheckCircle2 } from 'lucide-react';
 import Headline from '@/components/Headline';
+import { timeAgo, fullDate } from '@/lib/time';
 
 // Comments under a post. Under an ask they are answers: each can be upvoted
 // by anyone but its author, and the person who asked can mark one as the one
@@ -41,7 +42,7 @@ export default function FeedCommentList({ postId, user, authorId, isAsk, helpful
       {isAsk&&<button type="button" onClick={()=>vote(c)} disabled={!!user&&c.created_by_id===user.id} aria-label="Upvote this answer" className={`flex h-12 w-9 shrink-0 flex-col items-center justify-center rounded-xl text-xs font-bold ${myVotes.has(c.id)?'bg-brand-navy text-white':'bg-brand-surface text-brand-body hover:text-brand-ink'} disabled:opacity-40`}><ChevronUp size={16}/>{c.vote_count||0}</button>}
       {!isAsk&&<div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-surface text-xs font-bold text-brand-teal">{(c.author_name||' KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-brand-ink">{c.author_name||'Community member'}</p>{isHelpful&&<span className="inline-flex items-center gap-1 rounded-full bg-brand-surface px-2 py-0.5 text-[10px] font-bold text-brand-gold-ink"><CheckCircle2 size={11}/>Helped the asker</span>}</div>
+        <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-brand-ink">{c.author_name||'Community member'}</p>{c.created_date&&<time dateTime={c.created_date} title={fullDate(c.created_date)} className="text-[11px] text-brand-muted">{timeAgo(c.created_date)}</time>}{isHelpful&&<span className="inline-flex items-center gap-1 rounded-full bg-brand-surface px-2 py-0.5 text-[10px] font-bold text-brand-gold-ink"><CheckCircle2 size={11}/>Helped the asker</span>}</div>
         <Headline text={c.author_headline} className="text-[11px]"/>
         <p className="text-sm leading-6 text-brand-body">{c.body}</p>
         {isAsk&&isAsker&&<button type="button" onClick={()=>helped(c)} className="mt-1 text-xs font-semibold text-brand-teal hover:underline">{isHelpful?'Unmark as helpful':'This helped'}</button>}

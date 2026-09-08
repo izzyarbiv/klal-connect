@@ -2,10 +2,13 @@ import React,{useEffect,useState,useRef} from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import GuestPrompt from '@/components/GuestPrompt';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, SmilePlus } from 'lucide-react';
 import { Image } from '@/components/ui/image';
 import Headline from '@/components/Headline';
 import { loadMyConnections, connectionStatusWith } from '@/lib/connections';
+import ReactionPicker from '@/components/feed/ReactionPicker';
+import { REACTION_BY_ID } from '@/lib/reactions';
+import { timeAgo, fullDate } from '@/lib/time';
 
 export default function Conversation(){
   const { id } = useParams();
@@ -17,7 +20,16 @@ export default function Conversation(){
   const [err,setErr]=useState('');
   const [connected,setConnected]=useState(false);
   const [loading,setLoading]=useState(true);
+  const [pickerFor,setPickerFor]=useState(null);
   const endRef=useRef(null);
+
+  const react=async(m,reaction)=>{
+    setPickerFor(null);
+    const r=await api.functions.invoke('reactToMessage',{ message_id:m.id, reaction });
+    if(r.status>=400){ setErr(r.data?.error||'Could not react'); return; }
+    setErr('');
+    setMessages(ms=>ms.map(x=>x.id===m.id?r.data.message:x));
+  };
 
   const load = async (u) => {
     const [sent, received] = await Promise.all([
@@ -73,12 +85,25 @@ export default function Conversation(){
       </Link>
 
       {!connected ? <p className="py-10 text-center text-sm text-brand-muted">You can only message members you are connected with. <Link to={`/profile/${other.id}`} className="font-semibold text-brand-teal">View profile</Link></p> : <>
-        <div className="my-4 max-h-[55vh] space-y-3 overflow-y-auto py-2">
+        <div className="my-4 max-h-[55vh] space-y-3 overflow-y-auto px-9 py-2" onClick={()=>setPickerFor(null)}>
           {messages.length===0 && <p className="py-8 text-center text-sm text-brand-muted">No messages yet. Say hello!</p>}
           {messages.map(m=>{
             const mine=m.sender_id===me.id;
-            return <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
-              <div className={`max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${mine?'bg-brand-navy text-white':'bg-brand-tint text-brand-ink'}`}>{m.body}</div>
+            const reactions=Object.entries(m.reactions||{}).filter(([,id])=>REACTION_BY_ID[id]);
+            const own=m.reactions?.[me.id]||null;
+            return <div key={m.id} className={`group flex ${mine?'justify-end':'justify-start'}`}>
+              <div className="relative max-w-[78%]">
+                <div className={`rounded-2xl px-4 py-2.5 text-sm leading-6 ${mine?'bg-brand-navy text-white':'bg-brand-tint text-brand-ink'}`} title={fullDate(m.created_date)}>{m.body}</div>
+                {/* The "react" button sits beside the bubble: shown on hover,
+                    and always faintly there on touch screens, where there is
+                    no hover. */}
+                <button type="button" aria-label="React to this message" onClick={(e)=>{e.stopPropagation();setPickerFor(p=>p===m.id?null:m.id);}} className={`absolute top-1 grid h-7 w-7 place-items-center rounded-full bg-brand-surface text-brand-muted opacity-60 shadow-sm ring-1 ring-brand-line transition hover:text-brand-ink hover:opacity-100 group-hover:opacity-100 ${mine?'-left-9':'-right-9'}`}><SmilePlus size={14}/></button>
+                <ReactionPicker open={pickerFor===m.id} current={own} onPick={(id)=>react(m,id)} className={`bottom-full mb-1 ${mine?'right-0':'left-0'}`}/>
+                <div className={`mt-1 flex items-center gap-2 text-[10px] text-brand-muted ${mine?'flex-row-reverse':''}`}>
+                  {reactions.length>0&&<span className={`-mt-3 flex gap-0.5 rounded-full bg-brand-surface px-1.5 py-0.5 text-sm shadow-sm ring-1 ring-brand-line ${mine?'mr-2':'ml-2'}`} title={reactions.map(([uid,id])=>`${uid===me.id?'You':other.full_name||'They'}: ${REACTION_BY_ID[id].label}`).join(', ')}>{reactions.map(([uid,id])=><span key={uid}>{REACTION_BY_ID[id].emoji}</span>)}</span>}
+                  <span>{timeAgo(m.created_date)}</span>
+                </div>
+              </div>
             </div>;
           })}
           <div ref={endRef}/>

@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 // Helpers shared by both data layers.
 export const nowISO = () => new Date().toISOString();
+
+// Visitors on a KC_DEMO_MODE deployment are signed in as this one shared
+// account so they can browse without a login wall. It is a placeholder, not a
+// person: nothing written onto its row is ever shown (see app.js).
+export const GUEST_EMAIL = 'guest@klal.app';
 export const newId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 24);
 
 // A stable id derived from content, for seeded rows. Two instances seeding the

@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import { api } from '@/api/client';
+import { api, promptForAccount } from '@/api/client';
 import { UserPlus, Check, X, Clock } from 'lucide-react';
 import { connectionStatusWith, sentThisWeekCount, WEEKLY_CAP } from '@/lib/connections';
 import { notify } from '@/lib/notifications';
@@ -8,8 +8,12 @@ export default function ConnectButton({ targetId, me, connections, onReload, siz
   const [busy,setBusy]=useState(false);
   const [capMsg,setCapMsg]=useState('');
   if (!me || me.id === targetId) return null;
-  const st = connectionStatusWith(targetId, connections);
   const pad = size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2.5 text-sm';
+  // The shared guest has no connections of its own to show — whatever the
+  // seed attached to it belongs to nobody. One button, and it opens the
+  // "create an account" prompt.
+  if (me.guest) return <button type="button" onClick={promptForAccount} className={`inline-flex items-center gap-1.5 rounded-xl border border-brand-line bg-brand-surface font-semibold text-brand-ink hover:bg-brand-tint ${pad}`}><UserPlus size={15}/>Connect</button>;
+  const st = connectionStatusWith(targetId, connections);
   const act = async fn => { setBusy(true); try { await fn(); onReload && onReload(); } finally { setBusy(false); } };
 
   if (st.status === 'accepted') return <span className={`inline-flex items-center gap-1.5 rounded-xl bg-brand-tint font-semibold text-brand-success ${pad}`}><Check size={15}/>Connected</span>;

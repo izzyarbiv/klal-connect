@@ -8,11 +8,12 @@ import Headline from '@/components/Headline';
 export default function FeedPromotedPanel(){
   const [items,setItems]=useState(null);
   useEffect(()=>{ api.entities.Provider.filter({ featured:true, status:'published' },'-usage_count',4).then(setItems).catch(()=>setItems([])); },[]);
+  // Rendered only once there is something to show: an empty "promoted"
+  // module makes a young network look dead.
+  if (!items || items.length === 0) return null;
   const panel = <div className="panel space-y-3">
     <div className="flex items-center justify-between"><h2 className="text-sm font-bold uppercase tracking-wide text-brand-ink">Promoted businesses</h2><TrendingUp size={15} className="text-brand-teal"/></div>
-    {!items && <p className="text-sm text-brand-body">Loading…</p>}
-    {items?.length===0 && <p className="text-sm text-brand-muted">No promoted businesses yet.</p>}
-    {items?.map(p=>{
+    {items.map(p=>{
       const initials=(p.name||'').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
       return <Link key={p.id} to={`/provider/${p.id}`} className="flex items-start gap-3 rounded-2xl p-2 hover:bg-brand-tint">
         {p.logo_url

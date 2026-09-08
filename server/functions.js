@@ -3,11 +3,20 @@
 // These are functions rather than plain entity writes because each enforces
 // something the client must not be trusted with: moderation status, ownership,
 // counter integrity, or the Shabbos write-gate.
-import { store, users } from './db.js';
+import { store, users, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable } from './shabbos.js';
 import { BADGES } from '../src/lib/badges.js';
+import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 
 const BADGE_IDS = new Set(BADGES.map((b) => b.id));
+
+// The composer's ids (src/lib/postTypes.js). `update` was an older spelling of
+// `post` and still exists on seeded rows, so it is folded in rather than
+// rejected — otherwise the "Updates" filter never matched those posts.
+const POST_TYPES = new Set(['post', 'question', 'insight', 'promotion']);
+const postType = (value) => (value === 'update' ? 'post' : POST_TYPES.has(value) ? value : 'post');
+
+const validReaction = (value) => (value ? (REACTION_BY_ID[value] ? value : null) : DEFAULT_REACTION);
 // What a member may say about their own listing. Verification, status and
 // the counters are the server's and an admin's to set.
 function listingInput(payload) {
@@ -158,7 +167,7 @@ export const functions = {
       'FeedPost',
       {
         body: text,
-        post_type: post_type || 'update',
+        post_type: postType(post_type),
         image_urls: image_urls || [],
         like_count: 0,
         comment_count: 0,
@@ -200,7 +209,7 @@ export const functions = {
   // Every member has one personal invite link; asking again returns it. The
   // code is short and memorable enough to read out loud.
   async myInvite(_payload, user) {
-    if (user.email === 'guest@klal.app') fail('Create an account to invite people.', 403);
+    if (user.email === GUEST_EMAIL) fail('Create an account to invite people.', 403);
     const [existing] = await store.filter('Invite', { created_by_id: user.id, provider_id: null });
     if (existing) return { invite: existing };
     let code;
@@ -266,34 +275,51 @@ export const functions = {
     return { helpful_comment_id: next };
   },
 
-  async toggleLike({ post_id }, user) {
+  // One reaction per member per post. Reacting again with the same one takes
+  // it back; with a different one, it changes. `like_count` stays the total
+  // of every kind, so nothing that reads it needed to change; the breakdown is
+  // in `reaction_counts`.
+  async toggleLike({ post_id, reaction }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');
     const post = await store.get('FeedPost', post_id);
     if (!post) fail('Post not found.', 404);
+    const wanted = validReaction(reaction);
+    if (!wanted) fail('Unknown reaction.');
 
     const existing = await store.filter('FeedLike', { post_id, created_by_id: user.id });
     let liked;
-    if (existing.length) {
+    if (existing.length && reactionOf(existing[0]) === wanted) {
       for (const like of existing) await store.delete('FeedLike', like.id);
       liked = false;
+    } else if (existing.length) {
+      await store.update('FeedLike', existing[0].id, { reaction: wanted });
+      for (const extra of existing.slice(1)) await store.delete('FeedLike', extra.id);
+      liked = true;
     } else {
-      await store.create('FeedLike', { post_id }, user);
+      await store.create('FeedLike', { post_id, reaction: wanted }, user);
       liked = true;
     }
-    const like_count = await store.count('FeedLike', { post_id });
-    await store.update('FeedPost', post_id, { like_count });
+    const all = await store.filter('FeedLike', { post_id });
+    const reaction_counts = {};
+    for (const row of all) { const id = reactionOf(row); reaction_counts[id] = (reaction_counts[id] || 0) + 1; }
+    const like_count = all.length;
+    await store.update('FeedPost', post_id, { like_count, reaction_counts });
 
-    if (liked && post.created_by_id !== user.id) {
+    // Told once per member per post: changing a reaction is not a new event.
+    if (liked && !existing.length && post.created_by_id !== user.id) {
+      const what = REACTION_BY_ID[wanted];
       await notify(post.created_by_id, {
         type: 'like',
         actor_name: user.full_name || user.email,
         target_type: 'post',
         target_id: post_id,
-        message: `${user.full_name || 'Someone'} liked your post`,
+        message: wanted === DEFAULT_REACTION
+          ? `${user.full_name || 'Someone'} liked your post`
+          : `${user.full_name || 'Someone'} reacted ${what.emoji} ${what.label} to your post`,
       });
     }
-    return { liked, like_count };
+    return { liked, reaction: liked ? wanted : null, like_count, reaction_counts };
   },
 
   // Views are counted once per viewer, so a refresh loop can't inflate them.
@@ -405,6 +431,23 @@ export const functions = {
       message: `${user.full_name || 'Someone'} sent you a message`,
     });
     return { message };
+  },
+
+  // A reaction on a message in a thread you are part of. One per person per
+  // message, stored on the message keyed by member id; the same reaction again
+  // removes it. Nobody is notified — it is a nod, not a message.
+  async reactToMessage({ message_id, reaction }, user) {
+    await assertWritable(user);
+    need(message_id, 'Missing message.');
+    const message = await store.get('Message', message_id);
+    if (!message) fail('Message not found.', 404);
+    if (message.sender_id !== user.id && message.recipient_id !== user.id) fail('Not your conversation.', 403);
+    const wanted = validReaction(reaction);
+    if (!wanted) fail('Unknown reaction.');
+    const reactions = { ...(message.reactions || {}) };
+    if (reactions[user.id] === wanted) delete reactions[user.id];
+    else reactions[user.id] = wanted;
+    return { message: await store.update('Message', message_id, { reactions }) };
   },
 
   // ---- zmanim ---------------------------------------------------------------
