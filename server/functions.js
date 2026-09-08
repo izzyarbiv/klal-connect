@@ -7,6 +7,7 @@ import { store, users, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable } from './shabbos.js';
 import { BADGES } from '../src/lib/badges.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
+import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
 const BADGE_IDS = new Set(BADGES.map((b) => b.id));
 
@@ -349,6 +350,84 @@ export const functions = {
       await store.update('FeedPost', postId, { view_count: count });
     }
     return { recorded: true };
+  },
+
+  // ---- the post menu: save, report, delete ---------------------------------
+
+  // A private bookmark. The row is the member's own (OWNER_SCOPED in app.js):
+  // nobody, the author included, sees who saved what.
+  async toggleSavePost({ post_id }, user) {
+    await assertWritable(user);
+    need(post_id, 'Missing post.');
+    const post = await store.get('FeedPost', post_id);
+    if (!post) fail('Post not found.', 404);
+    const existing = await store.filter('SavedPost', { post_id, created_by_id: user.id });
+    if (existing.length) {
+      for (const row of existing) await store.delete('SavedPost', row.id);
+      return { saved: false };
+    }
+    await store.create('SavedPost', { post_id }, user);
+    return { saved: true };
+  },
+
+  // Goes to the private-reports queue the admin already works. `name` and
+  // `body` are what that queue renders, so both are written to read on their
+  // own: who wrote the post, why it was reported, what the reporter said,
+  // and a line of the post itself in case it is edited or gone by then.
+  async reportPost({ post_id, reason_category, explanation }, user) {
+    await assertWritable(user);
+    need(post_id, 'Missing post.');
+    const post = await store.get('FeedPost', post_id);
+    if (!post) fail('Post not found.', 404);
+    if (post.created_by_id === user.id) fail('You cannot report your own post.');
+    const reason = Object.hasOwn(POST_REPORT_REASON_BY_ID, reason_category) ? POST_REPORT_REASON_BY_ID[reason_category] : null;
+    if (!reason) fail('Please choose a reason.');
+    const text = String(explanation || '').trim();
+    if (text.length < 20) fail('Please add at least 20 characters of explanation.');
+    if (text.length > 1000) fail('Explanation must be 1000 characters or fewer.');
+    const open = await store.filter('PrivateReport', { target_type: 'post', target_id: post_id, created_by_id: user.id, status: 'open' });
+    if (open.length) fail('You have already reported this post. Our team will look at it.');
+
+    const author = post.author_name || 'a community member';
+    const report = await store.create(
+      'PrivateReport',
+      {
+        name: `Reported post by ${author}`,
+        body: `${reason.label}: ${text} — the post reads “${postExcerpt(post.body, 140) || '(no text)'}”`,
+        target_type: 'post',
+        target_id: post_id,
+        post_author_id: post.created_by_id,
+        post_author_name: post.author_name || '',
+        reason_category,
+        explanation: text,
+        status: 'open',
+      },
+      user
+    );
+    return { report };
+  },
+
+  // The author takes back their own post; an admin or a moderator removes
+  // anyone's. Everything hanging off it goes with it, so no comment, reaction,
+  // vote or bookmark is left pointing at a post that is not there. A staff
+  // removal is audited the way a status change is (app.js).
+  async deletePost({ post_id }, user) {
+    await assertWritable(user);
+    need(post_id, 'Missing post.');
+    const post = await store.get('FeedPost', post_id);
+    if (!post) fail('Post not found.', 404);
+    const own = post.created_by_id === user.id;
+    const staff = user.role === 'admin' || user.role === 'moderator';
+    if (!own && !staff) fail('You can only delete your own posts.', 403);
+
+    for (const entity of ['Comment', 'FeedLike', 'CommentVote', 'SavedPost']) {
+      for (const row of await store.filter(entity, { post_id })) await store.delete(entity, row.id);
+    }
+    await store.delete('FeedPost', post_id);
+    if (!own) {
+      await store.create('ActivityEvent', { type: 'moderation', entity: 'FeedPost', target_id: post_id, from: 'published', to: 'deleted', actor_role: user.role }, user);
+    }
+    return { ok: true };
   },
 
   // ---- provider activity ----------------------------------------------------

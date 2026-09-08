@@ -2,16 +2,17 @@ import React,{useState} from 'react';
 import { api } from '@/api/client';
 import { MessageCircle, Eye, ThumbsUp } from 'lucide-react';
 import FeedCommentList from '@/components/feed/FeedCommentList';
+import FeedPostMenu, { ReportPostForm } from '@/components/feed/FeedPostMenu';
 import Headline from '@/components/Headline';
 import ReactionPicker, { useReactionPicker } from '@/components/feed/ReactionPicker';
 import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf, topReactions } from '@/lib/reactions';
 import { timeAgo, fullDate } from '@/lib/time';
 
-export default function FeedPostItem({ post, user }) {
+export default function FeedPostItem({ post, user, onDeleted }) {
   const type=POST_TYPE_BY_ID[normalizePostType(post.post_type)];
   const isAsk=type.id==='question';
-  const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null);
+  const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null),[reporting,setReporting]=useState(false);
   const views=post.view_count||0;
   const picker=useReactionPicker();
   React.useEffect(()=>{(async()=>{if(user&&!user.guest){const rows=await api.entities.FeedLike.filter({post_id:post.id});const own=rows.find(r=>r.created_by_id===user.id);setMine(own?reactionOf(own):null);}})();},[post.id,user]);
@@ -51,9 +52,11 @@ export default function FeedPostItem({ post, user }) {
         <Headline text={post.author_headline}/>
         {post.business_name&&<p className="text-xs font-medium text-[#0D6B66]">{post.business_name}</p>}
       </div>
+      <FeedPostMenu post={post} user={user} onReport={()=>setReporting(true)} onDeleted={onDeleted}/>
     </div>
     <p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>
     {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-2xl ring-1 ring-brand-line"/>)}</div>}
+    {reporting&&<ReportPostForm post={post} onClose={()=>setReporting(false)}/>}
     {(likes>0||cc>0||showViews)&&<div className="flex items-center gap-3 text-xs text-brand-muted">
       {likes>0&&<span className="flex items-center gap-1"><span className="flex -space-x-1">{stack.map(r=><span key={r.id} className="grid h-5 w-5 place-items-center rounded-full bg-brand-surface text-[13px] ring-1 ring-brand-line" title={r.label}>{r.emoji}</span>)}</span>{likes}</span>}
       {cc>0&&<span>{cc} {isAsk?(cc===1?'answer':'answers'):(cc===1?'comment':'comments')}</span>}
