@@ -3,6 +3,14 @@ import { api } from '@/api/client';
 import { Search, LocateFixed, AlertTriangle, MapPin } from 'lucide-react';
 import { locateFromCity } from '@/hooks/useDetectLocation';
 
+// The zones this device knows, for the settings list. An unknown zone used to
+// be storable, and then threw from inside the calendar call on the server —
+// which took the status endpoint and every write down with it.
+const ZONES = (() => {
+  try { return Intl.supportedValuesOf('timeZone'); } catch { return ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Asia/Jerusalem', 'Europe/London', 'Europe/Paris', 'Australia/Sydney']; }
+})();
+const validZone = (tz) => { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch { return false; } };
+
 export default function LocationPicker({ user }) {
   const [lat, setLat] = useState(user.latitude ?? null),[lon, setLon] = useState(user.longitude ?? null),[tz, setTz] = useState(user.timezone || ''),[city, setCity] = useState(user.city || ''),[country, setCountry] = useState(user.country_code || ''),[candle, setCandle] = useState(user.candle_lighting_offset_minutes != null ? String(user.candle_lighting_offset_minutes) : 'auto'),[havdalah, setHavdalah] = useState(user.havdalah_method || '50'),[readOnly, setReadOnly] = useState(user.shabbos_full_lock !== true),[q, setQ] = useState(''),[results, setResults] = useState([]),[busy, setBusy] = useState(false),[saved, setSaved] = useState(false),[status, setStatus] = useState(null),[err, setErr] = useState('');
 
@@ -76,13 +84,17 @@ export default function LocationPicker({ user }) {
   const pick = (r) => {
     setLat(r.latitude);setLon(r.longitude);
     setCity(r.city || (r.label || '').split(',')[0]);
-    setCountry(r.country_code || '');
+    // Only overwrite what the geocoder actually returned: several providers
+    // omit the country, and blanking a correct "IL" silently moves an Israeli
+    // member to diaspora Yom Tov.
+    if (r.country_code) setCountry(r.country_code);
     if (r.timezone) setTz(r.timezone);
     setResults([]);setQ('');
   };
   const save = async () => {
     setErr('');
     if (lat == null || lon == null || !tz) {setErr('Location and timezone are required.');return;}
+    if (!validZone(tz)) {setErr(`"${tz}" is not a time zone. Start typing a city — for example Asia/Jerusalem — and pick from the list.`);return;}
     await api.auth.updateMe({ latitude: lat, longitude: lon, timezone: tz, city, country_code: country, candle_lighting_offset_minutes: candle === 'auto' ? null : Number(candle), havdalah_method: havdalah, shabbos_full_lock: !readOnly, shabbos_mode_source: 'manual' });
     setSaved(true);setTimeout(() => setSaved(false), 1500);loadStatus();
   };
@@ -106,7 +118,7 @@ export default function LocationPicker({ user }) {
     <div className="grid gap-3 sm:grid-cols-2">
       <label>City<input className="field" value={city} onChange={(e) => setCity(e.target.value)} /></label>
       <label>Country<input className="field" value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} placeholder="US, IL…" /></label>
-      <label>Time zone<input className="field" value={tz} onChange={(e) => setTz(e.target.value)} placeholder="America/New_York" /></label>
+      <label>Time zone<input className="field" list="kc-timezones" value={tz} onChange={(e) => setTz(e.target.value.trim())} placeholder="America/New_York" />{tz && !validZone(tz) && <span className="mt-1 block text-xs font-semibold text-brand-error">That is not a time zone this device knows. Pick one from the list.</span>}<datalist id="kc-timezones">{ZONES.map((z) => <option key={z} value={z} />)}</datalist></label>
       <label>Candle lighting offset<select className="field" value={candle} onChange={(e) => setCandle(e.target.value)}><option value="auto">Auto (city default)</option><option value="15">15 min</option><option value="18">18 min</option><option value="20">20 min</option><option value="22">22 min</option><option value="30">30 min</option><option value="40">40 min</option></select></label>
       <label>Havdalah method<select className="field" value={havdalah} onChange={(e) => setHavdalah(e.target.value)}><option value="42">42 min</option><option value="50">50 min</option><option value="72">72 min</option><option value="tzeis_8_5">Tzeis 8.5°</option></select></label>
       <label>Shabbos mode<select className="field" value={readOnly ? 'read' : 'lock'} onChange={(e) => setReadOnly(e.target.value === 'read')}><option value="read">Read-only (default) — browse, but nothing can be posted</option><option value="lock">Full lock — the app closes entirely</option></select></label>

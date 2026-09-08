@@ -18,7 +18,11 @@ export default function ShabbosSimulator(){
     setBusy(false);
   };
   const apply=(p)=>{ setNow(p.now);setLat(String(p.lat));setLon(String(p.lon));setTz(p.tz);setCity(p.city);setCc(p.cc); };
-  const fmt=(ms)=>ms?new Date(ms).toUTCString():'—';
+  // The tool for checking zmanim has to show the location's own clock. It
+  // printed UTC, which is the one format that reliably labels a Saturday-night
+  // Havdalah as Sunday — exactly the confusion it exists to settle.
+  const fmt=(ms,tzid)=>{ if(!ms) return '—'; try{ return new Intl.DateTimeFormat('en-US',{timeZone:tzid||'UTC',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(ms)); }catch{ return new Date(ms).toISOString(); } };
+  const utc=(ms)=>ms?new Date(ms).toISOString().replace('T',' ').slice(0,16)+' UTC':'—';
   return <div className="panel">
     <h2 className="section-title">Shabbos simulator</h2>
     <p className="helper">Override date, time and coordinates to verify zmanim. Admin only — the function rejects overrides for non-admins, and always compares against server time (changing your device clock can't unlock the app).</p>
@@ -35,7 +39,10 @@ export default function ShabbosSimulator(){
     {out&&<pre className="mt-3 overflow-x-auto rounded-xl bg-brand-tint p-3 text-xs">{JSON.stringify(out,null,2)}</pre>}
     {out&&!out.error&&<div className="mt-3 grid gap-1 text-sm">
       <p>Restricted: <b>{String(out.isRestricted)}</b></p><p>City: <b>{out.cityLabel}</b> ({out.isInIsrael?'Israel':'Diaspora'})</p>
-      <p>Starts: <b>{fmt(out.startsAt)}</b></p><p>Ends: <b>{fmt(out.endsAt)}</b></p><p>Next change: <b>{fmt(out.nextChange)}</b></p>
+      <p>Starts: <b>{fmt(out.startsAt,out.tzid)}</b> <span className="text-xs text-brand-muted">{utc(out.startsAt)}</span></p>
+      <p>Ends: <b>{fmt(out.endsAt,out.tzid)}</b> <span className="text-xs text-brand-muted">{utc(out.endsAt)}</span></p>
+      <p>Next change: <b>{fmt(out.nextChange,out.tzid)}</b></p>
+      <p className="text-xs text-brand-muted">Zone {out.tzid || '—'} · {out.isInIsrael ? 'Israel (one day of Yom Tov)' : 'Diaspora (two days)'}{out.windowKind ? ` · ${out.windowKind}` : ''}</p>
       <p>Parsha: <b>{out.parsha||'—'}</b></p>{out.fallback&&<p className="text-brand-error">Fallback (zmanim calc failed)</p>}
     </div>}
   </div>;

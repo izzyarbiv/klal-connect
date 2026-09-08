@@ -22,30 +22,75 @@ async function readGlobalOverride() {
   return value;
 }
 
+// A zone name only counts if the platform knows it. hebcal accepts anything
+// at construction and throws much later, from inside the calendar call, so an
+// unusable value has to be caught here.
+export function isValidTimeZone(tzid) {
+  if (!tzid || typeof tzid !== 'string') return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tzid });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Whether these are Israel times, which decides one day of Yom Tov or two.
+// The zone is the reliable signal: country_code is a free-text box that
+// geocoders often leave empty, and an empty country used to turn a Jerusalem
+// member into the diaspora — a whole extra day of lock.
+const ISRAEL_ZONES = new Set(['Asia/Jerusalem', 'Asia/Tel_Aviv', 'Asia/Hebron', 'Asia/Gaza']);
+export function inIsrael({ timezone, country_code, latitude, longitude }) {
+  if (isValidTimeZone(timezone) && ISRAEL_ZONES.has(timezone)) return true;
+  if (String(country_code || '').trim().toUpperCase() === 'IL') return true;
+  // Last resort, for a row with coordinates but neither zone nor country: the
+  // box around Israel. Deliberately generous — one day of Yom Tov is the
+  // lenient answer, so this only ever adds the stricter reading where the
+  // coordinates genuinely sit in the country.
+  const lat = Number(latitude), lon = Number(longitude);
+  return Number.isFinite(lat) && Number.isFinite(lon)
+    && lat > 29.4 && lat < 33.4 && lon > 34.2 && lon < 35.9;
+}
+
 function locationFor(profile) {
   const { latitude, longitude, timezone, city, country_code } = profile;
   if (latitude == null || longitude == null) return null;
-  const isIsrael = String(country_code || '').toUpperCase() === 'IL';
-  // A tzid is required for correct local candle-lighting times; fall back to
-  // the host's zone rather than silently computing UTC times.
-  const tzid = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  // A tzid is required for correct local times. An invalid one used to be
+  // passed straight through and blew up inside the calendar call, which took
+  // the whole status endpoint — and every write — down with it.
+  if (!isValidTimeZone(timezone)) return null;
   try {
-    return new Location(Number(latitude), Number(longitude), isIsrael, tzid, city || 'Your location', country_code || undefined);
+    return new Location(Number(latitude), Number(longitude), inIsrael(profile), timezone, city || 'Your location', country_code || undefined);
   } catch {
     return null;
   }
 }
 
-// havdalah_method is stored as a string: minutes after sunset ("50", "72") or
-// degrees below the horizon when it ends in "deg" (e.g. "8.5deg").
+// havdalah_method as it is stored: a number of minutes after sunset ("42",
+// "50", "72"), degrees below the horizon ("8.5deg"), or the token the settings
+// menu has always sent for the degrees option.
+const HAVDALAH_TOKENS = { tzeis_8_5: { havdalahDeg: 8.5 }, tzeis_7_083: { havdalahDeg: 7.083 }, tzeis_8_5deg: { havdalahDeg: 8.5 } };
 function havdalahOptions(method) {
   const raw = String(method ?? '50').trim();
+  if (HAVDALAH_TOKENS[raw]) return HAVDALAH_TOKENS[raw];
   if (raw.endsWith('deg')) {
     const deg = parseFloat(raw);
     if (Number.isFinite(deg)) return { havdalahDeg: deg };
   }
   const mins = parseFloat(raw);
-  return Number.isFinite(mins) ? { havdalahMins: mins } : { havdalahMins: 50 };
+  if (Number.isFinite(mins) && mins > 0) return { havdalahMins: mins };
+  // Anything else is a value we do not understand. Say so rather than
+  // quietly applying a different opinion than the one that was chosen.
+  if (raw && raw !== '50') console.warn(`[shabbos] unrecognised havdalah_method ${JSON.stringify(raw)} — using 50 minutes`);
+  return { havdalahMins: 50 };
+}
+
+// An offset of "" is not an offset of zero. Zero would mean lighting exactly
+// at sunset, which opens the write gate well past the real candle lighting.
+function candleOptions(value) {
+  if (value === '' || value == null) return {};
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? { candleLightingMins: n } : {};
 }
 
 /**
@@ -64,19 +109,27 @@ export async function computeShabbosStatus(profile = {}, now = Date.now()) {
   const location = locationFor(profile);
   if (!location) return { hasLocation: false, isRestricted: false, adminOverride: false };
 
-  const candleMins = profile.candle_lighting_offset_minutes;
-  const events = HebrewCalendar.calendar({
-    start: new Date(now - 3 * DAY),
-    end: new Date(now + 10 * DAY),
-    location,
-    il: location.getIsrael(),
-    candlelighting: true,
-    sedrot: true,
-    ...(candleMins != null && Number.isFinite(Number(candleMins))
-      ? { candleLightingMins: Number(candleMins) }
-      : {}),
-    ...havdalahOptions(profile.havdalah_method),
-  });
+  let events;
+  try {
+    events = HebrewCalendar.calendar({
+      // Five days back, not three: a Yom Tov that runs into Shabbos is over
+      // three days long, so a shorter lookback loses the window's own opening
+      // boundary and reports an intermediate candle lighting as the start.
+      start: new Date(now - 5 * DAY),
+      end: new Date(now + 10 * DAY),
+      location,
+      il: location.getIsrael(),
+      candlelighting: true,
+      sedrot: true,
+      ...candleOptions(profile.candle_lighting_offset_minutes),
+      ...havdalahOptions(profile.havdalah_method),
+    });
+  } catch (err) {
+    // A profile hebcal cannot work with must not take down the status
+    // endpoint and every write with it.
+    console.error('[shabbos] could not compute zmanim for this profile:', err.message);
+    return { hasLocation: false, isRestricted: false, adminOverride: false, error: 'zmanim_unavailable' };
+  }
 
   // Reduce to an ordered list of boundary times: candle lighting opens a
   // restricted window, havdalah closes it. Match on the event classes rather
@@ -98,6 +151,10 @@ export async function computeShabbosStatus(profile = {}, now = Date.now()) {
   for (let i = 0; i < boundaries.length; i++) {
     const b = boundaries[i];
     if (!b.opens) continue;
+    // A three-day window has candle lighting again in the middle of it. The
+    // window began at the first of those, so walk back over any run of
+    // openings before reporting when it started.
+    if (i > 0 && boundaries[i - 1].opens) continue;
     const close = boundaries.slice(i + 1).find((x) => !x.opens);
     if (!close) continue;
     if (now >= b.time && now < close.time) {
@@ -123,6 +180,24 @@ export async function computeShabbosStatus(profile = {}, now = Date.now()) {
     .filter((e) => e.getFlags() & flags.PARSHA_HASHAVUA)
     .find((e) => Math.abs(e.getDate().greg().getTime() - anchor) < 2 * DAY);
 
+  // What the window actually is, taken from the events rather than guessed
+  // from the parsha — the parsha of the week exists during Yom Kippur too,
+  // and the lock screen was greeting people with "Gut Shabbos" because of it.
+  const holidayFlags = flags.CHAG | flags.MAJOR_HOLIDAY | flags.YOM_TOV_ENDS | flags.EREV;
+  const inWindow = (t) => startsAt != null && endsAt != null && t >= startsAt - DAY && t <= endsAt + DAY;
+  const hasYomTov = events.some((e) => (e.getFlags() & holidayFlags) && inWindow(e.getDate().greg().getTime()));
+  const coversSaturday = (() => {
+    if (startsAt == null || endsAt == null) return false;
+    try {
+      const zone = location.getTzid();
+      for (let t = startsAt; t <= endsAt; t += 6 * 3600_000) {
+        if (new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short' }).format(new Date(t)) === 'Sat') return true;
+      }
+    } catch { /* the zone was validated above; this is belt and braces */ }
+    return false;
+  })();
+  const windowKind = hasYomTov && coversSaturday ? 'both' : hasYomTov ? 'yomtov' : 'shabbos';
+
   return {
     hasLocation: true,
     adminOverride: false,
@@ -138,6 +213,9 @@ export async function computeShabbosStatus(profile = {}, now = Date.now()) {
     cityLabel: location.getName() || profile.city || 'Your location',
     tzid: location.getTzid(),
     parsha: parshaEvent ? parshaEvent.render('en') : null,
+    // 'shabbos' | 'yomtov' | 'both' — what to call this window, and how to
+    // greet someone during it.
+    windowKind,
     isInIsrael: location.getIsrael(),
   };
 }

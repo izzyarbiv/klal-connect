@@ -137,7 +137,14 @@ Every status change by staff is recorded as a `moderation` activity event.
 - **Creating rows**: a member's direct POST cannot choose a row's status, id, or creator; a
   connection request always starts pending, a listing or note always goes to review.
 - **Shabbos**: the server refuses writes during Shabbos and Yom Tov, so a stale tab or a
-  wrong client clock can't slip one through.
+  wrong client clock can't slip one through. Times come from `@hebcal/core` for the
+  member's own coordinates. Israel (one day of Yom Tov) is decided by the IANA time zone
+  first and the country code second, because the country field is free text and an empty
+  one used to move a Jerusalem member to the diaspora. A time zone the platform does not
+  recognise is refused on save and treated as "no location" if it is already stored: it
+  used to throw from inside the calendar and take the status endpoint, and every write,
+  down with it. A member with no coordinates is not gated at all — see
+  `Admin → Health` for who that is.
 - **Listing owners** edit their listing's content; `status`, `verified`, confirmed badges
   and the counters are set only by the server or staff.
 - **Invites**: every member has one personal link (`/join/<code>`). Whoever joins through

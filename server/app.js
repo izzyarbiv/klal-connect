@@ -14,6 +14,7 @@ import {
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
 import { functions, publicFunctions } from './functions.js';
+import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
@@ -492,6 +493,12 @@ if (isDemoMode) {
 app.get('/api/auth/me', requireAuth, (req, res) => res.json(sessionUser(req.user)));
 
 app.put('/api/auth/me', requireAuth, async (req, res, next) => {
+  // A zone the platform does not know used to be storable, and then threw
+  // from inside the Hebrew calendar on every read — taking the Shabbos status
+  // endpoint and every write down with it, with no way back in through the UI.
+  if (req.body?.timezone && !isValidTimeZone(req.body.timezone)) {
+    return res.status(400).json({ error: `"${req.body.timezone}" is not a time zone. Use a name like Asia/Jerusalem or America/New_York.` });
+  }
   // Every visitor shares the guest; letting one of them write its profile is
   // how another member's details end up shown to everyone. Refused regardless
   // of KC_GUEST_READONLY.
