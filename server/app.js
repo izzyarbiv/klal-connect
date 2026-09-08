@@ -146,6 +146,13 @@ let guestIdPromise = null;
 const guestId = () => (guestIdPromise ??= users.byEmail(GUEST_EMAIL).then((row) => row?.id || null).catch(() => { guestIdPromise = null; return null; }));
 
 async function visibleRows(entity, rows, user) {
+  // The demo seed connects the guest to everyone so the demo has something to
+  // show; those are nobody's connections and must not count as anyone's —
+  // not even on an admin's screen.
+  if (entity === 'Connection') {
+    const g = await guestId();
+    if (g) rows = rows.filter((row) => row.requester_id !== g && row.recipient_id !== g);
+  }
   if (user?.role === 'admin') return rows;
   if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
   if (!user && !PUBLIC_READ.has(entity)) return [];
@@ -155,12 +162,6 @@ async function visibleRows(entity, rows, user) {
   const scope = OWNER_SCOPED[entity];
   let visible = scope ? rows.filter((row) => scope(row, user)) : rows;
   if (MODERATED.has(entity)) visible = visible.filter((row) => moderationVisible(row, user));
-  // The demo seed connects the guest to everyone so the demo has something to
-  // show; those are nobody's connections and must not count as anyone's.
-  if (entity === 'Connection') {
-    const g = await guestId();
-    if (g) visible = visible.filter((row) => row.requester_id !== g && row.recipient_id !== g);
-  }
   return visible;
 }
 

@@ -15,6 +15,7 @@ import ProviderDetail from '@/pages/ProviderDetail';
 import Saved from '@/pages/Saved';
 import AddListing from '@/pages/AddListing';
 import Profile from '@/pages/Profile';
+import Settings from '@/pages/Settings';
 import Admin from '@/pages/Admin';
 import Feed from '@/pages/Feed';
 import Directory from '@/pages/Directory';
@@ -75,6 +76,7 @@ const AuthenticatedApp = () => {
         <Route path="/saved" element={<Saved />} />
         <Route path="/add" element={<AddListing />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/admin" element={<Admin />} />
       </Route>

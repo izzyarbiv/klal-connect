@@ -16,3 +16,6 @@ server/uploads
 
 # Old local SQLite store (pre-Postgres); never meant to be tracked.
 server/data/
+
+# Background agent worktrees
+.claude/worktrees/

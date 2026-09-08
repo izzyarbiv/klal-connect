@@ -1,0 +1,111 @@
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '@/api/client';
+import { Image } from '@/components/ui/image';
+import { MapPin, Briefcase, Users, Pencil, Camera, Loader2, Settings, Phone, X } from 'lucide-react';
+import ConnectButton from '@/components/ConnectButton';
+import MessageButton from '@/components/MessageButton';
+import ShareButton from '@/components/ShareButton';
+import ProfileBanner from '@/components/ProfileBanner';
+import HeadlineEdit from '@/components/HeadlineEdit';
+import { AFFILIATIONS, AFFILIATION_BY_ID, PROFILE_TYPES } from '@/lib/affiliations';
+import { topJob } from '@/lib/connections';
+
+const initialsOf = (user) => (user.full_name || user.email || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+
+// The top of a profile: cover, photo, name, headline, the facts, the actions.
+// One component for both the owner (editable: pencils, upload overlays, an
+// inline intro form) and everyone else (Connect / Message / Share).
+export default function ProfileHeader({ user, me, editable, onSave, connections, onReload, companies = {}, connectionCount, mutual, editing, setEditing }) {
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const open = editing === 'intro';
+
+  const startEdit = () => {
+    setForm({ full_name: user.full_name || '', headline: user.headline || '', profile_type: user.profile_type || 'community_member', affiliation: user.affiliation || '', home_city: user.home_city || '', phone: user.phone || '' });
+    setErr('');
+    setEditing('intro');
+  };
+  React.useEffect(() => { if (open && !form) startEdit(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cancel = () => { setEditing(null); setForm(null); setErr(''); };
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    try { await onSave(form); setEditing(null); setForm(null); }
+    catch (error) { setErr(error.message || 'Could not save'); }
+    finally { setBusy(false); }
+  };
+  const upload = (field) => async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true); setErr('');
+    try { const { file_url } = await api.integrations.Core.UploadFile({ file }); await onSave({ [field]: file_url }); }
+    catch (error) { setErr(error.message || 'That image could not be uploaded.'); }
+    finally { setBusy(false); }
+  };
+
+  const job = topJob(user);
+  const companyLink = job?.company ? companies[job.company.trim().toLowerCase()] : null;
+  const typeLabel = PROFILE_TYPES.find((t) => t.id === user.profile_type)?.label;
+  const affiliation = user.affiliation && user.affiliation !== 'private' ? AFFILIATION_BY_ID[user.affiliation]?.label : null;
+  const profileUrl = `${window.location.origin}/profile/${user.id}`;
+  const overlay = 'inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-brand-surface/90 px-3 py-1.5 text-xs font-semibold text-brand-ink shadow-sm ring-1 ring-brand-line backdrop-blur hover:bg-brand-surface';
+
+  return <section id="intro" className="scroll-mt-24 overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
+    <div className="relative">
+      <ProfileBanner url={user.banner_url} className="rounded-t-3xl"/>
+      {editable && <div className="absolute right-3 top-3 flex gap-2">
+        <label className={overlay}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Camera size={14}/>}{user.banner_url ? 'Change cover' : 'Add a cover'}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>
+        {user.banner_url && <button type="button" onClick={() => onSave({ banner_url: '' })} className={overlay} aria-label="Remove cover"><X size={14}/></button>}
+      </div>}
+    </div>
+    <div className="px-6 pb-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="relative z-10 -mt-12 sm:-mt-14">
+          {user.avatar_url
+            ? <div className="h-24 w-24 overflow-hidden rounded-full ring-4 ring-brand-surface sm:h-28 sm:w-28"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24 sm:h-28 sm:w-28"/></div>
+            : <div className="grid h-24 w-24 place-items-center rounded-full bg-brand-tint text-2xl font-bold text-brand-teal ring-4 ring-brand-surface sm:h-28 sm:w-28">{initialsOf(user)}</div>}
+          {editable && <label className="absolute -bottom-1 -right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-navy text-white shadow ring-2 ring-brand-surface hover:bg-brand-navy-hover" title={user.avatar_url ? 'Change photo' : 'Add a photo'}>{busy ? <Loader2 size={15} className="animate-spin"/> : <Camera size={15}/>}<input type="file" accept="image/*" className="hidden" onChange={upload('avatar_url')} disabled={busy}/></label>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 pt-3">
+          {editable
+            ? <><button type="button" onClick={open ? cancel : startEdit} className="primary"><Pencil size={15}/>{open ? 'Close' : 'Edit intro'}</button><ShareButton title={`${user.full_name || 'A member'} on Klal`} url={profileUrl} className="secondary"/><Link to="/settings" className="secondary"><Settings size={15}/>Settings</Link></>
+            : <><ConnectButton targetId={user.id} me={me} connections={connections} onReload={onReload}/><MessageButton targetId={user.id} me={me} connections={connections}/><ShareButton title={`${user.full_name || 'A member'} on Klal`} url={profileUrl} className="secondary"/></>}
+        </div>
+      </div>
+
+      {open && form
+        ? <form onSubmit={submit} className="mt-4 space-y-4 rounded-2xl bg-brand-tint/60 p-4 ring-1 ring-brand-line">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="sm:col-span-2">Name<input className="field" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="As people in the community know you" autoFocus/></label>
+            <div className="sm:col-span-2"><HeadlineEdit label="Headline" value={form.headline} onChange={(v) => setForm({ ...form, headline: v })} suggestion={job ? `${job.title}${job.company ? ` — ${job.company}` : ''}` : null}/></div>
+            <label>What brings you here<select className="field" value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })}>{PROFILE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+            <label>Community<select className="field" value={form.affiliation} onChange={(e) => setForm({ ...form, affiliation: e.target.value })}><option value="">Not set</option>{AFFILIATIONS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</select><span className="helper">Optional. Only ever used to show you what people in your community use.</span></label>
+            <label>General home city<input className="field" value={form.home_city} onChange={(e) => setForm({ ...form, home_city: e.target.value })} placeholder="Lakewood, Brooklyn, Monsey…"/><span className="helper">Your exact location is never displayed.</span></label>
+            <label>Phone<input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel"/><span className="helper">Private. Only you and the admins can see it.</span></label>
+          </div>
+          {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
+          <div className="flex items-center gap-3"><button className="primary" disabled={busy}>{busy ? <Loader2 size={15} className="animate-spin"/> : null}Save</button><button type="button" onClick={cancel} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Cancel</button></div>
+        </form>
+        : <div className="mt-3 min-w-0">
+          <h1 className="text-2xl font-bold text-brand-ink">{user.full_name || (editable ? <button type="button" onClick={startEdit} className="text-brand-muted hover:underline">Add your name</button> : 'Community member')}</h1>
+          {user.headline && String(user.headline).trim()
+            ? <p className="mt-0.5 line-clamp-2 text-base text-brand-body">{user.headline}</p>
+            : editable && <button type="button" onClick={startEdit} className="mt-0.5 text-sm text-brand-muted hover:text-brand-teal hover:underline">Add a one-line headline</button>}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {typeLabel && <span className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-semibold text-brand-teal">{typeLabel}</span>}
+            {affiliation && <span className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-semibold text-brand-teal">{affiliation}</span>}
+          </div>
+          <div className="mt-3 space-y-1 text-sm text-brand-body">
+            {job && <p className="flex items-start gap-2"><Briefcase size={14} className="mt-1 shrink-0 text-brand-teal"/><span>{job.title}{job.company ? <>, {companyLink ? <Link to={companyLink} className="font-semibold text-brand-teal hover:underline">{job.company}</Link> : job.company}</> : ''}</span></p>}
+            {user.home_city && <p className="flex items-start gap-2"><MapPin size={14} className="mt-1 shrink-0 text-brand-teal"/><span>{user.home_city}</span></p>}
+            {editable && user.phone && <p className="flex items-start gap-2 text-brand-muted"><Phone size={14} className="mt-1 shrink-0 text-brand-teal"/><span>{user.phone} <span className="text-xs">· only you see this</span></span></p>}
+            {connectionCount > 0 && <p className="flex items-start gap-2"><Users size={14} className="mt-1 shrink-0 text-brand-teal"/><span>{connectionCount} {connectionCount === 1 ? 'connection' : 'connections'}{mutual?.count > 0 && <span className="text-brand-muted"> · {mutual.count} mutual{mutual.names.length ? `: ${mutual.names.join(', ')}${mutual.count > mutual.names.length ? ` and ${mutual.count - mutual.names.length} more` : ''}` : ''}</span>}</span></p>}
+            {user.invited_by_name && <p className="text-xs text-brand-muted">Invited to Klal by {user.invited_by_id ? <Link to={`/profile/${user.invited_by_id}`} className="font-semibold text-brand-teal hover:underline">{user.invited_by_name}</Link> : user.invited_by_name}</p>}
+          </div>
+          {err && <p className="mt-2 text-sm font-semibold text-brand-error">{err}</p>}
+        </div>}
+    </div>
+  </section>;
+}

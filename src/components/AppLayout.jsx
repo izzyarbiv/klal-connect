@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut } from 'lucide-react';
+import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut, Settings } from 'lucide-react';
 import Brand from '@/components/Brand';
 import ThemeToggle from '@/components/ThemeToggle';
 import MobileNotificationBell from '@/components/MobileNotificationBell';
@@ -25,6 +25,7 @@ function HeaderAccount() {
   }
   return <>
     {(user.role === 'admin' || user.role === 'moderator') && <NavLink to="/admin" className="ml-2 p-2 text-brand-muted hover:text-brand-teal" aria-label="Admin"><ShieldCheck size={19}/></NavLink>}
+    <NavLink to="/settings" className={({ isActive }) => `p-2 hover:text-brand-teal ${isActive ? 'text-brand-teal' : 'text-brand-muted'}`} aria-label="Settings" title="Settings"><Settings size={19}/></NavLink>
     <button type="button" onClick={() => logout()} className="ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-brand-muted hover:bg-brand-surface hover:text-brand-ink" aria-label="Log out"><LogOut size={16}/><span className="hidden lg:inline">Log out</span></button>
   </>;
 }
