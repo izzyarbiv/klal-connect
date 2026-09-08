@@ -16,7 +16,8 @@ const BADGE_IDS = new Set(BADGES.map((b) => b.id));
 const POST_TYPES = new Set(['post', 'question', 'insight', 'promotion']);
 const postType = (value) => (value === 'update' ? 'post' : POST_TYPES.has(value) ? value : 'post');
 
-const validReaction = (value) => (value ? (REACTION_BY_ID[value] ? value : null) : DEFAULT_REACTION);
+// Own keys only: a plain object also answers to 'constructor' and friends.
+const validReaction = (value) => (value === undefined || value === null || value === '' ? DEFAULT_REACTION : (typeof value === 'string' && Object.hasOwn(REACTION_BY_ID, value) ? value : null));
 // What a member may say about their own listing. Verification, status and
 // the counters are the server's and an admin's to set.
 function listingInput(payload) {
@@ -79,6 +80,13 @@ const ACTIVITIES = {
 async function notify(recipientId, payload) {
   if (!recipientId) return;
   await store.create('Notification', { recipient_id: recipientId, read: false, ...payload });
+}
+
+// Whether this actor has already told this recipient about this thing —
+// a like taken back and given again is not news twice.
+async function alreadyNotified(recipientId, type, targetId, actorId) {
+  const rows = await store.filter('Notification', { recipient_id: recipientId, type, target_id: targetId, actor_id: actorId });
+  return rows.length > 0;
 }
 
 export const functions = {
@@ -195,6 +203,7 @@ export const functions = {
     if (post.created_by_id !== user.id) {
       await notify(post.created_by_id, {
         type: 'comment',
+        actor_id: user.id,
         actor_name: user.full_name || user.email,
         target_type: 'post',
         target_id: post_id,
@@ -265,6 +274,7 @@ export const functions = {
       if (comment.created_by_id !== user.id) {
         await notify(comment.created_by_id, {
           type: 'helpful',
+          actor_id: user.id,
           actor_name: user.full_name || user.email,
           target_type: 'post',
           target_id: post_id,
@@ -306,11 +316,13 @@ export const functions = {
     const like_count = all.length;
     await store.update('FeedPost', post_id, { like_count, reaction_counts });
 
-    // Told once per member per post: changing a reaction is not a new event.
-    if (liked && !existing.length && post.created_by_id !== user.id) {
+    // Told once per member per post: changing a reaction, or taking one back
+    // and giving it again, is not a new event.
+    if (liked && !existing.length && post.created_by_id !== user.id && !(await alreadyNotified(post.created_by_id, 'like', post_id, user.id))) {
       const what = REACTION_BY_ID[wanted];
       await notify(post.created_by_id, {
         type: 'like',
+        actor_id: user.id,
         actor_name: user.full_name || user.email,
         target_type: 'post',
         target_id: post_id,
@@ -328,14 +340,15 @@ export const functions = {
     const post = await store.get('FeedPost', postId);
     if (!post) fail('Post not found.', 404);
 
+    // The count is the author's alone (see present() in app.js), and the
+    // author never records a view of their own post — so nothing comes back.
     const seen = await store.filter('ActivityEvent', { type: 'post_view', target_id: postId, created_by_id: user.id });
     if (!seen.length) {
       await store.create('ActivityEvent', { type: 'post_view', target_id: postId }, user);
       const count = await store.count('ActivityEvent', { type: 'post_view', target_id: postId });
       await store.update('FeedPost', postId, { view_count: count });
-      return { count };
     }
-    return { count: post.view_count || await store.count('ActivityEvent', { type: 'post_view', target_id: postId }) };
+    return { recorded: true };
   },
 
   // ---- provider activity ----------------------------------------------------
@@ -383,6 +396,7 @@ export const functions = {
       if (owner && owner !== user.id) {
         await notify(owner, {
           type: 'vouch',
+          actor_id: user.id,
           actor_name: user.full_name || user.email,
           target_type: 'provider',
           target_id: providerId,
@@ -401,7 +415,10 @@ export const functions = {
     const text = String(body || '').trim();
     if (!text) fail('Write a message first.');
     if (recipient_id === user.id) fail('You cannot message yourself.');
-    if (!(await users.byId(recipient_id))) fail('That member could not be found.', 404);
+    const recipient = await users.byId(recipient_id);
+    if (!recipient) fail('That member could not be found.', 404);
+    // Every visitor reads as the guest; a message to it would be public.
+    if (recipient.email === GUEST_EMAIL) fail('That member cannot receive messages.');
 
     // Only people you are connected to. The UI already hides the message button
     // otherwise, but that is not enforcement — without this a direct POST could
@@ -425,6 +442,7 @@ export const functions = {
     );
     await notify(recipient_id, {
       type: 'message',
+      actor_id: user.id,
       actor_name: user.full_name || user.email,
       target_type: 'message',
       target_id: user.id,

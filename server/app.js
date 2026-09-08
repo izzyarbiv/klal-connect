@@ -116,13 +116,51 @@ const CLIENT_WRITABLE = new Set([
 const MODERATED_BY_STAFF = new Set(['Provider', 'CommunityNote', 'ClaimRequest', 'ListingChangeRequest', 'ListingReport', 'PrivateReport']);
 const isModerator = (user) => user?.role === 'moderator';
 
-function readable(entity, rows, user) {
+// Author fields are copied onto rows when they are created (functions.js
+// authorFields, sender_name, actor_name…). Rows the guest created before it
+// was locked carry whatever name was on its profile at the time, so the mask
+// is applied on the way out as well: anything the guest wrote reads as Guest.
+const GUEST_AUTHOR = { author_name: GUEST_PROFILE.full_name, author_headline: GUEST_PROFILE.headline, author_avatar_url: '', sender_name: GUEST_PROFILE.full_name, inviter_name: GUEST_PROFILE.full_name, actor_name: GUEST_PROFILE.full_name, actor_headline: '' };
+
+// The shape a row takes on the way to a particular reader.
+function present(entity, row, user) {
+  let out = row;
+  if (row.created_by === GUEST_EMAIL) {
+    out = { ...out };
+    for (const k of Object.keys(GUEST_AUTHOR)) if (k in out) out[k] = GUEST_AUTHOR[k];
+  }
+  // How many people saw a post is the author's to know, not the readers'.
+  if (entity === 'FeedPost' && user?.role !== 'admin' && row.created_by_id !== user?.id && 'view_count' in out) {
+    const { view_count, ...rest } = out;
+    out = rest;
+  }
+  return out;
+}
+
+async function readable(entity, rows, user) {
+  return (await visibleRows(entity, rows, user)).map((row) => present(entity, row, user));
+}
+
+// The guest's id, looked up once per process. Null where there is no guest.
+let guestIdPromise = null;
+const guestId = () => (guestIdPromise ??= users.byEmail(GUEST_EMAIL).then((row) => row?.id || null).catch(() => { guestIdPromise = null; return null; }));
+
+async function visibleRows(entity, rows, user) {
   if (user?.role === 'admin') return rows;
   if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
   if (!user && !PUBLIC_READ.has(entity)) return [];
+  // The guest has no messages, notifications, saves or votes of its own —
+  // anything addressed to it would be readable by every visitor at once.
+  if (isGuest(user) && OWNER_SCOPED[entity]) return [];
   const scope = OWNER_SCOPED[entity];
   let visible = scope ? rows.filter((row) => scope(row, user)) : rows;
   if (MODERATED.has(entity)) visible = visible.filter((row) => moderationVisible(row, user));
+  // The demo seed connects the guest to everyone so the demo has something to
+  // show; those are nobody's connections and must not count as anyone's.
+  if (entity === 'Connection') {
+    const g = await guestId();
+    if (g) visible = visible.filter((row) => row.requester_id !== g && row.recipient_id !== g);
+  }
   return visible;
 }
 
@@ -133,8 +171,9 @@ function canWrite(entity, user, row) {
   // create listings on anyone's behalf or delete anything.
   if (isModerator(user) && row && MODERATED_BY_STAFF.has(entity)) return true;
   if (!CLIENT_WRITABLE.has(entity)) return false;
-  // Settings are platform-wide (e.g. the global Shabbos override) — admin only.
-  if (entity === 'Setting') return false;
+  // Settings are platform-wide (e.g. the global Shabbos override) and the
+  // category list is the directory's structure — admin only.
+  if (entity === 'Setting' || entity === 'Category') return false;
   if (row && row.created_by_id && row.created_by_id !== user.id) {
     // Notifications are written by the server for a recipient, who may mark
     // them read; that is the one cross-author write we allow.
@@ -188,22 +227,16 @@ app.get('/api/entities/:entity', async (req, res, next) => {
   const { sort, limit, query } = req.query;
   const q = parseJSON(query, null);
   const rows = q ? await store.filter(entity, q, sort, null) : await store.list(entity, sort, null);
-  const visible = readable(entity, rows, req.user);
+  const visible = await readable(entity, rows, req.user);
   res.json(limit ? visible.slice(0, Number(limit)) : visible);
 });
 
 app.get('/api/entities/:entity/:id', async (req, res, next) => {
   const row = await store.get(req.params.entity, req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
-  const [visible] = readable(req.params.entity, [row], req.user);
+  const [visible] = await readable(req.params.entity, [row], req.user);
   if (!visible) return res.status(403).json({ error: 'Not permitted' });
   res.json(visible);
-});
-
-app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
-  const { entity } = req.params;
-  if (!canWrite(entity, req.user)) return res.status(403).json({ error: 'Not permitted' });
-  res.status(201).json(await store.create(entity, req.body, req.user));
 });
 
 // Fields only the server or an admin may set. A listing's author may edit
@@ -214,6 +247,31 @@ const PROTECTED_FIELDS = new Set([
 ]);
 const MODERATOR_FIELDS = new Set(['status', 'admin_notes', 'resolved_at', 'resolved_by']);
 const stripProtected = (body) => Object.fromEntries(Object.entries(body || {}).filter(([k]) => !PROTECTED_FIELDS.has(k)));
+
+// The status a member's freshly created row starts in, whatever the body
+// said. A connection request is pending until its recipient answers; a
+// listing or note waits for review; a company page publishes as it always
+// has (there is no review queue for companies).
+const CREATE_STATUS = { Connection: 'pending', Provider: 'pending', CommunityNote: 'pending', ListingChangeRequest: 'pending', Company: 'published' };
+
+app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
+  const { entity } = req.params;
+  if (!canWrite(entity, req.user)) return res.status(403).json({ error: 'Not permitted' });
+  let body = req.body || {};
+  if (req.user.role !== 'admin') {
+    // Without this a direct POST could hand itself an accepted connection, a
+    // published listing, or someone else's name as creator.
+    body = stripProtected(body);
+    if (CREATE_STATUS[entity]) body.status = CREATE_STATUS[entity];
+  }
+  if (entity === 'Connection') {
+    const recipient = body.recipient_id ? await users.byId(body.recipient_id) : null;
+    if (!recipient || recipient.email === GUEST_EMAIL) return res.status(400).json({ error: 'That member cannot receive connection requests.' });
+    if (recipient.id === req.user.id) return res.status(400).json({ error: 'You cannot connect with yourself.' });
+    body.requester_id = req.user.id;
+  }
+  res.status(201).json(await store.create(entity, body, req.user));
+});
 
 app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   const { entity, id } = req.params;
@@ -308,7 +366,7 @@ app.post('/api/users/:id/reset-password', requireAdmin, async (req, res, next) =
 
 // Admin only: the basic profile fields, and deactivation. Not role (its own
 // route), not email, not password.
-const ADMIN_PROFILE_FIELDS = new Set(['full_name', 'headline', 'bio', 'home_city', 'phone', 'avatar_url', 'banner_url', 'work_experience', 'profile_type', 'disabled']);
+const ADMIN_PROFILE_FIELDS = new Set(['full_name', 'headline', 'bio', 'home_city', 'phone', 'avatar_url', 'banner_url', 'work_experience', 'profile_type', 'disabled', 'verified']);
 app.put('/api/users/:id', requireAdmin, async (req, res, next) => {
   const target = await users.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Not found' });

@@ -16,12 +16,12 @@ export const DEFAULT_REACTION = 'like';
 
 // Likes recorded before reactions existed have no `reaction` field; they are
 // plain likes.
-export const reactionOf = (row) => (row?.reaction && REACTION_BY_ID[row.reaction] ? row.reaction : DEFAULT_REACTION);
+export const reactionOf = (row) => (typeof row?.reaction === 'string' && Object.hasOwn(REACTION_BY_ID, row.reaction) ? row.reaction : DEFAULT_REACTION);
 
 // { like: 3, mazel_tov: 1 } → the emojis to stack on the card, most used first.
 export function topReactions(counts = {}, max = 3) {
   return Object.entries(counts)
-    .filter(([id, n]) => REACTION_BY_ID[id] && n > 0)
+    .filter(([id, n]) => Object.hasOwn(REACTION_BY_ID, id) && n > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
     .map(([id]) => REACTION_BY_ID[id]);

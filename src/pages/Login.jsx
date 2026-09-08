@@ -41,7 +41,13 @@ export default function Login() {
     }
   };
 
-  if (verify) return <VerifyEmail email={verify.email} devCode={verify.devCode} onVerified={() => { window.location.href = returnTo; }} />;
+  // An account that registered but never entered its code has not seen the
+  // welcome cards either; verifying here sends it there first.
+  const afterVerify = (result) => {
+    const onboarded = !!result?.user?.onboarded;
+    window.location.href = onboarded ? returnTo : '/welcome' + (returnTo !== '/' && returnTo !== '/welcome' ? '?returnTo=' + encodeURIComponent(returnTo) : '');
+  };
+  if (verify) return <VerifyEmail email={verify.email} devCode={verify.devCode} onVerified={afterVerify} />;
 
   return (
     <AuthLayout

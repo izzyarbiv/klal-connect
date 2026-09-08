@@ -112,7 +112,11 @@ Every status change by staff is recorded as a `moderation` activity event.
   recipient of a connection request may accept or decline it, and the recipient of a
   message may mark it read; nothing else on someone else's row is editable.
 - **Post views**: counted once per member and shown only to the post's author.
-- **Admin only**: platform settings (including the global Shabbos override), the report queue.
+- **Admin only**: platform settings (including the global Shabbos override), categories, the
+  report queue, and marking an account verified (the way in for a member whose code never
+  arrived).
+- **Creating rows**: a member's direct POST cannot choose a row's status, id, or creator; a
+  connection request always starts pending, a listing or note always goes to review.
 - **Shabbos**: the server refuses writes during Shabbos and Yom Tov, so a stale tab or a
   wrong client clock can't slip one through.
 - **Listing owners** edit their listing's content; `status`, `verified`, confirmed badges

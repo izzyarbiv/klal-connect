@@ -11,13 +11,16 @@ import { timeAgo, fullDate } from '@/lib/time';
 export default function FeedPostItem({ post, user }) {
   const type=POST_TYPE_BY_ID[normalizePostType(post.post_type)];
   const isAsk=type.id==='question';
-  const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[views,setViews]=useState(post.view_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null);
+  const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null);
+  const views=post.view_count||0;
   const picker=useReactionPicker();
   React.useEffect(()=>{(async()=>{if(user&&!user.guest){const rows=await api.entities.FeedLike.filter({post_id:post.id});const own=rows.find(r=>r.created_by_id===user.id);setMine(own?reactionOf(own):null);}})();},[post.id,user]);
-  React.useEffect(()=>{if(user&&!user.guest&&post.created_by_id!==user.id){api.functions.invoke('recordPostView',{postId:post.id}).then(r=>{if(r.status<400)setViews(r.data.count)}).catch(()=>{});}},[post.id,user]);
+  // Recording a view returns nothing: the count is the author's, and the
+  // author never records one.
+  React.useEffect(()=>{if(user&&!user.guest&&post.created_by_id!==user.id){api.functions.invoke('recordPostView',{postId:post.id}).catch(()=>{});}},[post.id,user]);
 
   const react=async(reaction)=>{
-    picker.setOpen(false);
+    picker.close();
     if(!(await api.auth.requireAccount()))return;
     const r=await api.functions.invoke('toggleLike',{post_id:post.id,reaction});
     if(r.status>=400){setLikeErr(r.data?.error||'Action unavailable');return;}
@@ -57,9 +60,9 @@ export default function FeedPostItem({ post, user }) {
       {showViews&&<span className="ml-auto flex items-center gap-1"><Eye size={14}/>{views} {views===1?'view':'views'}</span>}
     </div>}
     <div className="flex items-center gap-1 border-t pt-3 text-sm text-brand-body">
-      <div className="relative">
+      <div className="relative" {...picker.hoverProps}>
         <ReactionPicker open={picker.open} current={mine} onPick={react} className="bottom-full left-0 mb-2"/>
-        <button type="button" {...picker.triggerProps} onClick={tap} aria-label={current?`You reacted ${current.label}. Tap to remove, hold to change.`:'Like. Hold to choose a reaction.'} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold hover:bg-brand-tint ${current?'text-brand-teal':''}`}>
+        <button type="button" {...picker.pressProps} onClick={tap} aria-label={current?`You reacted ${current.label}. Tap to remove, hold to change.`:'Like. Hold to choose a reaction.'} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold hover:bg-brand-tint ${current?'text-brand-teal':''}`}>
           {current?<span className="text-base leading-none">{current.emoji}</span>:<ThumbsUp size={17}/>}{current?current.label:'Like'}
         </button>
       </div>

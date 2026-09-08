@@ -44,9 +44,9 @@ export default function Conversation(){
 
   useEffect(()=>{(async()=>{
     if(!await api.auth.isAuthenticated()) return api.auth.redirectToLogin(location.href);
-    const [u, target] = await Promise.all([ api.auth.me(), api.entities.User.get(id) ]);
+    const [u, target] = await Promise.all([ api.auth.me(), api.entities.User.get(id).catch(()=>null) ]);
     setMe(u); setOther(target);
-    if(u.guest){ setLoading(false); return; }
+    if(u.guest||!target){ setLoading(false); return; }
     const conn = await loadMyConnections(u.id);
     setConnected(connectionStatusWith(id, conn).status === 'accepted');
     await load(u);
@@ -98,8 +98,9 @@ export default function Conversation(){
                     and always faintly there on touch screens, where there is
                     no hover. */}
                 <button type="button" aria-label="React to this message" onClick={(e)=>{e.stopPropagation();setPickerFor(p=>p===m.id?null:m.id);}} className={`absolute top-1 grid h-7 w-7 place-items-center rounded-full bg-brand-surface text-brand-muted opacity-60 shadow-sm ring-1 ring-brand-line transition hover:text-brand-ink hover:opacity-100 group-hover:opacity-100 ${mine?'-left-9':'-right-9'}`}><SmilePlus size={14}/></button>
-                <ReactionPicker open={pickerFor===m.id} current={own} onPick={(id)=>react(m,id)} className={`bottom-full mb-1 ${mine?'right-0':'left-0'}`}/>
                 <div className={`mt-1 flex items-center gap-2 text-[10px] text-brand-muted ${mine?'flex-row-reverse':''}`}>
+                  {/* In the flow, not floated over the bubble above: this list scrolls, and a floated row is clipped at its edges. */}
+                  <ReactionPicker inline open={pickerFor===m.id} current={own} onPick={(id)=>react(m,id)}/>
                   {reactions.length>0&&<span className={`-mt-3 flex gap-0.5 rounded-full bg-brand-surface px-1.5 py-0.5 text-sm shadow-sm ring-1 ring-brand-line ${mine?'mr-2':'ml-2'}`} title={reactions.map(([uid,id])=>`${uid===me.id?'You':other.full_name||'They'}: ${REACTION_BY_ID[id].label}`).join(', ')}>{reactions.map(([uid,id])=><span key={uid}>{REACTION_BY_ID[id].emoji}</span>)}</span>}
                   <span>{timeAgo(m.created_date)}</span>
                 </div>
