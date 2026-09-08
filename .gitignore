@@ -19,3 +19,6 @@ server/data/
 
 # Background agent worktrees
 .claude/worktrees/
+
+# Built index.html, baked in for the API at build time.
+server/shell.generated.js

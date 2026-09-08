@@ -220,6 +220,28 @@ Vercel env and redeploy.
 The whole API is one function (`api/index.js`), so a warm instance keeps a single
 database pool rather than one per route.
 
+## Search
+
+The public surface is server-rendered so a directory can actually be found.
+`server/seo.js` serves the home page, `/directory`, `/directory/<category>`,
+`/directory/<category>/<city>`, `/provider/<slug>`, `/gemach/<slug>` and
+`/company/<slug>` from the built shell with that page's own `<title>`,
+description, canonical URL, Open Graph tags, schema.org data (`LocalBusiness`
+for a listing, `ItemList` for a category) and the listing's own text inside
+`#root`. React replaces that text on mount, so a person gets the app and a
+crawler gets the content. Signed-in routes are served with `noindex`, and a
+category with no listings is `noindex` too — a thin page is worse than none.
+
+`/sitemap.xml` is generated from the data on request (published listings and
+companies, categories that have listings, and category+city pairs with at
+least two), and `/robots.txt` points at it. Submit the sitemap once in Google
+Search Console; it stays current on its own.
+
+The shell has to be available to the serverless function, so `npm run build`
+runs `scripts/emit-shell.mjs` after Vite and writes `server/shell.generated.js`
+(gitignored). Without it the SEO routes stand down and every path falls back to
+the static shell, which is what happens in dev.
+
 ## Installing as an app
 
 The build produces a service worker and manifest, so the site is installable:

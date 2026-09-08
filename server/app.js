@@ -18,6 +18,12 @@ import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
+import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
+
+// The built index.html, baked in at build time by scripts/emit-shell.mjs.
+// Absent in dev and in tests, where Vite serves the shell itself.
+let SHELL = '';
+try { ({ SHELL } = await import('./shell.generated.js')); } catch { /* dev */ }
 
 const app = express();
 // Vercel and most hosts terminate TLS in front of us; req.ip must come from
@@ -715,11 +721,36 @@ app.get('/api/geo/ip', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ------------------------------------------------------------------- seo --
+
+app.get('/sitemap.xml', async (req, res, next) => {
+  try {
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400');
+    res.send(await sitemap(siteOrigin(req)));
+  } catch (err) { next(err); }
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.set('Content-Type', 'text/plain; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=86400');
+  res.send(robots(siteOrigin(req)));
+});
+
 app.get('/api/health', async (_req, res, next) => {
   try {
     res.json({ ok: true, users: (await users.all()).length, providers: await store.count('Provider') });
   } catch (err) { next(err); }
 });
+
+// An /api path that matched nothing is a client mistake, and the client
+// parses JSON — Express's default HTML error page would surface as a parse
+// error instead of the status.
+app.use('/api', (req, res) => res.status(404).json({ error: `No such endpoint: ${req.method} ${req.originalUrl.split('?')[0]}` }));
+
+// Public pages, rendered with their own title, description and schema. Last,
+// so nothing above is shadowed.
+mountSeo(app, SHELL);
 
 app.use((err, _req, res, _next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {

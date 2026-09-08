@@ -8,7 +8,7 @@
     "dev:api": "node --env-file-if-exists=.env.local --watch server/index.js",
     "dev:web": "vite",
     "seed": "node --env-file-if-exists=.env.local server/seed.js",
-    "build": "vite build",
+    "build": "vite build && node scripts/emit-shell.mjs",
     "start": "node server/index.js",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",

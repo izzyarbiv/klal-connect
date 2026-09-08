@@ -9,7 +9,45 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api"
+    },
+    {
+      "source": "/",
+      "destination": "/api"
+    },
+    {
+      "source": "/provider/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/gemach/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/company/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/directory",
+      "destination": "/api"
+    },
+    {
+      "source": "/directory/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
