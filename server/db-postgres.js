@@ -213,20 +213,29 @@ function matches(record, query = {}) {
 
 // Filtering and sorting stay in JS so the semantics above are preserved exactly.
 // To keep that from meaning "fetch the whole table", the parts of a query that
-// map cleanly onto real columns are pushed into SQL first.
+// map cleanly onto real columns are pushed into SQL first, and scalar document
+// fields become containment tests that ride the GIN index. SQL only narrows;
+// matches() still decides, so the two can never disagree.
 const COLUMN_FIELDS = new Set(['id', 'created_by_id', 'created_by']);
+const isScalar = (v) => v === null || ['string', 'number', 'boolean'].includes(typeof v);
 
 function buildWhere(entity, query = {}) {
   const where = ['entity = $1'];
   const params = [entity];
   for (const [key, want] of Object.entries(query)) {
-    if (!COLUMN_FIELDS.has(key)) continue;
-    if (Array.isArray(want)) {
-      params.push(want);
-      where.push(`${key} = ANY($${params.length})`);
-    } else {
-      params.push(want);
-      where.push(`${key} = $${params.length}`);
+    if (COLUMN_FIELDS.has(key)) {
+      if (Array.isArray(want)) {
+        params.push(want);
+        where.push(`${key} = ANY($${params.length})`);
+      } else {
+        params.push(want);
+        where.push(`${key} = $${params.length}`);
+      }
+    } else if (isScalar(want) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      // A field that holds a scalar, or a tag-style array containing it —
+      // both are how matches() reads equality.
+      params.push(JSON.stringify({ [key]: want }), JSON.stringify({ [key]: [want] }));
+      where.push(`(data @> $${params.length - 1}::jsonb OR data @> $${params.length}::jsonb)`);
     }
   }
   return { text: where.join(' AND '), params };

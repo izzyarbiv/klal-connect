@@ -22,22 +22,30 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   const [err, setErr] = useState('');
   const open = editing === 'intro';
 
-  const startEdit = () => {
-    setForm({ full_name: user.full_name || '', headline: user.headline || '', profile_type: user.profile_type || 'community_member', affiliation: user.affiliation || '', home_city: user.home_city || '', phone: user.phone || '' });
+  const startEdit = () => setEditing('intro');
+  // The form is built from the profile whenever the editor opens (pencil or
+  // checklist) and dropped whenever it closes, so no draft outlives a switch
+  // to another section.
+  React.useEffect(() => {
+    if (open) setForm({ full_name: user.full_name || '', headline: user.headline || '', profile_type: user.profile_type || 'community_member', affiliation: user.affiliation || '', home_city: user.home_city || '', phone: user.phone || '' });
+    else setForm(null);
     setErr('');
-    setEditing('intro');
-  };
-  React.useEffect(() => { if (open && !form) startEdit(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-  const cancel = () => { setEditing(null); setForm(null); setErr(''); };
-  const submit = async (e) => {
-    e.preventDefault();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cancel = () => setEditing(null);
+  // Every write from this header goes through here: one busy flag, one
+  // error line, and a failed save never goes unnoticed.
+  const write = async (patch, fallback) => {
     setBusy(true); setErr('');
-    try { await onSave(form); setEditing(null); setForm(null); }
-    catch (error) { setErr(error.message || 'Could not save'); }
+    try { await onSave(patch); return true; }
+    catch (error) { setErr(error.message || fallback); return false; }
     finally { setBusy(false); }
   };
+  const submit = async (e) => { e.preventDefault(); if (await write(form, 'Could not save')) setEditing(null); };
   const upload = (field) => async (e) => {
     const file = e.target.files?.[0];
+    // Cleared so choosing the same file again (after a failed upload, say)
+    // still fires a change event.
+    e.target.value = '';
     if (!file) return;
     setBusy(true); setErr('');
     try { const { file_url } = await api.integrations.Core.UploadFile({ file }); await onSave({ [field]: file_url }); }
@@ -57,7 +65,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
       <ProfileBanner url={user.banner_url} className="rounded-t-3xl"/>
       {editable && <div className="absolute right-3 top-3 flex gap-2">
         <label className={overlay}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Camera size={14}/>}{user.banner_url ? 'Change cover' : 'Add a cover'}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>
-        {user.banner_url && <button type="button" onClick={() => onSave({ banner_url: '' })} className={overlay} aria-label="Remove cover"><X size={14}/></button>}
+        {user.banner_url && <button type="button" disabled={busy} onClick={() => write({ banner_url: '' }, 'Could not remove the cover')} className={overlay} aria-label="Remove cover"><X size={14}/></button>}
       </div>}
     </div>
     <div className="px-6 pb-6">
@@ -66,7 +74,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
           {user.avatar_url
             ? <div className="h-24 w-24 overflow-hidden rounded-full ring-4 ring-brand-surface sm:h-28 sm:w-28"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24 sm:h-28 sm:w-28"/></div>
             : <div className="grid h-24 w-24 place-items-center rounded-full bg-brand-tint text-2xl font-bold text-brand-teal ring-4 ring-brand-surface sm:h-28 sm:w-28">{initialsOf(user)}</div>}
-          {editable && <label className="absolute -bottom-1 -right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-navy text-white shadow ring-2 ring-brand-surface hover:bg-brand-navy-hover" title={user.avatar_url ? 'Change photo' : 'Add a photo'}>{busy ? <Loader2 size={15} className="animate-spin"/> : <Camera size={15}/>}<input type="file" accept="image/*" className="hidden" onChange={upload('avatar_url')} disabled={busy}/></label>}
+          {editable && <label className="absolute -bottom-1 -right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-navy text-white shadow ring-2 ring-brand-surface hover:bg-brand-navy-hover" title={user.avatar_url ? 'Change photo' : 'Add a photo'}>{busy ? <Loader2 size={15} className="animate-spin"/> : <Camera size={15}/>}<input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={upload('avatar_url')} disabled={busy}/></label>}
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-3">
           {editable
@@ -85,6 +93,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             <label>General home city<input className="field" value={form.home_city} onChange={(e) => setForm({ ...form, home_city: e.target.value })} placeholder="Lakewood, Brooklyn, Monsey…"/><span className="helper">Your exact location is never displayed.</span></label>
             <label>Phone<input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel"/><span className="helper">Private. Only you and the admins can see it.</span></label>
           </div>
+          {user.avatar_url && <button type="button" disabled={busy} onClick={() => write({ avatar_url: '' }, 'Could not remove the photo')} className="text-sm font-semibold text-brand-error hover:underline">Remove profile photo</button>}
           {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
           <div className="flex items-center gap-3"><button className="primary" disabled={busy}>{busy ? <Loader2 size={15} className="animate-spin"/> : null}Save</button><button type="button" onClick={cancel} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Cancel</button></div>
         </form>

@@ -23,7 +23,7 @@ export function profileCompleteness(user) {
   return score([
     { weight: 20, test: (u) => filled(u.full_name), action: 'Add your name', target: '#intro' },
     { weight: 15, test: (u) => filled(u.headline), action: 'Write a one-line headline', target: '#intro' },
-    { weight: 15, test: (u) => filled(u.avatar_url), action: 'Add a photo', target: '#intro' },
+    { weight: 15, test: (u) => filled(u.avatar_url), action: 'Add a photo', target: '#photo' },
     { weight: 10, test: (u) => filled(u.home_city), action: 'Add your home city', target: '#intro' },
     { weight: 15, test: (u) => (u.bio || '').trim().length >= 40, action: 'Write a short bio', target: '#about' },
     { weight: 15, test: (u) => Array.isArray(u.work_experience) && u.work_experience.length > 0, action: 'Add your work or business', target: '#experience' },

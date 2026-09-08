@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Circle, ArrowRight } from 'lucide-react';
 import CompletenessRing from '@/components/CompletenessRing';
 import { profileCompleteness } from '@/lib/completeness';
@@ -7,14 +7,21 @@ import { profileCompleteness } from '@/lib/completeness';
 // The completeness ring, and under it every step with a tick or a link to
 // where it gets done. Owner only. Disappears once everything is ticked.
 export default function ProfileChecklist({ user, onEdit }) {
+  const navigate = useNavigate();
   const c = profileCompleteness(user);
   if (c.percent >= 100) return null;
   const go = (target) => {
     if (!target) return;
-    if (target.startsWith('#')) {
-      document.getElementById(target.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      onEdit?.(target.slice(1));
+    if (target.startsWith('/')) { navigate(target); return; }
+    if (target === '#photo') {
+      // The photo lives in the header's upload overlay, not in a form: open
+      // the picker straight away (a click handler may do that).
+      document.getElementById('intro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('avatar-upload')?.click();
+      return;
     }
+    document.getElementById(target.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    onEdit?.(target.slice(1));
   };
   return <div className="panel space-y-4">
     <CompletenessRing percent={c.percent} next={c.next} label="Profile" onAction={() => go(c.next?.target)} />

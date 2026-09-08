@@ -153,6 +153,10 @@ async function visibleRows(entity, rows, user) {
   if (entity === 'Connection') {
     const g = await guestId();
     if (g) rows = rows.filter((row) => row.requester_id !== g && row.recipient_id !== g);
+    // The accepted graph is public — that is what connection counts and
+    // "mutual connections" are made of. A request that is pending or was
+    // declined is between the two people on it and nobody else.
+    if (user?.role !== 'admin') rows = rows.filter((row) => row.status === 'accepted' || (user && (row.requester_id === user.id || row.recipient_id === user.id)));
   }
   if (user?.role === 'admin') return rows;
   if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
@@ -221,7 +225,8 @@ app.param('entity', (req, res, next, entity) => {
 // Registered before the generic :entity route below, which would otherwise
 // shadow it and return an empty list (users don't live in the records table).
 app.get('/api/entities/User', async (req, res, next) => {
-  res.json(await memberList(req.user));
+  const list = await memberList(req.user);
+  res.json(req.query.limit ? list.slice(0, Number(req.query.limit)) : list);
 });
 
 app.get('/api/entities/:entity', async (req, res, next) => {
@@ -350,7 +355,8 @@ async function memberList(viewer) {
 }
 
 app.get('/api/users', async (req, res, next) => {
-  res.json(await memberList(req.user));
+  const list = await memberList(req.user);
+  res.json(req.query.limit ? list.slice(0, Number(req.query.limit)) : list);
 });
 
 // Admin only: hand a locked-out member a temporary password. Shown once to

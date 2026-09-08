@@ -30,35 +30,48 @@ export default function ProfilePage({ userId }) {
 
   const reload = async () => { if (me) setConnections(await loadMyConnections(me.id)); };
 
-  useEffect(() => { (async () => {
-    setLoading(true); setUser(undefined); setEditing(null);
-    if (!(await api.auth.isAuthenticated())) return api.auth.redirectToLogin(location.href);
-    const u = await api.auth.me();
-    setMe(u);
-    const self = !userId || userId === u.id;
-    // The session already carries everything about yourself, including the
-    // private fields the public route strips.
-    const target = self ? u : await api.entities.User.get(userId).catch(() => null);
-    setUser(target);
-    if (!target || u.guest) { setLoading(false); return; }
-    const conn = await loadMyConnections(u.id);
-    setConnections(conn);
-    setLoading(false);
-    // Decoration, loaded after the page is usable.
-    api.entities.User.list('-created_date', 500).then(setMembers).catch(() => {});
-    api.entities.Company.filter({ status: 'published' }).then((rows) => {
-      const byName = {};
-      for (const c of rows) if (c.name) byName[c.name.trim().toLowerCase()] = companyPath(c);
-      setCompanies(byName);
-    }).catch(() => {});
-    if (self) {
-      setTheirs(conn.all.filter((c) => c.status === 'accepted'));
-    } else {
-      Promise.all([api.entities.Connection.filter({ requester_id: target.id, status: 'accepted' }), api.entities.Connection.filter({ recipient_id: target.id, status: 'accepted' })])
-        .then(([a, b]) => setTheirs([...a, ...b])).catch(() => {});
-    }
-    suggestSimilar(target, u.id, [...connectedIds(conn)]).then(setSuggestions).catch(() => {});
-  })(); }, [userId]);
+  useEffect(() => {
+    // Moving from one profile to another reuses this component, so everything
+    // that belongs to a profile is reset here, and a load that is still in
+    // flight when the next one starts must not land on the new page.
+    let alive = true;
+    const set = (fn) => (value) => { if (alive) fn(value); };
+    setLoading(true); setUser(undefined); setEditing(null); setTheirs([]); setSuggestions([]); setConnections({ sent: [], received: [], all: [] });
+    (async () => {
+      if (!(await api.auth.isAuthenticated())) return api.auth.redirectToLogin(location.href);
+      const u = await api.auth.me();
+      if (!alive) return;
+      setMe(u);
+      const self = !userId || userId === u.id;
+      // The session already carries everything about yourself, including the
+      // private fields the public route strips.
+      const target = self ? u : await api.entities.User.get(userId).catch(() => null);
+      if (!alive) return;
+      setUser(target);
+      if (!target) { setLoading(false); return; }
+      // The guest has no connections of its own (the server hides the seeded
+      // ones), so this is empty for it, and the page reads the same either way.
+      const conn = await loadMyConnections(u.id).catch(() => ({ sent: [], received: [], all: [] }));
+      if (!alive) return;
+      setConnections(conn);
+      setLoading(false);
+      // Decoration, loaded after the page is usable.
+      api.entities.User.list('-created_date', 500).then(set(setMembers)).catch(() => {});
+      api.entities.Company.filter({ status: 'published' }).then((rows) => {
+        const byName = {};
+        for (const c of rows) if (c.name) byName[c.name.trim().toLowerCase()] = companyPath(c);
+        set(setCompanies)(byName);
+      }).catch(() => {});
+      if (self) {
+        setTheirs(conn.all.filter((c) => c.status === 'accepted'));
+      } else {
+        Promise.all([api.entities.Connection.filter({ requester_id: target.id, status: 'accepted' }), api.entities.Connection.filter({ recipient_id: target.id, status: 'accepted' })])
+          .then(([a, b]) => set(setTheirs)([...a, ...b])).catch(() => {});
+      }
+      suggestSimilar(target, u.id, [...connectedIds(conn)]).then(set(setSuggestions)).catch(() => {});
+    })();
+    return () => { alive = false; };
+  }, [userId]);
 
   const save = async (patch) => {
     const updated = await api.auth.updateMe(patch);
@@ -77,7 +90,7 @@ export default function ProfilePage({ userId }) {
   const nameOf = new Map(members.map((m) => [m.id, m.full_name || 'Community member']));
   const theirIds = new Set(theirs.flatMap((c) => [c.requester_id, c.recipient_id]).filter((id) => id !== user.id));
   const mineAccepted = new Set(connections.all.filter((c) => c.status === 'accepted').flatMap((c) => [c.requester_id, c.recipient_id]).filter((id) => id !== me.id));
-  const mutualIds = isMe ? [] : [...theirIds].filter((id) => mineAccepted.has(id));
+  const mutualIds = isMe || me.guest ? [] : [...theirIds].filter((id) => mineAccepted.has(id));
   const mutual = { count: mutualIds.length, names: mutualIds.slice(0, 3).map((id) => nameOf.get(id)).filter(Boolean) };
 
   return <div className="page-shell max-w-3xl space-y-5 py-8">

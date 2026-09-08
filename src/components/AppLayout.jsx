@@ -25,9 +25,16 @@ function HeaderAccount() {
   }
   return <>
     {(user.role === 'admin' || user.role === 'moderator') && <NavLink to="/admin" className="ml-2 p-2 text-brand-muted hover:text-brand-teal" aria-label="Admin"><ShieldCheck size={19}/></NavLink>}
-    <NavLink to="/settings" className={({ isActive }) => `p-2 hover:text-brand-teal ${isActive ? 'text-brand-teal' : 'text-brand-muted'}`} aria-label="Settings" title="Settings"><Settings size={19}/></NavLink>
     <button type="button" onClick={() => logout()} className="ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-brand-muted hover:bg-brand-surface hover:text-brand-ink" aria-label="Log out"><LogOut size={16}/><span className="hidden lg:inline">Log out</span></button>
   </>;
+}
+
+// The settings gear sits outside the desktop-only nav: on a phone the bottom
+// bar has no room for it, and this is the one place it is always reachable.
+function SettingsGear() {
+  const { user, isGuest, authChecked } = useAuth();
+  if (!authChecked || !user || isGuest) return null;
+  return <NavLink to="/settings" className={({ isActive }) => `p-2 hover:text-brand-teal ${isActive ? 'text-brand-teal' : 'text-brand-muted'}`} aria-label="Settings" title="Settings"><Settings size={19}/></NavLink>;
 }
 
 export default function AppLayout() {
@@ -36,7 +43,7 @@ export default function AppLayout() {
     <AccountRequiredModal/>
     <ShabbosMode/>
     <TravelWarningBanner/>
-    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}<HeaderAccount/></nav><ThemeToggle/></div></div></header>
+    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}<HeaderAccount/></nav><SettingsGear/><ThemeToggle/></div></div></header>
     <main><Outlet/></main>
     <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-7 border-t border-brand-line bg-brand-surface px-1 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{links.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex flex-col items-center gap-1 text-[10px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={19}/><span>{n}</span></NavLink>)}<MobileNotificationBell/></nav>
   </div>;

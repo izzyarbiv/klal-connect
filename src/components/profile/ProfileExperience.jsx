@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pencil, Loader2, Plus } from 'lucide-react';
 import WorkExperienceEditor from '@/components/WorkExperienceEditor';
 import WorkExperienceTimeline from '@/components/WorkExperienceTimeline';
@@ -10,8 +10,11 @@ export default function ProfileExperience({ user, editable, onSave, companies, e
   const [err, setErr] = useState('');
   const open = editing === 'experience';
   const list = Array.isArray(user.work_experience) ? user.work_experience : [];
+  // Seeded from the profile every time the editor opens (pencil, prompt, or
+  // checklist), so a cancelled draft never comes back.
+  useEffect(() => { if (open) { setItems(list.map((j) => ({ ...j }))); setErr(''); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   if (list.length === 0 && !editable) return null;
-  const start = () => { setItems(list.map((j) => ({ ...j }))); setErr(''); setEditing('experience'); };
+  const start = () => setEditing('experience');
   const save = async () => {
     setBusy(true); setErr('');
     try { await onSave({ work_experience: items.filter((j) => (j.title || '').trim() || (j.company || '').trim()) }); setEditing(null); }

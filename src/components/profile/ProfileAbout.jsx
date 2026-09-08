@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pencil, Loader2 } from 'lucide-react';
 
 // The bio. Others see it only when there is one; the owner always sees the
@@ -9,8 +9,12 @@ export default function ProfileAbout({ user, editable, onSave, editing, setEditi
   const [err, setErr] = useState('');
   const open = editing === 'about';
   const has = !!(user.bio && String(user.bio).trim());
+  // Seeded from the profile every time the editor opens — it can be opened
+  // by the pencil, the dashed prompt, or the checklist — so Save never writes
+  // back an empty box over a bio that was there.
+  useEffect(() => { if (open) { setText(user.bio || ''); setErr(''); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!has && !editable) return null;
-  const start = () => { setText(user.bio || ''); setErr(''); setEditing('about'); };
+  const start = () => setEditing('about');
   const save = async () => {
     setBusy(true); setErr('');
     try { await onSave({ bio: text.trim() }); setEditing(null); }
