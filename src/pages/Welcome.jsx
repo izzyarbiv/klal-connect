@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Compass, Wrench, Store, MapPin, Handshake, Plus } from 'lucide-react';
 import { api } from '@/api/client';
 import { safeReturnTo } from '@/lib/authReturnTo';
-import { AFFILIATIONS, PROFILE_TYPES } from '@/lib/affiliations';
+import { PROFILE_TYPES } from '@/lib/affiliations';
 import InviteButton from '@/components/InviteButton';
 import ResourceCard from '@/components/ResourceCard';
 
@@ -17,7 +17,6 @@ export default function Welcome() {
   const [type, setType] = useState('community_member');
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
-  const [affiliation, setAffiliation] = useState('');
   const [nearby, setNearby] = useState(null);
   const [members, setMembers] = useState(null);
   // Where "Done" goes: wherever sign-up was headed, else the feed — the
@@ -33,7 +32,6 @@ export default function Welcome() {
       setType(u.profile_type || 'community_member');
       setName(u.full_name || '');
       setCity(u.home_city || u.city || '');
-      setAffiliation(u.affiliation || '');
       api.entities.User.list('-created_date', 500).then(setMembers).catch(() => setMembers([]));
     })();
   }, []);
@@ -70,16 +68,15 @@ export default function Welcome() {
       </>}
 
       {step === 1 && <>
-        <div><span className="eyebrow dark">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first. Your affiliation is optional and only ever used to show you what people in your community use.</p></div>
+        <div><span className="eyebrow dark">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first — the listings, people and asks near you.</p></div>
         <label>City<div className="relative"><MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted"/><input className="field pl-9" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Lakewood, Brooklyn, Monsey…"/></div></label>
-        <div><p className="text-sm font-semibold text-brand-ink">Community</p><div className="mt-2 flex flex-wrap gap-2">{AFFILIATIONS.map((a) => <button key={a.id} type="button" onClick={() => setAffiliation(a.id === affiliation ? '' : a.id)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ring-1 transition ${affiliation === a.id ? 'bg-brand-navy text-white ring-brand-navy' : 'bg-brand-surface text-brand-body ring-brand-line hover:text-brand-ink'}`}>{a.label}</button>)}</div></div>
-        <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" onClick={() => next({ home_city: city, affiliation })} className="primary">Continue<ArrowRight size={16}/></button></div>
+        <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" onClick={() => next({ home_city: city })} className="primary">Continue<ArrowRight size={16}/></button></div>
       </>}
 
       {step === 2 && <>
         <div><span className="eyebrow dark">{type === 'community_member' ? 'NEAR YOU' : 'YOUR LISTING'}</span>
           <h1 className="title text-3xl">{type === 'community_member' ? 'Trusted by the community' : 'Put yourself in front of the klal'}</h1>
-          <p className="helper">{type === 'community_member' ? 'The most-vouched listings on Klal right now. Vouches come from named members — never anonymous.' : 'Your listing goes to a quick review, then members can find it, vouch for it, and message you on WhatsApp.'}</p></div>
+          <p className="helper">{type === 'community_member' ? 'The most-vouched listings on Klal right now. Vouches come from named members — never anonymous.' : 'Your listing is live the moment you post it — members can find it, vouch for it, and message you on WhatsApp.'}</p></div>
         {type === 'community_member'
           ? (nearby === null ? <div className="loading min-h-24">Loading…</div>
             : nearby.length === 0

@@ -11,6 +11,13 @@ import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
 const BADGE_IDS = new Set(BADGES.map((b) => b.id));
 
+// Listings and positive notes go live the moment they are submitted. Admins
+// and moderators can still hide, archive or reject anything from the queues,
+// and reports still come in privately. KC_REVIEW_LISTINGS=1 brings back the
+// hold-for-approval step if the community ever needs it.
+const REVIEW_FIRST = process.env.KC_REVIEW_LISTINGS === '1';
+const INITIAL_STATUS = REVIEW_FIRST ? 'pending' : 'published';
+
 // The composer's ids (src/lib/postTypes.js). `update` was an older spelling of
 // `post` and still exists on seeded rows, so it is folded in rather than
 // rejected — otherwise the "Updates" filter never matched those posts.
@@ -100,7 +107,7 @@ export const functions = {
     // New listings are never published directly — they go to the review queue.
     const provider = await store.create(
       'Provider',
-      { ...listingInput(payload), status: 'pending', claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },
+      { ...listingInput(payload), status: INITIAL_STATUS, claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },
       user
     );
     return { provider };
@@ -134,7 +141,7 @@ export const functions = {
     if (String(body || '').trim().length < 10) fail('Please share a little more detail.');
     const note = await store.create(
       'CommunityNote',
-      { provider_id, provider_name, body: String(body).trim(), status: 'pending', ...authorFields(user) },
+      { provider_id, provider_name, body: String(body).trim(), status: INITIAL_STATUS, ...authorFields(user) },
       user
     );
     return { note };

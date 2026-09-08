@@ -8,7 +8,7 @@ import MessageButton from '@/components/MessageButton';
 import ShareButton from '@/components/ShareButton';
 import ProfileBanner from '@/components/ProfileBanner';
 import HeadlineEdit from '@/components/HeadlineEdit';
-import { AFFILIATIONS, AFFILIATION_BY_ID, PROFILE_TYPES } from '@/lib/affiliations';
+import { PROFILE_TYPES } from '@/lib/affiliations';
 import { topJob } from '@/lib/connections';
 
 const initialsOf = (user) => (user.full_name || user.email || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
@@ -27,7 +27,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   // checklist) and dropped whenever it closes, so no draft outlives a switch
   // to another section.
   React.useEffect(() => {
-    if (open) setForm({ full_name: user.full_name || '', headline: user.headline || '', profile_type: user.profile_type || 'community_member', affiliation: user.affiliation || '', home_city: user.home_city || '', phone: user.phone || '' });
+    if (open) setForm({ full_name: user.full_name || '', headline: user.headline || '', profile_type: user.profile_type || 'community_member', home_city: user.home_city || '', phone: user.phone || '' });
     else setForm(null);
     setErr('');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -56,7 +56,6 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   const job = topJob(user);
   const companyLink = job?.company ? companies[job.company.trim().toLowerCase()] : null;
   const typeLabel = PROFILE_TYPES.find((t) => t.id === user.profile_type)?.label;
-  const affiliation = user.affiliation && user.affiliation !== 'private' ? AFFILIATION_BY_ID[user.affiliation]?.label : null;
   const profileUrl = `${window.location.origin}/profile/${user.id}`;
   const overlay = 'inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-brand-surface/90 px-3 py-1.5 text-xs font-semibold text-brand-ink shadow-sm ring-1 ring-brand-line backdrop-blur hover:bg-brand-surface';
 
@@ -89,7 +88,6 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             <label className="sm:col-span-2">Name<input className="field" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="As people in the community know you" autoFocus/></label>
             <div className="sm:col-span-2"><HeadlineEdit label="Headline" value={form.headline} onChange={(v) => setForm({ ...form, headline: v })} suggestion={job ? `${job.title}${job.company ? ` — ${job.company}` : ''}` : null}/></div>
             <label>What brings you here<select className="field" value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })}>{PROFILE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
-            <label>Community<select className="field" value={form.affiliation} onChange={(e) => setForm({ ...form, affiliation: e.target.value })}><option value="">Not set</option>{AFFILIATIONS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</select><span className="helper">Optional. Only ever used to show you what people in your community use.</span></label>
             <label>General home city<input className="field" value={form.home_city} onChange={(e) => setForm({ ...form, home_city: e.target.value })} placeholder="Lakewood, Brooklyn, Monsey…"/><span className="helper">Your exact location is never displayed.</span></label>
             <label>Phone<input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel"/><span className="helper">Private. Only you and the admins can see it.</span></label>
           </div>
@@ -104,7 +102,6 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             : editable && <button type="button" onClick={startEdit} className="mt-0.5 text-sm text-brand-muted hover:text-brand-teal hover:underline">Add a one-line headline</button>}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {typeLabel && <span className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-semibold text-brand-teal">{typeLabel}</span>}
-            {affiliation && <span className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-semibold text-brand-teal">{affiliation}</span>}
           </div>
           <div className="mt-3 space-y-1 text-sm text-brand-body">
             {job && <p className="flex items-start gap-2"><Briefcase size={14} className="mt-1 shrink-0 text-brand-teal"/><span>{job.title}{job.company ? <>, {companyLink ? <Link to={companyLink} className="font-semibold text-brand-teal hover:underline">{job.company}</Link> : job.company}</> : ''}</span></p>}
