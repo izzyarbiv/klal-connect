@@ -19,6 +19,7 @@ import { ensureDemoData } from './demo-seed.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
+import { healthReport } from './health.js';
 
 // The built index.html, baked in at build time by scripts/emit-shell.mjs.
 // Absent in dev and in tests, where Vite serves the shell itself.
@@ -120,8 +121,16 @@ const OWNER_SCOPED = {
 // counters goes through /functions instead.
 const CLIENT_WRITABLE = new Set([
   'Provider', 'Company', 'Setting', 'Notification', 'Connection',
-  'SavedProvider', 'ListingChangeRequest', 'Category',
+  'SavedProvider', 'ListingChangeRequest', 'Category', 'ActivityEvent',
 ]);
+
+// What the app is allowed to record about what someone did. Anything that
+// affects a count — a post view, a vouch — is written by the server from
+// /api/functions, never by the client, so those types are not here. Without
+// this list ActivityEvent was simply not writable and every search, listing
+// view and tap-to-call was silently refused: the directory had no idea what
+// people were looking for.
+const CLIENT_EVENTS = new Set(['search', 'profile_view', 'call', 'text', 'share', 'share_whatsapp', 'whatsapp']);
 
 // Entities a moderator works: the review queues and what they moderate.
 // A moderator never sees messages, saves, or anyone's private notifications.
@@ -187,6 +196,9 @@ async function visibleRows(entity, rows, user) {
 function canWrite(entity, user, row) {
   if (!user) return false;
   if (user.role === 'admin') return true;
+  // An event is a record of something that happened; only an admin rewrites
+  // history (and does, when clearing test data).
+  if (entity === 'ActivityEvent' && row) return false;
   // Moderators change the state of existing rows in the queues; they do not
   // create listings on anyone's behalf or delete anything.
   if (isModerator(user) && row && MODERATED_BY_STAFF.has(entity)) return true;
@@ -278,6 +290,9 @@ const CREATE_STATUS = { Connection: 'pending', Provider: 'pending', CommunityNot
 app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   const { entity } = req.params;
   if (!canWrite(entity, req.user)) return res.status(403).json({ error: 'Not permitted' });
+  if (entity === 'ActivityEvent' && req.user.role !== 'admin' && !CLIENT_EVENTS.has(req.body?.type)) {
+    return res.status(400).json({ error: 'Unknown event type' });
+  }
   let body = req.body || {};
   if (req.user.role !== 'admin') {
     // Without this a direct POST could hand itself an accepted connection, a
@@ -746,6 +761,12 @@ app.get('/api/geo/ip', requireAuth, async (req, res, next) => {
     // X-Forwarded-For is only believed when we are actually behind a proxy.
     res.json(await geolocateIp(req.ip));
   } catch (err) { next(err); }
+});
+
+// What needs attention before and after launch, in one call. Admin only: it
+// names members and their addresses.
+app.get('/api/admin/health', requireAdmin, async (_req, res, next) => {
+  try { res.json(await healthReport()); } catch (err) { next(err); }
 });
 
 // ------------------------------------------------------------------- seo --
