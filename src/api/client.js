@@ -260,8 +260,8 @@ const getConfig = () => (configPromise ??= request('GET', '/config').catch(() =>
  */
 export async function adoptDemoSession() {
   if (tokenStore.get()) return false;
-  const { demoMode } = await getConfig();
-  if (!demoMode) return false;
+  const { guestBrowsing } = await getConfig();
+  if (!guestBrowsing) return false;
   try {
     const res = await request('POST', '/auth/demo-session');
     if (!res?.access_token) return false;

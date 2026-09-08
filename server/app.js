@@ -437,7 +437,10 @@ app.get('/api/users/:id', async (req, res, next) => {
 // The server-side geocoding key (KC_GEOCODER_KEY) is a different key and never
 // leaves this process.
 app.get('/api/config', (_req, res) => res.json({
-  demoMode: isDemoMode,
+  // Visitors get a read-only shared guest session so the whole site is
+  // browsable without an account. Named for what it is; "demo mode" made
+  // more than one reviewer think the site was a sandbox.
+  guestBrowsing: isDemoMode,
   googleMapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || '',
   googleMapsMapId: process.env.GOOGLE_MAPS_MAP_ID || '',
   tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
