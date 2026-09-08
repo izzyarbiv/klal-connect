@@ -87,7 +87,9 @@ All routes are under `/api`, and the dev server proxies to the API automatically
 Functions: `createListing`, `updateListingTagline`, `createClaim`, `createReview`,
 `createReport`, `createPost`, `createComment`, `toggleLike` (one reaction per member per
 post — see `src/lib/reactions.js`), `toggleAnswerVote`, `markHelpful`, `recordPostView`,
-`reactToMessage`, `toggleCommunityActivity`, `sendMessage`, `myInvite`, `getShabbosStatus`.
+`toggleSavePost`, `reportPost`, `deletePost` (the post's author, an admin or a moderator;
+takes its comments, reactions, votes and saves with it), `reactToMessage`,
+`toggleCommunityActivity`, `sendMessage`, `myInvite`, `getShabbosStatus`.
 
 These are server-side rather than direct entity writes because each enforces something
 the client must not be trusted with: moderation status, ownership, counter integrity, or
@@ -108,8 +110,9 @@ in the header, the Settings button on the profile, and the Shabbos prompts.
 
 - **user** — a member. Reads everything public, writes their own.
 - **moderator** — the review queues (pending listings, claims, positive notes, reports,
-  edits). Can approve, reject and resolve, and leave notes. Cannot delete, verify,
-  rename, or see messages, saves, categories or users.
+  edits). Can approve, reject and resolve, leave notes, and remove a feed post
+  (`deletePost`). Cannot delete anything else, verify, rename, or see messages, saves,
+  categories or users.
 - **admin** — everything, including verification, badges, categories and roles.
   Roles are changed from Admin → Users; you cannot change your own.
 
@@ -123,6 +126,8 @@ Every status change by staff is recorded as a `moderation` activity event.
   recipient of a connection request may accept or decline it, and the recipient of a
   message may mark it read; nothing else on someone else's row is editable.
 - **Post views**: counted once per member and shown only to the post's author.
+- **Saved posts** (`SavedPost`): private to the member who saved them; written only through
+  `toggleSavePost`, never by a direct entity write.
 - **Admin only**: platform settings (including the global Shabbos override), categories, the
   report queue, and marking an account verified (the way in for a member whose code never
   arrived).

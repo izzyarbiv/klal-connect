@@ -36,3 +36,26 @@ export function matchesFilter(post, filter) {
   if (filter === 'unanswered') return type === 'question' && !post.helpful_comment_id;
   return type === filter;
 }
+
+// Why a post can be reported. The ids are what the server stores on the
+// PrivateReport row; the labels are what the member picks from and what the
+// admin reads in the queue.
+export const POST_REPORT_REASONS = [
+  { id: 'spam', label: 'Spam' },
+  { id: 'scam', label: 'Scam or misleading' },
+  { id: 'harassment', label: 'Harassment' },
+  { id: 'off_topic', label: 'Off-topic or inappropriate' },
+  { id: 'other', label: 'Other' },
+];
+export const POST_REPORT_REASON_BY_ID = Object.fromEntries(POST_REPORT_REASONS.map((r) => [r.id, r]));
+
+// The first `max` characters of a post on one line, for a share message, a
+// saved-posts row, or the quote on a report. Cut at a word where there is
+// one, with an ellipsis when something was left out.
+export function postExcerpt(body, max = 120) {
+  const text = String(body || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const space = cut.lastIndexOf(' ');
+  return `${space > max * 0.6 ? cut.slice(0, space) : cut}…`;
+}
