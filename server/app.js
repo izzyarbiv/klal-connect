@@ -536,7 +536,8 @@ app.put('/api/auth/password', requireAuth, async (req, res, next) => {
 });
 
 app.post('/api/auth/login', async (req, res, next) => {
-  const { email, password } = req.body || {};
+  const { password } = req.body || {};
+  const email = normalizeEmail(req.body?.email);
   const row = await users.byEmail(email);
   if (!row || !checkPassword(password, row.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
@@ -563,9 +564,29 @@ app.get('/api/invites/:code', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// One spelling of an address, everywhere. The unique index is on lower(email)
+// and lookups are case-insensitive, but the row itself used to keep whatever
+// casing the form sent, so the same person could look like two people.
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+// A code costs an email and can be used to pester someone; one per minute per
+// address, and a fresh one only when the last is nearly spent.
+const RESEND_COOLDOWN_MS = 60_000;
+async function throttleCode(email, purpose, res) {
+  const issued = await otp.issuedAt(normalizeEmail(email), purpose).catch(() => null);
+  if (issued && Date.now() - issued < RESEND_COOLDOWN_MS) {
+    const wait = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - issued)) / 1000);
+    res.status(429).json({ error: `Please wait ${wait} second${wait === 1 ? '' : 's'} before asking for another code.` });
+    return true;
+  }
+  return false;
+}
+
 app.post('/api/auth/register', async (req, res, next) => {
-  const { email, password, full_name, invite_code } = req.body || {};
+  const { password, full_name, invite_code } = req.body || {};
+  const email = normalizeEmail(req.body?.email);
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return res.status(400).json({ error: 'That does not look like an email address' });
   if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   if (await users.byEmail(email)) return res.status(409).json({ error: 'That email is already registered' });
 
@@ -610,7 +631,8 @@ async function acceptInvite(invite, newUser) {
 }
 
 app.post('/api/auth/verify-otp', async (req, res, next) => {
-  const { email, otpCode } = req.body || {};
+  const { otpCode } = req.body || {};
+  const email = normalizeEmail(req.body?.email);
   if (!(await otp.verify(String(email || '').trim(), 'verify', otpCode))) {
     return res.status(400).json({ error: 'That code is incorrect or has expired' });
   }
@@ -621,18 +643,20 @@ app.post('/api/auth/verify-otp', async (req, res, next) => {
 });
 
 app.post('/api/auth/resend-otp', async (req, res, next) => {
-  const { email } = req.body || {};
+  const email = normalizeEmail(req.body?.email);
   if (!(await users.byEmail(email))) return res.json({ ok: true }); // don't reveal who is registered
+  if (await throttleCode(email, 'verify', res)) return;
   const code = await otp.issue(String(email).trim(), 'verify');
   res.json({ ok: true, dev_code: await deliverCode(email, 'verify', code) });
 });
 
 app.post('/api/auth/reset-password-request', async (req, res, next) => {
-  const { email } = req.body || {};
+  const email = normalizeEmail(req.body?.email);
   if (!canDeliverCodes()) {
     return res.status(503).json({ error: 'Password reset by email is not available yet. Please contact us and we will reset it for you.' });
   }
   if (!(await users.byEmail(email))) return res.json({ ok: true });
+  if (await throttleCode(email, 'reset', res)) return;
   const code = await otp.issue(String(email).trim(), 'reset');
   res.json({ ok: true, dev_code: await deliverCode(email, 'reset', code) });
 });
@@ -663,7 +687,10 @@ app.post('/api/functions/:name', async (req, res, next) => {
   try {
     res.json(await fn(req.body || {}, req.user));
   } catch (err) {
-    res.status(err.statusCode || 500).json({ error: err.message || 'Something went wrong' });
+    res.status(err.statusCode || 500).json({
+      error: err.message || 'Something went wrong',
+      ...(err.verification_required ? { verification_required: true } : {}),
+    });
   }
 });
 

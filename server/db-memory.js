@@ -171,6 +171,11 @@ const otp = {
     otpRows.push({ email: key, code, purpose, expires_at: Date.now() + ttlMinutes * 60_000 });
     return code;
   },
+  async issuedAt(email, purpose, ttlMinutes = 15) {
+    const key = String(email || '').trim().toLowerCase();
+    const row = otpRows.find((r) => r.email === key && r.purpose === purpose);
+    return row ? row.expires_at - ttlMinutes * 60_000 : null;
+  },
   async verify(email, purpose, code) {
     const key = String(email || '').trim().toLowerCase();
     const i = otpRows.findIndex((r) => r.email === key && r.purpose === purpose);

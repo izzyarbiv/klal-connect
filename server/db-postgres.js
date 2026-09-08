@@ -384,6 +384,18 @@ export const otp = {
     ]);
     return code;
   },
+  // When the live code for this address was issued, so the routes can refuse
+  // to send another one every few seconds. Derived from the row's expiry, so
+  // it works across serverless instances without another column.
+  async issuedAt(email, purpose, ttlMinutes = 15) {
+    await ready();
+    const { rows } = await pool.query(
+      'SELECT expires_at FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2',
+      [email, purpose]
+    );
+    if (!rows[0]) return null;
+    return Number(rows[0].expires_at) - ttlMinutes * 60_000;
+  },
   async verify(email, purpose, code) {
     await ready();
     const { rows } = await pool.query(

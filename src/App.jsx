@@ -101,10 +101,12 @@ function App() {
         <Router>
           <ScrollToTop />
           <AuthenticatedApp />
+          {/* Inside the Router: the install prompt has to know which route is
+              showing, because it must never cover a sign-up form. */}
+          <InstallPrompt />
         </Router>
         <Toaster />
         <UpdatePrompt />
-        <InstallPrompt />
       </QueryClientProvider>
     </AuthProvider>
   )

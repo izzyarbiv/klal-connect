@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Download, Share, X } from 'lucide-react';
 
 // "Add Klal to your home screen", offered on a repeat visit to a visitor who
@@ -6,6 +7,11 @@ import { Download, Share, X } from 'lucide-react';
 // iPhone has no such event, so there we show the Share → Add to Home Screen
 // steps. Push notifications on iPhone only work once installed, which is
 // why this is worth asking.
+// Never over a form someone is trying to submit. A banner across the bottom of
+// a laptop screen covered the "Create account" button, and being asked to
+// install an app you have not signed up for yet is the wrong moment anyway.
+const NO_PROMPT = ['/login', '/register', '/welcome', '/join', '/forgot-password', '/reset-password', '/add'];
+
 const VISITS_KEY = 'kc_visits';
 const SNOOZE_KEY = 'kc_install_snoozed';
 const SNOOZE_DAYS = 14;
@@ -25,6 +31,7 @@ function snoozed() {
 }
 
 export default function InstallPrompt() {
+  const { pathname } = useLocation();
   const [show, setShow] = useState(false);
   const [deferred, setDeferred] = useState(null);
   const [ios, setIos] = useState(false);
@@ -46,8 +53,9 @@ export default function InstallPrompt() {
     setShow(false);
   };
 
-  if (!show) return null;
-  return <div className="fixed inset-x-3 bottom-20 z-[105] mx-auto max-w-md rounded-2xl bg-brand-navy p-4 text-sm text-white shadow-lg md:bottom-4">
+  const blocked = NO_PROMPT.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (!show || blocked) return null;
+  return <div className="fixed inset-x-3 bottom-20 z-[105] mx-auto max-w-md rounded-2xl bg-brand-navy p-4 text-sm text-white shadow-lg md:inset-x-auto md:right-4 md:bottom-4 md:mx-0 md:w-[22rem]">
     <div className="flex items-start gap-3">
       <Download size={18} className="mt-0.5 shrink-0 text-[#f3c66a]" />
       <div className="flex-1">

@@ -4,12 +4,32 @@
 // something the client must not be trusted with: moderation status, ownership,
 // counter integrity, or the Shabbos write-gate.
 import { store, users, GUEST_EMAIL } from './db.js';
-import { computeShabbosStatus, assertWritable } from './shabbos.js';
-import { BADGES } from '../src/lib/badges.js';
+import { computeShabbosStatus, assertWritable as assertShabbosWritable } from './shabbos.js';
+import { canDeliverCodes } from './auth.js';
+import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
-const BADGE_IDS = new Set(BADGES.map((b) => b.id));
+const BADGE_BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b]));
+
+// Anyone can look around; creating something under someone else's email is
+// what verification prevents. Only bites where a code can actually be
+// delivered — otherwise an account could never clear it. Bundled with the
+// Shabbos check so every business function keeps calling one gate.
+function assertVerified(user) {
+  if (!canDeliverCodes()) return;
+  if (user && user.verified === false) {
+    const err = new Error('Please confirm your email address first — check your inbox for the code we sent.');
+    err.statusCode = 403;
+    err.verification_required = true;
+    throw err;
+  }
+}
+
+async function assertWritable(user, now) {
+  assertVerified(user);
+  await assertShabbosWritable(user, now);
+}
 
 // Listings and positive notes go live the moment they are submitted. Admins
 // and moderators can still hide, archive or reject anything from the queues,
@@ -30,7 +50,11 @@ const validReaction = (value) => (value === undefined || value === null || value
 // the counters are the server's and an admin's to set.
 function listingInput(payload) {
   const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, owner_id, ...rest } = payload || {};
-  const badges = Array.isArray(rest.badges) ? [...new Set(rest.badges.filter((b) => BADGE_IDS.has(b)))] : [];
+  // Badges are category-specific: a plumber cannot claim Pas Yisroel, and the
+  // check belongs here rather than only in the form.
+  const badges = Array.isArray(rest.badges)
+    ? [...new Set(rest.badges.filter((id) => BADGE_BY_ID[id] && badgeAppliesTo(BADGE_BY_ID[id], rest.category)))]
+    : [];
   // WhatsApp wants the number as digits with the country code, no plus.
   const whatsapp = rest.whatsapp ? String(rest.whatsapp).replace(/\D/g, '').replace(/^1?(\d{10})$/, '1$1') : '';
   return { ...rest, badges, whatsapp };
@@ -227,6 +251,7 @@ export const functions = {
   // code is short and memorable enough to read out loud.
   async myInvite(_payload, user) {
     if (user.email === GUEST_EMAIL) fail('Create an account to invite people.', 403);
+    assertVerified(user);
     const [existing] = await store.filter('Invite', { created_by_id: user.id, provider_id: null });
     if (existing) return { invite: existing };
     let code;
