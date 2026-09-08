@@ -165,6 +165,17 @@ const auth = {
     return request('PUT', '/auth/me', { body: patch });
   },
 
+  // Google's ID token in, a Klal session out. Carries the invite code the
+  // visitor arrived with, like register() does.
+  async loginWithGoogle(credential) {
+    let invite_code = null;
+    try { invite_code = localStorage.getItem('kc_invite_code') || null; } catch { /* fine */ }
+    const res = await request('POST', '/auth/google', { body: { credential, invite_code } });
+    tokenStore.set(res.access_token);
+    try { localStorage.removeItem('kc_invite_code'); } catch { /* fine */ }
+    return res;
+  },
+
   async changePassword(current_password, new_password) {
     return request('PUT', '/auth/password', { body: { current_password, new_password } });
   },

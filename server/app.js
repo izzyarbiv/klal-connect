@@ -441,6 +441,8 @@ app.get('/api/config', (_req, res) => res.json({
   // browsable without an account. Named for what it is; "demo mode" made
   // more than one reviewer think the site was a sandbox.
   guestBrowsing: isDemoMode,
+  // Public by design: Google's client id identifies the app, it is not a secret.
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleMapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || '',
   googleMapsMapId: process.env.GOOGLE_MAPS_MAP_ID || '',
   tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -476,6 +478,44 @@ app.put('/api/auth/me', requireAuth, async (req, res, next) => {
   // Role and verification are server-owned; a user cannot promote themselves.
   const { role, verified, password_hash, email, id, ...safe } = req.body || {};
   res.json(userToPublic(await users.update(req.user.id, safe)));
+});
+
+// "Continue with Google": the browser hands us the ID token Google issued
+// for our client id; we check it with Google, then sign in the account with
+// that (Google-verified) email or create it. No password, no code.
+async function verifyGoogleToken(credential) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) { const e = new Error('Google sign-in is not configured.'); e.statusCode = 501; throw e; }
+  const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(String(credential || ''))}`);
+  const info = await res.json().catch(() => ({}));
+  const ok = res.ok && info.aud === clientId && ['accounts.google.com', 'https://accounts.google.com'].includes(info.iss)
+    && info.email && String(info.email_verified) === 'true' && Number(info.exp) * 1000 > Date.now();
+  if (!ok) { const e = new Error('Google could not confirm that sign-in. Please try again.'); e.statusCode = 401; throw e; }
+  return { email: String(info.email).trim().toLowerCase(), name: info.name || '', picture: info.picture || '', sub: info.sub };
+}
+
+app.post('/api/auth/google', async (req, res, next) => {
+  try {
+    const { credential, invite_code } = req.body || {};
+    const g = await verifyGoogleToken(credential);
+    let row = await users.byEmail(g.email);
+    let created = false;
+    if (row) {
+      if (row.email === GUEST_EMAIL) return res.status(400).json({ error: 'That account cannot be used.' });
+      if (row.data?.disabled) return res.status(403).json({ error: 'This account has been deactivated.' });
+      // Google vouches for the address: an unverified email/password account
+      // is verified by this, and remembers its Google id.
+      row = await users.update(row.id, { verified: true, google_sub: g.sub, ...(row.data?.avatar_url ? {} : (g.picture ? { avatar_url: g.picture } : {})) });
+    } else {
+      const invited = invite_code ? (await store.filter('Invite', { code: String(invite_code).toLowerCase() }))[0] : null;
+      const invitedBy = invited ? { invited_by_id: invited.created_by_id, invited_by_name: invited.inviter_name || '' } : {};
+      const role = (await users.all()).length === 0 ? 'admin' : 'user';
+      row = await users.create({ email: g.email, password_hash: null, role, verified: true, full_name: g.name, avatar_url: g.picture, google_sub: g.sub, ...invitedBy });
+      await acceptInvite(invited, row);
+      created = true;
+    }
+    res.status(created ? 201 : 200).json({ access_token: signToken(row), user: sessionUser(userToPublic(row)), created });
+  } catch (err) { next(err); }
 });
 
 // A signed-in member changes their own password. Needs the current one, so
@@ -685,8 +725,12 @@ app.use((err, _req, res, _next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: `That image is too large. Please choose one under ${MAX_UPLOAD_MB}MB.` });
   }
-  console.error('[api]', err);
-  res.status(err.statusCode || 500).json({ error: err.message || 'Server error' });
+  // A 4xx is the API doing its job — a refused sign-in, a 404 — and logging a
+  // stack for each one buries the 5xx that actually need looking at.
+  const status = err.statusCode || 500;
+  if (status >= 500) console.error('[api]', err);
+  else console.warn(`[api] ${status} ${err.message}`);
+  res.status(status).json({ error: err.message || 'Server error' });
 });
 
 export default app;

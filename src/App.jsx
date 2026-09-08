@@ -28,6 +28,7 @@ import Messages from '@/pages/Messages';
 import Conversation from '@/pages/Conversation';
 import Login from '@/pages/Login';
 import Join from '@/pages/Join';
+import Privacy from '@/pages/Privacy';
 import Welcome from '@/pages/Welcome';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -78,6 +79,7 @@ const AuthenticatedApp = () => {
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/welcome" element={<Welcome />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/admin" element={<Admin />} />
       </Route>
       <Route path="/login" element={<Login />} />

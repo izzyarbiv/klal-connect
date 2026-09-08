@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { UserPlus, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import VerifyEmail from "@/components/VerifyEmail";
+import GoogleButton from "@/components/GoogleButton";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 // A new account goes through the welcome cards first, then on to wherever
@@ -73,6 +74,8 @@ export default function Register() {
           {error}
         </div>
       )}
+
+      <GoogleButton text="signup_with" onSignedIn={() => { window.location.href = welcomeUrl(); }} onError={setError} />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">

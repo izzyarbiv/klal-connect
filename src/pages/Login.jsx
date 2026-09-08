@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import VerifyEmail from "@/components/VerifyEmail";
+import GoogleButton from "@/components/GoogleButton";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 export default function Login() {
@@ -76,6 +77,8 @@ export default function Login() {
           {error}
         </div>
       )}
+
+      <GoogleButton onSignedIn={(r) => { window.location.href = r.created || !r.user?.onboarded ? '/welcome' + (returnTo !== '/' && returnTo !== '/welcome' ? '?returnTo=' + encodeURIComponent(returnTo) : '') : returnTo; }} onError={setError} />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
