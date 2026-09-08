@@ -93,6 +93,17 @@ These are server-side rather than direct entity writes because each enforces som
 the client must not be trusted with: moderation status, ownership, counter integrity, or
 the Shabbos write-gate.
 
+## Profiles and settings
+
+`/profile` is a member's own profile, rendered by the same page everyone else sees at
+`/profile/:id` with the editing turned on: cover and photo uploads, an inline intro form
+(name, headline, what brings them here, community, city, private phone), About and
+Experience edited in place, their recent posts, a completeness checklist, and their invite
+link. Viewers get Connect, Message, Share, the connection count and mutual connections.
+Everything about the account that is not the profile — Shabbos location, password,
+notifications, listings, company pages, log out — is at `/settings`, reached from the gear
+in the header, the Settings button on the profile, and the Shabbos prompts.
+
 ## Roles
 
 - **user** — a member. Reads everything public, writes their own.
