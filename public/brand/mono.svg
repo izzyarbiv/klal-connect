@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Klal">
-  <path d="M14 10.5 A1.5 1.5 0 0 1 15.5 9 Q17 12 22 12 H38 A14 14 0 0 1 52 26 V32 A20 20 0 0 1 32 52 H11 A1.5 1.5 0 0 1 9.5 50.5 V43.5 A1.5 1.5 0 0 1 11 42 H37 A9 9 0 0 0 46 33 V28 A6 6 0 0 0 40 22 H15.5 A1.5 1.5 0 0 1 14 20.5 Z" fill="currentColor"/>
-  <circle cx="28.5" cy="33.5" r="3.5" fill="currentColor"/>
+  <path d="M35.5 12.5 A19.5 19.5 0 0 1 35.5 51.5 L35.5 43.5 A11.5 11.5 0 0 0 35.5 20.5 Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="13.5" y="12.5" width="16.6" height="8" rx="1.5" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="9.5" y="43.5" width="20.6" height="8" rx="1.5" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
 </svg>
