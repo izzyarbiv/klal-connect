@@ -29,7 +29,7 @@ export default function Join() {
   if (state.loading) return <div className="loading">Opening your invite…</div>;
 
   const register = '/register?returnTo=' + encodeURIComponent('/welcome');
-  return <AuthLayout icon={UserPlus} title={state.invite ? `${state.invite.inviter_name} invited you to Klal` : 'Welcome to Klal'} subtitle={state.error || 'Trusted businesses, gemachs and professionals — vouched for by people you know.'}
+  return <AuthLayout icon={UserPlus} title={state.invite ? `${state.invite.inviter_name} invited you to Klal Connect` : 'Welcome to Klal Connect'} subtitle={state.error || 'Trusted businesses, gemachs and professionals — vouched for by people you know.'}
     footer={<Link to="/directory" className="text-primary font-medium hover:underline"><Compass className="w-3 h-3 inline mr-1" />Browse the directory first</Link>}>
     <div className="space-y-3">
       {state.member

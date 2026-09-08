@@ -13,9 +13,9 @@
 import { store } from './db.js';
 import { slugify } from './seo-shared.js';
 
-const SITE_NAME = 'Klal';
+const SITE_NAME = 'Klal Connect';
 const TAGLINE = 'Community resources & business directory';
-const DEFAULT_DESCRIPTION = 'Klal is a community-powered platform for finding trusted Jewish professionals, businesses, and resources near you.';
+const DEFAULT_DESCRIPTION = 'Klal Connect is a community-powered platform for finding trusted Jewish professionals, businesses, and resources near you.';
 
 export const siteOrigin = (req) => {
   const host = req.get('x-forwarded-host') || req.get('host') || 'klalconnect.org';
@@ -184,7 +184,7 @@ export function mountSeo(app, shell) {
       ]);
       const where = [provider.city, provider.state].filter(Boolean).join(', ');
       const title = `${provider.name}${provider.category ? ` — ${provider.category}` : ''}${where ? ` in ${where}` : ''} · ${SITE_NAME}`;
-      const description = clamp(provider.tagline || provider.short_description || provider.description || `${provider.name} on Klal.`, 155);
+      const description = clamp(provider.tagline || provider.short_description || provider.description || `${provider.name} on Klal Connect.`, 155);
       const image = provider.logo_url || (provider.image_urls || [])[0] || ogFallback(origin);
       const canonical = `${origin}${canonicalPath}`;
       send(res, renderPage(shell, {
@@ -203,7 +203,7 @@ export function mountSeo(app, shell) {
         return send(res, renderPage(shell, { title: `Company not found · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, canonical: `${origin}${req.path}`, noindex: true }));
       }
       const canonical = `${origin}/company/${company.slug || company.id}`;
-      const description = clamp(company.tagline || company.about || `${company.name} on Klal.`, 155);
+      const description = clamp(company.tagline || company.about || `${company.name} on Klal Connect.`, 155);
       const image = company.logo_url || ogFallback(origin);
       send(res, renderPage(shell, {
         title: `${company.name}${company.industry ? ` — ${company.industry}` : ''} · ${SITE_NAME}`,
@@ -244,7 +244,7 @@ export function mountSeo(app, shell) {
       send(res, renderPage(shell, {
         title: `${what}${where} · ${SITE_NAME}`,
         description: match
-          ? clamp(`${match.name}${where} — ${rows.length} vouched-for ${rows.length === 1 ? 'listing' : 'listings'} in the Klal community directory.`, 155)
+          ? clamp(`${match.name}${where} — ${rows.length} vouched-for ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`, 155)
           : DEFAULT_DESCRIPTION,
         canonical,
         image: ogFallback(origin),

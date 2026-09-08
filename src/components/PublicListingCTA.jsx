@@ -12,7 +12,7 @@ export default function PublicListingCTA({ to='/directory', label='Browse the di
       <Compass className="text-brand-teal"/>
       <div>
         <p className="font-semibold text-brand-ink">Looking for more?</p>
-        <p className="text-sm text-brand-body">This is part of the Klal directory of trusted community resources.</p>
+        <p className="text-sm text-brand-body">This is part of the Klal Connect directory of trusted community resources.</p>
       </div>
     </div>
     <Link to={to} className="primary">{label}</Link>

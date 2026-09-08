@@ -43,7 +43,7 @@ export function ensureDemoData() {
         role: 'admin',
         verified: true,
         full_name: 'Demo Admin',
-        headline: 'Klal demo account',
+        headline: 'Klal Connect demo account',
       });
       await users.create({
         id: stableId('demo-user', GUEST_EMAIL),
@@ -54,7 +54,7 @@ export function ensureDemoData() {
         role: 'user',
         verified: true,
         full_name: 'Guest',
-        headline: 'Browsing the Klal demo',
+        headline: 'Browsing Klal Connect',
       });
       await seedAll({ id: admin.id, email: admin.email });
       await seedCommunity(admin);

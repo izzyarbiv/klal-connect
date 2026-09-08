@@ -63,7 +63,7 @@ function CompanyView({company,isOwner,onEdit}){
       </div>
       <div className="flex gap-2">
         <ShareButton title={company.name}/>
-        <WhatsAppShare title={`${company.name} on Klal`}/>
+        <WhatsAppShare title={`${company.name} on Klal Connect`}/>
         {isOwner && <button onClick={onEdit} className="secondary"><Pencil size={16}/>Edit page</button>}
       </div>
     </div>

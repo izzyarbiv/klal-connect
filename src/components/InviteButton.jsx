@@ -28,7 +28,7 @@ export default function InviteButton({ compact = false, message }) {
   const [copied, setCopied] = useState(false);
   if (!invite) return null;
   const link = inviteLink(invite);
-  const text = message || `I'm on Klal — the directory and community network for the frum world. Trusted businesses, gemachs, professionals, and asks answered by people you know. Join me: ${link}`;
+  const text = message || `I'm on Klal Connect — the directory and community network for the frum world. Trusted businesses, gemachs, professionals, and asks answered by people you know. Join me: ${link}`;
   const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked */ } };
   const pad = compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm';
   return <div className="flex flex-wrap items-center gap-2">

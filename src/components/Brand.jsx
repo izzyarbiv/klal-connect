@@ -27,9 +27,11 @@ export function Mark({ className = 'h-9 w-9' }) {
 
 export default function Brand() {
   return (
-    <Link to="/" className="flex items-center gap-2.5 text-brand-teal" aria-label="Klal — home">
+    <Link to="/" className="flex items-center gap-2.5 text-brand-teal" aria-label="Klal Connect — home">
       <Mark className="h-9 w-9" />
-      <span className="font-display text-2xl font-bold leading-none tracking-tight text-brand-ink">Klal</span>
+      {/* "Klal" is the word; "Connect" rides with it in a lighter weight so the
+          lockup reads as one name without shouting the second half. */}
+      <span className="font-display text-2xl font-bold leading-none tracking-tight text-brand-ink">Klal<span className="font-semibold text-brand-teal"> Connect</span></span>
     </Link>
   );
 }

@@ -15,7 +15,7 @@ export default defineConfig({
 
       manifest: {
         id: "/",
-        name: "Klal",
+        name: "Klal Connect",
         short_name: "Klal",
         description:
           "A community-powered platform for finding trusted Jewish professionals, businesses, and resources in your area.",

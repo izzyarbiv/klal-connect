@@ -8,7 +8,7 @@ export default function Home(){
     <section className="hero"><div className="page-shell py-16 md:py-28">
       <span className="eyebrow">BUILT BY THE COMMUNITY, FOR THE COMMUNITY</span>
       <h1 className="mt-5 max-w-3xl font-display text-4xl font-bold tracking-tight text-white md:text-6xl">Helping each other grow.<br/><span className="hero-gold">Strengthening our communities.</span></h1>
-      <p className="mt-5 max-w-2xl text-lg text-white/85">Klal is a single home for the frum Jewish community to find trusted businesses, services, and resources — and to put your own business in front of the klal.</p>
+      <p className="mt-5 max-w-2xl text-lg text-white/85">Klal Connect is a single home for the frum Jewish community to find trusted businesses, services, and resources — and to put your own business in front of the klal.</p>
       <div className="mt-8"><SearchPanel/></div>
       <div className="mt-5 flex flex-wrap gap-3">
         <Link to="/directory" className="inline-flex items-center gap-2 rounded-xl bg-[#f3c66a] px-5 py-3 font-bold text-[#0b2c38] shadow-sm transition hover:bg-[#f6d187]"><Search size={17}/>Browse the directory</Link>
