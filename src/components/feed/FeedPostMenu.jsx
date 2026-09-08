@@ -14,7 +14,7 @@ export const postLink = (id) => `${window.location.origin}/feed?post=${encodeURI
 // below) — the menu only asks the card to open it.
 export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
   const [open,setOpen]=useState(false),[saved,setSaved]=useState(null),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[err,setErr]=useState('');
-  const ref=useRef(null),timer=useRef(null);
+  const ref=useRef(null),timer=useRef(null),btn=useRef(null);
   const member=!!user&&!user.guest;
   const isOwn=member&&post.created_by_id===user.id;
   const canDelete=isOwn||user?.role==='admin'||user?.role==='moderator';
@@ -26,8 +26,11 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
     ref.current?.querySelector('[role="menuitem"]')?.focus();
     const onDown=e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
     const onKey=e=>{
-      if(e.key==='Escape'){ setOpen(false); ref.current?.querySelector('button')?.focus(); return; }
+      if(e.key==='Escape'){ setOpen(false); return; }
       if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+      // The arrows walk the menu only while focus is in it; elsewhere on the
+      // page they keep scrolling.
+      if(!ref.current?.contains(document.activeElement))return;
       const items=[...(ref.current?.querySelectorAll('[role="menuitem"]')||[])];
       if(!items.length)return;
       e.preventDefault();
@@ -36,8 +39,15 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
     };
     document.addEventListener('pointerdown',onDown);
     document.addEventListener('keydown',onKey);
-    return ()=>{ document.removeEventListener('pointerdown',onDown); document.removeEventListener('keydown',onKey); };
+    return ()=>{
+      document.removeEventListener('pointerdown',onDown); document.removeEventListener('keydown',onKey);
+      // However it closed, focus goes back to the button rather than to <body>.
+      if(document.activeElement===document.body||!document.activeElement||ref.current?.contains(document.activeElement)) btn.current?.focus();
+    };
   },[open]);
+  // Opening starts clean: no leftover note, error, or a close timer from a
+  // previous round still ticking.
+  const toggle=()=>{ clearTimeout(timer.current); setNote(''); setErr(''); setOpen(o=>!o); };
   // Whether it is already saved is looked up when the menu opens, not for
   // every card on the page.
   useEffect(()=>{
@@ -50,13 +60,16 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
 
   const copy=async()=>{
     const link=postLink(post.id);
-    try{ await navigator.clipboard.writeText(link); }
+    let ok=false;
+    try{ await navigator.clipboard.writeText(link); ok=true; }
     catch{
       // No clipboard API (an http origin, an old browser): the selection fallback.
       const el=document.createElement('textarea'); el.value=link; el.setAttribute('readonly',''); el.style.position='fixed'; el.style.opacity='0';
-      document.body.appendChild(el); el.select(); try{ document.execCommand('copy'); }catch{} el.remove();
+      document.body.appendChild(el); el.select(); el.setSelectionRange(0,link.length);
+      try{ ok=document.execCommand('copy'); }catch{ ok=false; }
+      el.remove();
     }
-    finish('Copied');
+    if(ok) finish('Copied'); else setErr('Could not copy — long-press the link in WhatsApp share instead.');
   };
   const save=async()=>{
     if(!(await api.auth.requireAccount())){ setOpen(false); return; }
@@ -83,11 +96,11 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
   const item='flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-brand-body hover:bg-brand-tint hover:text-brand-ink focus:bg-brand-tint focus:outline-none disabled:opacity-50';
 
   return <div ref={ref} className="relative -mr-2 -mt-1 shrink-0">
-    <button type="button" onClick={()=>setOpen(o=>!o)} aria-haspopup="menu" aria-expanded={open} aria-label="Post options" className="icon-button text-brand-muted hover:text-brand-ink"><MoreHorizontal/></button>
+    <button ref={btn} type="button" onClick={toggle} aria-haspopup="menu" aria-expanded={open} aria-label="Post options" className="icon-button text-brand-muted hover:text-brand-ink"><MoreHorizontal/></button>
     {open&&<div role="menu" aria-label="Post options" className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-2xl bg-brand-surface py-1 shadow-lg ring-1 ring-brand-line">
       <button type="button" role="menuitem" onClick={copy} className={item}><Link2 size={16}/>{note==='Copied'?'Copied':'Copy link'}</button>
       <a role="menuitem" href={waShareUrl(shareText)} target="_blank" rel="noreferrer" onClick={()=>setOpen(false)} className={item}><MessageCircle size={16} style={{color:WA_GREEN}}/>Share on WhatsApp</a>
-      {!isOwn&&<button type="button" role="menuitem" onClick={save} disabled={busy} className={item}>{saved?<BookmarkCheck size={16} className="text-brand-teal"/>:<Bookmark size={16}/>}{note&&note!=='Copied'?note:(saved?'Unsave':'Save post')}</button>}
+      {!isOwn&&<button type="button" role="menuitem" onClick={save} disabled={busy||(member&&saved===null)} className={item}>{saved?<BookmarkCheck size={16} className="text-brand-teal"/>:<Bookmark size={16}/>}{note&&note!=='Copied'?note:(saved?'Unsave':'Save post')}</button>}
       {!isOwn&&<button type="button" role="menuitem" onClick={report} className={item}><Flag size={16}/>Report post</button>}
       {canDelete&&<button type="button" role="menuitem" onClick={del} disabled={busy} className={`${item} text-brand-error hover:text-brand-error`}>{busy?<Loader2 size={16} className="animate-spin"/>:<Trash2 size={16}/>}Delete post</button>}
       {err&&<p className="px-3 py-1.5 text-xs font-semibold text-brand-error">{err}</p>}

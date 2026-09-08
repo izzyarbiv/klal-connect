@@ -380,7 +380,7 @@ export const functions = {
     const post = await store.get('FeedPost', post_id);
     if (!post) fail('Post not found.', 404);
     if (post.created_by_id === user.id) fail('You cannot report your own post.');
-    const reason = Object.hasOwn(POST_REPORT_REASON_BY_ID, reason_category) ? POST_REPORT_REASON_BY_ID[reason_category] : null;
+    const reason = typeof reason_category === 'string' && Object.hasOwn(POST_REPORT_REASON_BY_ID, reason_category) ? POST_REPORT_REASON_BY_ID[reason_category] : null;
     if (!reason) fail('Please choose a reason.');
     const text = String(explanation || '').trim();
     if (text.length < 20) fail('Please add at least 20 characters of explanation.');

@@ -88,6 +88,9 @@ function moderationVisible(row, user) {
   return !!user && row.created_by_id === user.id;
 }
 
+// Rows nobody but their owner reads, admins included.
+const PERSONAL = new Set(['SavedProvider', 'SavedPost', 'FeedLike', 'CommentVote']);
+
 // Rows a signed-in non-admin may read: either public, their own, or addressed
 // to them. Keeps one user's messages out of another's list() call.
 const OWNER_SCOPED = {
@@ -99,6 +102,8 @@ const OWNER_SCOPED = {
   FeedLike: (row, user) => row.created_by_id === user.id,
   CommentVote: (row, user) => row.created_by_id === user.id,
   Invite: (row, user) => row.created_by_id === user.id,
+  // Searches, calls, post views: a member's own trail, nobody else's to read.
+  ActivityEvent: (row, user) => row.created_by_id === user.id,
   PrivateReport: (row, user) => row.created_by_id === user.id,
   ListingReport: (row, user) => row.created_by_id === user.id,
   ClaimRequest: (row, user) => row.created_by_id === user.id,
@@ -158,12 +163,15 @@ async function visibleRows(entity, rows, user) {
     // declined is between the two people on it and nobody else.
     if (user?.role !== 'admin') rows = rows.filter((row) => row.status === 'accepted' || (user && (row.requester_id === user.id || row.recipient_id === user.id)));
   }
-  if (user?.role === 'admin') return rows;
-  if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
-  if (!user && !PUBLIC_READ.has(entity)) return [];
   // The guest has no messages, notifications, saves or votes of its own —
   // anything addressed to it would be readable by every visitor at once.
   if (isGuest(user) && OWNER_SCOPED[entity]) return [];
+  // Bookmarks and reactions are personal for everyone, an admin included:
+  // an admin's Saved page is their own list, not a register of everyone's.
+  if (PERSONAL.has(entity)) return rows.filter((row) => !!user && row.created_by_id === user.id);
+  if (user?.role === 'admin') return rows;
+  if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
+  if (!user && !PUBLIC_READ.has(entity)) return [];
   const scope = OWNER_SCOPED[entity];
   let visible = scope ? rows.filter((row) => scope(row, user)) : rows;
   if (MODERATED.has(entity)) visible = visible.filter((row) => moderationVisible(row, user));

@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '@/api/client';
 import FeedComposer from '@/components/feed/FeedComposer';
@@ -12,13 +12,18 @@ export default function Feed(){
   // ?post=<id> — a shared or saved link — shows that one post on its own.
   const [params,setParams]=useSearchParams();
   const postId=params.get('post');
-  const visible=posts?.filter(p=>matchesFilter(p,filter));
+  // A shared link shows its post whatever filter chip was left selected.
+  const visible=posts?.filter(p=>postId||matchesFilter(p,filter));
+  // Loads are numbered so that one still in flight when the next starts
+  // (Show all posts clicked mid-load, say) cannot land on top of it.
+  const run=useRef(0);
   const load=()=>{
+    const mine=++run.current;
     setLoading(true);
     const fetching=postId?api.entities.FeedPost.get(postId).then(p=>[p]).catch(()=>[]):api.entities.FeedPost.list('-created_date',50);
-    return fetching.then(setPosts).finally(()=>setLoading(false));
+    return fetching.then(rows=>{ if(run.current===mine){ setPosts(rows); setLoading(false); } });
   };
-  useEffect(()=>{setPosts(null);setLoading(true);(async()=>{if(!await api.auth.isAuthenticated())return api.auth.redirectToLogin(location.href);try{setUser(await api.auth.me());}catch{}load();})();},[postId]);
+  useEffect(()=>{setPosts(null);setLoading(true);const mine=++run.current;(async()=>{if(!await api.auth.isAuthenticated())return api.auth.redirectToLogin(location.href);try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}if(run.current===mine)load();})();},[postId]);
   const removed=id=>setPosts(ps=>ps?.filter(p=>p.id!==id));
   return <div className="page-shell py-7">
     <div className="mb-5"><span className="eyebrow dark">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>

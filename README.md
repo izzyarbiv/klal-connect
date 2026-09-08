@@ -131,6 +131,9 @@ Every status change by staff is recorded as a `moderation` activity event.
 - **Admin only**: platform settings (including the global Shabbos override), categories, the
   report queue, and marking an account verified (the way in for a member whose code never
   arrived).
+- **Personal, admins included**: saved listings, saved posts, reactions and answer votes are
+  readable only by the member who made them. Activity events (searches, calls, post views)
+  are readable by their author and admins.
 - **Creating rows**: a member's direct POST cannot choose a row's status, id, or creator; a
   connection request always starts pending, a listing or note always goes to review.
 - **Shabbos**: the server refuses writes during Shabbos and Yom Tov, so a stale tab or a
