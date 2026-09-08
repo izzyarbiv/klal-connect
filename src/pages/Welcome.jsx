@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import { safeReturnTo } from '@/lib/authReturnTo';
 import { PROFILE_TYPES } from '@/lib/affiliations';
 import InviteButton from '@/components/InviteButton';
+import { locateFromCity } from '@/hooks/useDetectLocation';
 import ResourceCard from '@/components/ResourceCard';
 
 // The ninety seconds after sign-up: one question per card, every card
@@ -18,6 +19,8 @@ export default function Welcome() {
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
   const [nearby, setNearby] = useState(null);
+  const [placed, setPlaced] = useState(null);
+  const [placing, setPlacing] = useState(false);
   const [members, setMembers] = useState(null);
   // Where "Done" goes: wherever sign-up was headed, else the feed — the
   // first thing a new member should see is the community, not the brochure.
@@ -48,6 +51,24 @@ export default function Welcome() {
   }, [step, nearby]);
 
   const save = async (patch) => { try { await api.auth.updateMe(patch); } catch { /* keep going; the profile page can fix it later */ } };
+
+  // The city they just typed is the best thing we know about where they are,
+  // so it seeds the Shabbos times too. Without this the app falls back to the
+  // address their connection resolves to, which put a Jerusalem member in
+  // Buffalo — and candle lighting for the wrong continent locks the app at the
+  // wrong hour.
+  const saveCity = async (value) => {
+    const typed = String(value || '').trim();
+    if (!typed) return;
+    setPlacing(true);
+    const found = await locateFromCity(typed);
+    setPlacing(false);
+    setPlaced(found);
+    await save(found
+      ? { home_city: found.city || typed, latitude: found.latitude, longitude: found.longitude, timezone: found.timezone, city: found.city, country_code: found.country_code, shabbos_mode_source: 'onboarding' }
+      : { home_city: typed });
+    return found;
+  };
   const next = async (patch) => { if (patch) await save(patch); setStep((s) => s + 1); };
   const finish = async () => { await save({ onboarded: true }); window.location.href = done; };
 
@@ -69,8 +90,9 @@ export default function Welcome() {
 
       {step === 1 && <>
         <div><span className="eyebrow dark">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first — the listings, people and asks near you.</p></div>
-        <label>City<div className="relative"><MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted"/><input className="field pl-9" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Lakewood, Brooklyn, Monsey…"/></div></label>
-        <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" onClick={() => next({ home_city: city })} className="primary">Continue<ArrowRight size={16}/></button></div>
+        <label>City<div className="relative"><MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted"/><input className="field pl-9" value={city} onChange={(e) => { setCity(e.target.value); setPlaced(null); }} onBlur={(e) => saveCity(e.target.value)} placeholder="Lakewood, Brooklyn, Monsey…"/></div></label>
+        {placed && placed.timezone && <p className="rounded-xl bg-brand-tint p-3 text-sm text-brand-body">Shabbos and Yom Tov times will be computed for <b>{placed.city}</b> — time zone {placed.timezone}. You can change this any time in Settings.</p>}
+        <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" disabled={placing} onClick={async () => { await saveCity(city); setStep((s) => s + 1); }} className="primary disabled:opacity-60">{placing ? 'Checking…' : 'Continue'}<ArrowRight size={16}/></button></div>
       </>}
 
       {step === 2 && <>

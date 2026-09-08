@@ -1,9 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/api/client';
-import { Search, LocateFixed } from 'lucide-react';
+import { Search, LocateFixed, AlertTriangle, MapPin } from 'lucide-react';
+import { locateFromCity } from '@/hooks/useDetectLocation';
 
 export default function LocationPicker({ user }) {
   const [lat, setLat] = useState(user.latitude ?? null),[lon, setLon] = useState(user.longitude ?? null),[tz, setTz] = useState(user.timezone || ''),[city, setCity] = useState(user.city || ''),[country, setCountry] = useState(user.country_code || ''),[candle, setCandle] = useState(user.candle_lighting_offset_minutes != null ? String(user.candle_lighting_offset_minutes) : 'auto'),[havdalah, setHavdalah] = useState(user.havdalah_method || '50'),[readOnly, setReadOnly] = useState(user.shabbos_full_lock !== true),[q, setQ] = useState(''),[results, setResults] = useState([]),[busy, setBusy] = useState(false),[saved, setSaved] = useState(false),[status, setStatus] = useState(null),[err, setErr] = useState('');
+
+  const [busyCity, setBusyCity] = useState(false);
+  // The city on the profile and the city the zmanim are computed for can
+  // drift apart — that is how a Jerusalem member ended up with Buffalo times.
+  const profileCity = (user.home_city || '').trim();
+  const drifted = !!profileCity && !!city && profileCity.toLowerCase() !== city.toLowerCase();
+  const suggestion = user.suggested_latitude != null ? {
+    latitude: user.suggested_latitude, longitude: user.suggested_longitude,
+    timezone: user.suggested_timezone, city: user.suggested_city, country_code: user.suggested_country_code,
+  } : null;
+  const useProfileCity = async () => {
+    setBusyCity(true); setErr('');
+    const found = await locateFromCity(profileCity);
+    setBusyCity(false);
+    if (!found) { setErr(`We could not find "${profileCity}" — search for it below instead.`); return; }
+    setLat(found.latitude); setLon(found.longitude); setTz(found.timezone); setCity(found.city); setCountry(found.country_code);
+  };
+  const useSuggestion = () => {
+    if (!suggestion) return;
+    setLat(suggestion.latitude); setLon(suggestion.longitude); setTz(suggestion.timezone || '');
+    setCity(suggestion.city || ''); setCountry(suggestion.country_code || '');
+  };
 
   const loadStatus = async () => {try {const r = await api.functions.invoke('getShabbosStatus', {});setStatus(r.data);} catch {}};
   useEffect(() => {loadStatus();}, []);
@@ -67,6 +90,9 @@ export default function LocationPicker({ user }) {
 
   return <section className="panel space-y-4 my-4">
     <div><h2 className="section-title">Shabbos & Yom Tov location</h2><p className="helper">Your zmanim are computed from your own location, so the app locks at your candle lighting and opens at your Havdalah — wherever you are.</p></div>
+    {drifted && <div className="flex flex-wrap items-center gap-3 rounded-xl bg-brand-gold-bg p-3 text-sm text-brand-gold-ink"><AlertTriangle size={16} className="shrink-0"/><span className="flex-1">Your profile says <b>{profileCity}</b> but your zmanim are set for <b>{city}</b>. Candle lighting is computed for {city}.</span><button type="button" onClick={useProfileCity} disabled={busyCity} className="secondary py-1.5 text-xs">{busyCity ? 'Looking up…' : `Use ${profileCity}`}</button></div>}
+    {!drifted && lat == null && profileCity && <div className="flex flex-wrap items-center gap-3 rounded-xl bg-brand-tint p-3 text-sm text-brand-body"><MapPin size={16} className="shrink-0 text-brand-teal"/><span className="flex-1">Your profile says <b>{profileCity}</b>. Set your zmanim to that city, or search below.</span><button type="button" onClick={useProfileCity} disabled={busyCity} className="secondary py-1.5 text-xs">{busyCity ? 'Looking up…' : `Use ${profileCity}`}</button></div>}
+    {lat == null && suggestion && <div className="flex flex-wrap items-center gap-3 rounded-xl bg-brand-tint p-3 text-sm text-brand-body"><MapPin size={16} className="shrink-0 text-brand-teal"/><span className="flex-1">Your connection looks like it is near <b>{suggestion.city || 'somewhere else'}</b>{suggestion.timezone ? ` (${suggestion.timezone})` : ''}. That is a guess from your network, so nothing is set until you confirm it.</span><button type="button" onClick={useSuggestion} className="secondary py-1.5 text-xs">Use it</button></div>}
     {status && <div className="rounded-xl bg-brand-tint p-4 text-sm">
       <p className="font-semibold text-brand-ink">{status.cityLabel || 'Unknown city'}{status.isInIsrael ? ' · Israel' : ' · Diaspora'}</p>
       <p className="text-brand-body">Candle lighting: <b>{fmt(status.startsAt)}</b></p>
@@ -85,6 +111,7 @@ export default function LocationPicker({ user }) {
       <label>Havdalah method<select className="field" value={havdalah} onChange={(e) => setHavdalah(e.target.value)}><option value="42">42 min</option><option value="50">50 min</option><option value="72">72 min</option><option value="tzeis_8_5">Tzeis 8.5°</option></select></label>
       <label>Shabbos mode<select className="field" value={readOnly ? 'read' : 'lock'} onChange={(e) => setReadOnly(e.target.value === 'read')}><option value="read">Read-only (default) — browse, but nothing can be posted</option><option value="lock">Full lock — the app closes entirely</option></select></label>
     </div>
+    {lat != null && lon != null && <p className="rounded-xl bg-brand-tint p-3 text-sm text-brand-body">Times will be computed for <b>{city || 'this location'}</b>{country ? `, ${country}` : ''} — {tz ? <>time zone <b>{tz}</b></> : <span className="font-semibold text-brand-error">no time zone yet</span>}{country === 'IL' ? ', using Israel (one-day) Yom Tov' : ''}. {(() => { try { return `Local time there is now ${new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', weekday: 'short' }).format(new Date())}.`; } catch { return ''; } })()}</p>}
     {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
     <div className="flex items-center gap-3"><button onClick={save} className="primary">Save location</button>{saved && <span className="text-sm font-semibold text-brand-teal">Saved</span>}</div>
   </section>;
