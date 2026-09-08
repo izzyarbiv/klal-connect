@@ -1,0 +1,184 @@
+// End-to-end checks of the API's access rules, against the in-memory store.
+//
+// Boots the Express app in this process on an ephemeral port and drives it
+// the way the client does. Every rule in README.md's "Access rules" that has
+// bitten once is pinned here: the guest mask, the login verification gate,
+// reactions, recipient-only patches, safe creates, personal rows, and the
+// read-time shaping of rows. Run with `npm test`.
+process.env.KC_DEMO_MODE = '1';
+process.env.KC_STORE = 'memory';
+process.env.KC_GUEST_READONLY = '1';
+process.env.KC_EMAIL_DELIVERY = 'dev';
+delete process.env.NODE_ENV;
+
+const { default: app } = await import('./app.js');
+const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+const API = `http://127.0.0.1:${server.address().port}/api`;
+
+let fails = 0;
+const ok = (cond, label, extra = '') => { console.log(`  ${cond ? 'ok  ' : 'FAIL'} ${label}${!cond && extra ? ' — ' + extra : ''}`); if (!cond) fails++; };
+async function call(method, path, { body, token } = {}) {
+  const res = await fetch(API + path, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  let data = null; try { data = await res.json(); } catch { /* empty body */ }
+  return { status: res.status, data };
+}
+// Quiet: the app logs verification codes and the seed; the test output is the assertions.
+const log = console.log; console.log = (...a) => { if (typeof a[0] === 'string' && /^\s*(ok {2}|FAIL)/.test(a[0])) log(...a); };
+console.warn = () => {};
+
+// ---- guest masking ------------------------------------------------------
+const demo = await call('POST', '/auth/demo-session');
+const guest = demo.data.access_token;
+ok(demo.data.user.guest === true && demo.data.user.full_name === 'Guest', 'guest session is masked', JSON.stringify(demo.data.user));
+// Admin writes a "leak" onto the guest row, the way it happened in production.
+const admin = (await call('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data.access_token;
+const guestId = demo.data.user.id;
+const leak = await call('PUT', `/users/${guestId}`, { token: admin, body: { full_name: 'Eli Epstein', phone: '555-0100', headline: 'Real person', bio: 'private', banner_url: 'https://x/y.png' } });
+ok(leak.status === 200 && leak.data.full_name === 'Eli Epstein', 'admin can write the guest row (to scrub it)');
+const me = await call('GET', '/auth/me', { token: guest });
+ok(me.data.full_name === 'Guest' && !me.data.phone && !me.data.bio && !me.data.banner_url, 'guest /auth/me hides whatever is on the row', JSON.stringify(me.data));
+const members = await call('GET', '/users', { token: guest });
+ok(!members.data.some((u) => u.id === guestId), 'guest absent from members list');
+ok(members.data.every((u) => u.phone === undefined), 'members list carries no phone numbers');
+const prof = await call('GET', `/users/${guestId}`, { token: guest });
+ok(prof.status === 404, 'guest profile route is 404 for non-admins', String(prof.status));
+const adminView = await call('GET', `/users/${guestId}`, { token: admin });
+ok(adminView.status === 200 && adminView.data.full_name === 'Eli Epstein', 'admin still sees the raw row');
+const edit = await call('PUT', '/auth/me', { token: guest, body: { full_name: 'Hacker' } });
+ok(edit.status === 403, 'guest cannot edit its profile', JSON.stringify(edit.data));
+
+// ---- registration + login verification gate -----------------------------
+const email = `t${Date.now()}@example.com`;
+const reg = await call('POST', '/auth/register', { body: { email, password: 'password123' } });
+ok(reg.status === 201 && reg.data.otp_sent === true && !reg.data.access_token, 'register sends a code and no session', JSON.stringify(reg.data));
+const gated = await call('POST', '/auth/login', { body: { email, password: 'password123' } });
+ok(gated.status === 403 && gated.data.verification_required === true && gated.data.dev_code, 'login before verifying is gated with a new code', JSON.stringify(gated.data));
+const bad = await call('POST', '/auth/verify-otp', { body: { email, otpCode: '000000' } });
+ok(bad.status === 400, 'wrong code rejected');
+const ver = await call('POST', '/auth/verify-otp', { body: { email, otpCode: gated.data.dev_code } });
+ok(ver.status === 200 && ver.data.access_token, 'right code signs in');
+const login2 = await call('POST', '/auth/login', { body: { email, password: 'password123' } });
+ok(login2.status === 200 && login2.data.access_token, 'login works once verified');
+const userA = login2.data.access_token, idA = login2.data.user.id;
+
+// ---- reactions ------------------------------------------------------------
+await call('PUT', '/auth/me', { token: userA, body: { full_name: 'Tester A' } });
+const post = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'hello', post_type: 'update' } })).data.post;
+ok(post.post_type === 'post', 'update is stored as post', post.post_type);
+const emailB = `b${Date.now()}@example.com`;
+const regB = await call('POST', '/auth/register', { body: { email: emailB, password: 'password123' } });
+const verB = await call('POST', '/auth/verify-otp', { body: { email: emailB, otpCode: regB.data.dev_code } });
+const userB = verB.data.access_token, idB = verB.data.user.id;
+await call('PUT', '/auth/me', { token: userB, body: { full_name: 'Tester B' } });
+let r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id, reaction: 'mazel_tov' } });
+ok(r.data.liked && r.data.reaction === 'mazel_tov' && r.data.like_count === 1 && r.data.reaction_counts.mazel_tov === 1, 'react mazel tov', JSON.stringify(r.data));
+r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id, reaction: 'like' } });
+ok(r.data.liked && r.data.reaction === 'like' && r.data.like_count === 1 && !r.data.reaction_counts.mazel_tov && r.data.reaction_counts.like === 1, 'change to like keeps count at 1', JSON.stringify(r.data));
+r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id } });
+ok(!r.data.liked && r.data.like_count === 0, 'plain toggle removes it', JSON.stringify(r.data));
+r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id, reaction: 'bogus' } });
+ok(r.status === 400, 'unknown reaction refused');
+const notes = await call('GET', '/entities/Notification', { token: userA });
+ok(notes.data.filter((n) => n.type === 'like').length === 1, 'author notified once, not on every change', String(notes.data.filter((n) => n.type === 'like').length));
+r = await call('POST', '/functions/toggleLike', { token: guest, body: { post_id: post.id } });
+ok(r.status === 403 && r.data.guest, 'guest cannot react');
+
+// ---- messages: read receipt + reaction -----------------------------------
+const emailC0 = `c0${Date.now()}@example.com`;
+const regC0 = await call('POST', '/auth/register', { body: { email: emailC0, password: 'password123' } });
+const userC0 = (await call('POST', '/auth/verify-otp', { body: { email: emailC0, otpCode: regC0.data.dev_code } })).data.access_token;
+const conn = (await call('POST', '/entities/Connection', { token: userA, body: { requester_id: idA, recipient_id: idB, status: 'pending' } })).data;
+let acc = await call('PUT', `/entities/Connection/${conn.id}`, { token: userC0, body: { status: 'accepted' } });
+ok(acc.status === 403, 'a third party cannot accept someone else\'s request', String(acc.status));
+acc = await call('PUT', `/entities/Connection/${conn.id}`, { token: userB, body: { status: 'accepted', requester_id: 'spoof' } });
+ok(acc.status === 200 && acc.data.status === 'accepted' && acc.data.requester_id === idA, 'recipient accepts; other fields untouched', JSON.stringify(acc.data));
+acc = await call('PUT', `/entities/Connection/${conn.id}`, { token: userB, body: { status: 'blocked' } });
+ok(acc.status === 403, 'recipient cannot set an arbitrary status', String(acc.status));
+const sent = await call('POST', '/functions/sendMessage', { token: userA, body: { recipient_id: idB, body: 'hi B' } });
+const msg = sent.data?.message;
+ok(!!msg?.id, 'message sent', JSON.stringify(sent.data));
+let rr = await call('PUT', `/entities/Message/${msg.id}`, { token: userB, body: { read: true, body: 'tampered' } });
+ok(rr.status === 200 && rr.data.read === true && rr.data.body === 'hi B', 'recipient marks read; body untouched', JSON.stringify(rr.data));
+rr = await call('PUT', `/entities/Message/${msg.id}`, { token: userA, body: { body: 'edited' } });
+ok(rr.status === 403, 'sender cannot edit a message', String(rr.status));
+const emailC = `c${Date.now()}@example.com`;
+const regC = await call('POST', '/auth/register', { body: { email: emailC, password: 'password123' } });
+const userC = (await call('POST', '/auth/verify-otp', { body: { email: emailC, otpCode: regC.data.dev_code } })).data.access_token;
+rr = await call('PUT', `/entities/Message/${msg.id}`, { token: userC, body: { read: true } });
+ok(rr.status === 403, 'a stranger cannot touch the message', String(rr.status));
+let mr = await call('POST', '/functions/reactToMessage', { token: userB, body: { message_id: msg.id, reaction: 'thanks' } });
+ok(mr.status === 200 && mr.data.message.reactions[idB] === 'thanks', 'recipient reacts to a message', JSON.stringify(mr.data));
+mr = await call('POST', '/functions/reactToMessage', { token: userA, body: { message_id: msg.id, reaction: 'love' } });
+ok(mr.status === 200 && mr.data.message.reactions[idA] === 'love' && mr.data.message.reactions[idB] === 'thanks', 'sender reacts too; both kept');
+mr = await call('POST', '/functions/reactToMessage', { token: userB, body: { message_id: msg.id, reaction: 'thanks' } });
+ok(mr.status === 200 && !mr.data.message.reactions[idB], 'same reaction again removes it');
+mr = await call('POST', '/functions/reactToMessage', { token: userC, body: { message_id: msg.id, reaction: 'like' } });
+ok(mr.status === 403, 'stranger cannot react to a message', String(mr.status));
+
+
+// ---- second review round ------------------------------------------------
+// Forged creates
+let forged = await call('POST', '/entities/Connection', { token: userC, body: { requester_id: 'someone-else', recipient_id: idA, status: 'accepted', created_by_id: idB, id: 'chosen-id' } });
+ok(forged.status === 201 && forged.data.status === 'pending' && forged.data.requester_id !== 'someone-else' && forged.data.created_by_id !== idB && forged.data.id !== 'chosen-id', 'connection create: status pinned to pending, creator and id not forgeable', JSON.stringify(forged.data));
+forged = await call('POST', '/entities/Connection', { token: userC, body: { recipient_id: guestId } });
+ok(forged.status === 400, 'no connection requests to the guest', String(forged.status));
+forged = await call('POST', '/entities/Provider', { token: userC, body: { name: 'Sneaky', category: 'x', status: 'published', verified: true } });
+ok(forged.status === 201 && forged.data.status === 'pending' && !forged.data.verified, 'direct listing create goes to review, unverified', JSON.stringify(forged.data));
+forged = await call('POST', '/entities/Category', { token: userC, body: { name: 'Junk' } });
+ok(forged.status === 403, 'members cannot create categories', String(forged.status));
+// view_count only for the author
+const listA = await call('GET', '/entities/FeedPost', { token: userA });
+const listB = await call('GET', '/entities/FeedPost', { token: userB });
+const pa = listA.data.find((p) => p.id === post.id), pb = listB.data.find((p) => p.id === post.id);
+ok(pa && 'view_count' in pa, 'author sees view_count');
+ok(pb && !('view_count' in pb), 'others do not see view_count', JSON.stringify(Object.keys(pb || {})));
+const one = await call('GET', `/entities/FeedPost/${post.id}`, { token: userB });
+ok(!('view_count' in (one.data || {})), 'single-row read also drops view_count');
+const rv = await call('POST', '/functions/recordPostView', { token: userB, body: { postId: post.id } });
+ok(rv.status === 200 && rv.data.count === undefined, 'recordPostView returns no count', JSON.stringify(rv.data));
+// Rows the guest wrote earlier read as Guest
+const tainted = await call('POST', '/entities/FeedPost', { token: admin, body: { body: 'old guest post', post_type: 'post', author_name: 'Eli Epstein', author_headline: 'Real headline', author_avatar_url: 'https://x/e.png', created_by: 'guest@klal.app', created_by_id: guestId } });
+ok(tainted.status === 201, 'admin planted a guest-authored row for the test');
+const readBack = (await call('GET', `/entities/FeedPost/${tainted.data.id}`, { token: userB })).data;
+ok(readBack.author_name === 'Guest' && readBack.author_headline !== 'Real headline' && !readBack.author_avatar_url, 'guest-authored post reads as Guest', JSON.stringify({ n: readBack.author_name, h: readBack.author_headline }));
+const listG = (await call('GET', '/entities/FeedPost', { token: guest })).data.find((p) => p.id === tainted.data.id);
+ok(listG.author_name === 'Guest', 'also in the list, also for the guest itself');
+// guest reads no private rows; nobody can message the guest
+const gm = await call('GET', '/entities/Message', { token: guest });
+ok(gm.status === 200 && gm.data.length === 0, 'guest reads no messages');
+const gn = await call('GET', '/entities/Notification', { token: guest });
+ok(gn.status === 200 && gn.data.length === 0, 'guest reads no notifications');
+const toGuest = await call('POST', '/functions/sendMessage', { token: admin, body: { recipient_id: guestId, body: 'hi guest' } });
+ok(toGuest.status === 400, 'nobody can message the guest', JSON.stringify(toGuest.data));
+// reactions: prototype keys refused, notification dedupe
+r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id, reaction: 'constructor' } });
+ok(r.status === 400, 'prototype-key reaction refused', String(r.status));
+r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id, reaction: 'like' } });
+r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id, reaction: 'like' } });
+r = await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: post.id, reaction: 'love' } });
+const notes2 = await call('GET', '/entities/Notification', { token: userA });
+ok(notes2.data.filter((n) => n.type === 'like' && n.target_id === post.id).length === 1, 'like → unlike → love still one notification', String(notes2.data.filter((n) => n.type === 'like').length));
+// admin can mark verified
+const emailD = `d${Date.now()}@example.com`;
+await call('POST', '/auth/register', { body: { email: emailD, password: 'password123' } });
+const allUsers = (await call('GET', '/users', { token: admin })).data;
+const dRow = allUsers.find((u) => u.email === emailD);
+ok(dRow && dRow.verified === false, 'fresh registration is unverified while mail is on');
+const mark = await call('PUT', `/users/${dRow.id}`, { token: admin, body: { verified: true } });
+ok(mark.status === 200 && mark.data.verified === true, 'admin marks verified');
+const dLogin = await call('POST', '/auth/login', { body: { email: emailD, password: 'password123' } });
+ok(dLogin.status === 200 && dLogin.data.access_token, 'and that account logs straight in');
+
+
+// guest's seeded connections are invisible to members (the seed connects the guest to everyone)
+const connsAsMember = (await call('GET', '/entities/Connection', { token: userB })).data;
+ok(connsAsMember.every((c) => c.requester_id !== guestId && c.recipient_id !== guestId) && connsAsMember.length > 0, 'members never see connections involving the guest', String(connsAsMember.length));
+const connsAsAdmin = (await call('GET', '/entities/Connection', { token: admin })).data;
+ok(connsAsAdmin.length > 0 && connsAsAdmin.every((c) => c.requester_id !== guestId && c.recipient_id !== guestId), 'admin does not see the seeded guest connections either');
+
+
+
+console.log = log;
+server.close();
+console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');
+process.exit(fails ? 1 : 0);
