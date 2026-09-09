@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import UpdatePrompt from '@/components/UpdatePrompt';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import InstallPrompt from '@/components/InstallPrompt';
 import AppLayout from '@/components/AppLayout';
 import Home from '@/pages/Home';
@@ -100,7 +101,11 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
-          <AuthenticatedApp />
+          {/* Inside the Router so the recovery screen keeps the header and
+              the person can navigate away instead of staring at a blank page. */}
+          <ErrorBoundary>
+            <AuthenticatedApp />
+          </ErrorBoundary>
           {/* Inside the Router: the install prompt has to know which route is
               showing, because it must never cover a sign-up form. */}
           <InstallPrompt />

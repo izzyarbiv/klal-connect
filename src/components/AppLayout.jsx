@@ -8,6 +8,7 @@ import ShabbosMode from '@/components/ShabbosMode';
 import TravelWarningBanner from '@/components/TravelWarningBanner';
 import { useDetectLocation } from '@/hooks/useDetectLocation';
 import AccountRequiredModal from '@/components/AccountRequiredModal';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { accountLinks } from '@/components/GuestPrompt';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -44,7 +45,10 @@ export default function AppLayout() {
     <ShabbosMode/>
     <TravelWarningBanner/>
     <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}<HeaderAccount/></nav><SettingsGear/><ThemeToggle/></div></div></header>
-    <main><Outlet/></main>
+    {/* A page that throws should not take the header and the tab bar with it:
+        the person needs a way to get somewhere else. The outer boundary in
+        App.jsx still catches anything that breaks the layout itself. */}
+    <main><ErrorBoundary><Outlet/></ErrorBoundary></main>
     <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-7 border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{links.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex flex-col items-center gap-1 text-[10px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={19}/><span>{n}</span></NavLink>)}<MobileNotificationBell/></nav>
   </div>;
 }
