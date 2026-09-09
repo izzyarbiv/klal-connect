@@ -25,14 +25,14 @@ export default function Feed(){
   };
   useEffect(()=>{setPosts(null);setLoading(true);const mine=++run.current;(async()=>{if(!await api.auth.isAuthenticated())return api.auth.redirectToLogin(location.href);try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}if(run.current===mine)load();})();},[postId]);
   const removed=id=>setPosts(ps=>ps?.filter(p=>p.id!==id));
-  return <div className="page-shell py-7">
-    <div className="mb-5"><span className="eyebrow dark">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>
+  return <div className="page-shell py-4 md:py-7">
+    <div className="mb-3 md:mb-5"><span className="eyebrow dark">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper hidden sm:block">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="mx-auto w-full max-w-2xl space-y-5">
+      <div className="mx-auto w-full max-w-2xl space-y-3 md:space-y-5">
         <FeedComposer onPosted={()=>postId?setParams({}):load()} user={user}/>
         {postId
           ?<div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-brand-muted">Showing one post</span><Link to="/feed" className="font-semibold text-brand-teal hover:underline">Show all posts</Link></div>
-          :<div className="flex flex-wrap gap-1.5">{FEED_FILTERS.map(f=><button key={f.id} type="button" onClick={()=>setFilter(f.id)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${filter===f.id?'bg-brand-navy text-white':'bg-brand-surface text-brand-body ring-1 ring-brand-line hover:text-brand-ink'}`}>{f.label}</button>)}</div>}
+          :<div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">{FEED_FILTERS.map(f=><button key={f.id} type="button" onClick={()=>setFilter(f.id)} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${filter===f.id?'bg-brand-navy text-white':'bg-brand-surface text-brand-body ring-1 ring-brand-line hover:text-brand-ink'}`}>{f.label}</button>)}</div>}
         {loading&&<div className="loading">Loading feed…</div>}
         {!loading&&posts?.length===0&&<div className="empty"><p>{postId?'That post is no longer available.':'Be the first to post to the Klal feed.'}</p>{postId&&<Link to="/feed" className="text-sm font-semibold text-brand-teal hover:underline">Show all posts</Link>}</div>}
         {!loading&&posts?.length>0&&visible?.length===0&&<div className="empty"><p>{filter==='unanswered'?'Every ask has an answer. Nice work, klal.':'Nothing here yet — try another filter.'}</p></div>}
