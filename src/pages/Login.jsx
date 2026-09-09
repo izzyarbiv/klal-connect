@@ -4,8 +4,9 @@ import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
+import { LogIn, Mail, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import PasswordInput from "@/components/PasswordInput";
 import VerifyEmail from "@/components/VerifyEmail";
 import GoogleButton from "@/components/GoogleButton";
 import { safeReturnTo } from "@/lib/authReturnTo";
@@ -32,10 +33,20 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await api.auth.loginViaEmailPassword(email, password);
+      await api.auth.loginViaEmailPassword(email.trim(), password);
       window.location.href = returnTo;
     } catch (err) {
-      if (err.data?.verification_required) { setVerify({ email, devCode: err.data.dev_code }); return; }
+      if (err.data?.verification_required) { setVerify({ email: email.trim(), devCode: err.data.dev_code }); return; }
+      // A password copied out of a message often carries a space on one end.
+      // Only retried after the real attempt failed, so a password that
+      // genuinely ends in a space still works.
+      if (err.status === 401 && password !== password.trim() && password.trim()) {
+        try {
+          await api.auth.loginViaEmailPassword(email.trim(), password.trim());
+          window.location.href = returnTo;
+          return;
+        } catch { /* fall through to the message below */ }
+      }
       setError(err.message || "Invalid email or password");
     } finally {
       setLoading(false);
@@ -105,19 +116,15 @@ export default function Login() {
               Forgot password?
             </Link>
           </div>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="pl-10 h-12"
-              required
-            />
-          </div>
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            withIcon
+            required
+          />
         </div>
         <Button type="submit" className="w-full h-12 font-medium" disabled={loading}>
           {loading ? (
