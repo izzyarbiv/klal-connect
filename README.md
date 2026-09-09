@@ -249,6 +249,24 @@ runs `scripts/emit-shell.mjs` after Vite and writes `server/shell.generated.js`
 (gitignored). Without it the SEO routes stand down and every path falls back to
 the static shell, which is what happens in dev.
 
+## Headers, caching and CORS
+
+`vercel.json` sets them for every response. Hashed build assets are immutable for
+a year; `index.html` is never cached, so a deploy is live at once. Every route
+carries `nosniff`, `X-Frame-Options: DENY`, a strict referrer policy and a
+permissions policy that keeps everything but geolocation (needed for zmanim)
+switched off. The Content-Security-Policy ships as **report-only** on purpose:
+it lists exactly what the app uses — Google sign-in and Maps, Vercel Blob for
+uploads, Google Fonts, OpenStreetMap tiles, Nominatim — so you can watch the
+console for a week and then rename the header to enforce it.
+
+The API answers this domain, `*.vercel.app` previews of this project, and
+localhost in development. `KC_ALLOWED_ORIGINS` adds more, comma separated. It
+used to answer any origin at all.
+
+An unknown URL now reaches the function and returns a real 404 with `noindex`,
+instead of the app rendering a page that does not exist with a 200.
+
 ## Updates
 
 New builds apply themselves. The service worker is registered in "prompt" mode

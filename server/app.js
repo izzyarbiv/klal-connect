@@ -32,7 +32,28 @@ const app = express();
 // X-Forwarded-For there, but trusting that header when we are NOT behind a
 // proxy would let any client spoof its own IP.
 if (process.env.KC_TRUST_PROXY === '1') app.set('trust proxy', true);
-app.use(cors());
+// The API answers this site, and localhost while developing. It used to
+// answer any origin at all, which let any page on the internet call it with a
+// visitor's token in hand.
+const ALLOWED_ORIGINS = [
+  'https://klalconnect.org',
+  'https://www.klalconnect.org',
+  ...(process.env.KC_ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean),
+];
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;                     // same-origin, curl, an app
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  // Vercel builds every deploy its own hostname; the preview of this project
+  // has to be able to call its own API.
+  return /^https:\/\/klal-connect-[a-z0-9-]+\.vercel\.app$/.test(origin);
+};
+app.use(cors({
+  origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+  allowedHeaders: ['authorization', 'content-type'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  maxAge: 86400,
+}));
 app.use(express.json({ limit: '2mb' }));
 // A demo instance seeds itself on first request; every cold start is empty.
 if (isDemoMode) {
