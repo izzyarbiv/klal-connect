@@ -249,6 +249,14 @@ runs `scripts/emit-shell.mjs` after Vite and writes `server/shell.generated.js`
 (gitignored). Without it the SEO routes stand down and every path falls back to
 the static shell, which is what happens in dev.
 
+## Updates
+
+New builds apply themselves. The service worker is registered in "prompt" mode
+so a fresh version never seizes a tab mid-action, but `src/components/AutoUpdate.jsx`
+does the accepting: it reloads at once when nothing is being typed, and otherwise
+waits for the next page change or for the tab to be left, so nobody loses a
+half-written post. Tabs left open check for a new build every ten minutes.
+
 ## Installing as an app
 
 The build produces a service worker and manifest, so the site is installable:

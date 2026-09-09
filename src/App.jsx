@@ -6,7 +6,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
-import UpdatePrompt from '@/components/UpdatePrompt';
+import AutoUpdate from '@/components/AutoUpdate';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import InstallPrompt from '@/components/InstallPrompt';
 import AppLayout from '@/components/AppLayout';
@@ -106,12 +106,14 @@ function App() {
           <ErrorBoundary>
             <AuthenticatedApp />
           </ErrorBoundary>
+          {/* Applies a new build on its own; it needs the route to know when
+              a reload cannot cost anyone their words. */}
+          <AutoUpdate />
           {/* Inside the Router: the install prompt has to know which route is
               showing, because it must never cover a sign-up form. */}
           <InstallPrompt />
         </Router>
         <Toaster />
-        <UpdatePrompt />
       </QueryClientProvider>
     </AuthProvider>
   )
