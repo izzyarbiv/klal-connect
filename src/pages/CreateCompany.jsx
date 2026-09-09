@@ -11,7 +11,7 @@ export default function CreateCompany(){
   const [data,setData]=useState(blank);
   const [logo,setLogo]=useState('');
   const [busy,setBusy]=useState(false);
-  const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState(''),[saving,setSaving]=useState(false);
   const navigate=useNavigate();
 
   const change=e=>setData({...data,[e.target.name]:e.target.value});
@@ -23,11 +23,18 @@ export default function CreateCompany(){
   };
   const submit=async e=>{
     e.preventDefault();
+    if(saving) return;
     if(!(await api.auth.requireAccount())) return;
     setSaving(true);
-    const slug=await uniqueSlugFor(api.entities.Company,data.name);
-    const c=await api.entities.Company.create({...data,slug,logo_url:logo,status:'published'});
-    navigate(`/company/${c.slug||c.id}`);
+    try{
+      const slug=await uniqueSlugFor(api.entities.Company,data.name);
+      const c=await api.entities.Company.create({...data,slug,logo_url:logo,status:'published'});
+      navigate(`/company/${c.slug||c.id}`);
+    }catch(ex){
+      // Without this the button stayed disabled and the page looked frozen.
+      setErr(ex.message||'Could not create the page. Please try again.');
+      setSaving(false);
+    }
   };
 
   return <div className="page-shell max-w-2xl py-9">
@@ -62,7 +69,8 @@ export default function CreateCompany(){
           <Field label="Founded" name="founded" type="date" value={data.founded} onChange={change}/>
         </div>
       </section>
-      <button className="primary" disabled={saving}>{saving ? 'Creating…' : 'Create company page'}</button>
+      {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
+        <button className="primary" disabled={saving}>{saving ? 'Creating…' : 'Create company page'}</button>
     </form>
   </div>;
 }
