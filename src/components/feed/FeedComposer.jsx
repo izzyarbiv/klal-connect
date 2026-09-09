@@ -33,10 +33,13 @@ export default function FeedComposer({ onPosted, user }) {
   // On a phone the composer stays a single line until it is tapped. Expanded,
   // it was taller than a third of the screen and the first post never
   // appeared — and most visits to a feed are to read it, not to write.
-  if(!open) return <button type="button" onClick={()=>setOpen(true)} className="flex w-full items-center gap-3 rounded-3xl bg-brand-surface p-3 text-left shadow-sm ring-1 ring-brand-line sm:hidden">
+  // min-w-0 and truncate are load-bearing: a flex child will not shrink below
+  // its text, so without them this button stays as wide as the placeholder and
+  // stretches the whole page past the edge of the screen.
+  if(!open) return <button type="button" onClick={()=>setOpen(true)} className="flex w-full min-w-0 items-center gap-3 rounded-3xl bg-brand-surface p-3 text-left shadow-sm ring-1 ring-brand-line sm:hidden">
     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-tint text-xs font-bold text-brand-teal">{(user?.full_name||'You').split(' ').map(x=>x[0]).slice(0,2).join('')}</span>
-    <span className="flex-1 text-sm text-brand-muted">Share something with the klal…</span>
-    <span className="rounded-full bg-brand-navy p-2 text-white"><Send size={15}/></span>
+    <span className="min-w-0 flex-1 truncate text-sm text-brand-muted">Share something with the klal…</span>
+    <span className="shrink-0 rounded-full bg-brand-navy p-2 text-white"><Send size={15}/></span>
   </button>;
 
   return <form onSubmit={submit} className="panel space-y-3">

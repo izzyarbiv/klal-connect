@@ -27,8 +27,12 @@ export default function Feed(){
   const removed=id=>setPosts(ps=>ps?.filter(p=>p.id!==id));
   return <div className="page-shell py-4 md:py-7">
     <div className="mb-3 md:mb-5"><span className="eyebrow dark">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper hidden sm:block">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="mx-auto w-full max-w-2xl space-y-3 md:space-y-5">
+    {/* grid-cols-[minmax(0,1fr)] is load-bearing on a phone: a grid item's
+        default min-width is auto, so the single column grew to fit the widest
+        thing inside it — the filter chips — and dragged the whole page past
+        the edge of the screen. */}
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="mx-auto w-full min-w-0 max-w-2xl space-y-3 md:space-y-5">
         <FeedComposer onPosted={()=>postId?setParams({}):load()} user={user}/>
         {postId
           ?<div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-brand-muted">Showing one post</span><Link to="/feed" className="font-semibold text-brand-teal hover:underline">Show all posts</Link></div>
