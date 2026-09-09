@@ -10,7 +10,7 @@ import { Download, Share, X } from 'lucide-react';
 // Never over a form someone is trying to submit. A banner across the bottom of
 // a laptop screen covered the "Create account" button, and being asked to
 // install an app you have not signed up for yet is the wrong moment anyway.
-const NO_PROMPT = ['/login', '/register', '/welcome', '/join', '/forgot-password', '/reset-password', '/add'];
+const NO_PROMPT = ['/login', '/register', '/welcome', '/join', '/forgot-password', '/reset-password', '/add', '/profile', '/settings', '/provider', '/gemach', '/company', '/messages', '/admin'];
 
 const VISITS_KEY = 'kc_visits';
 const SNOOZE_KEY = 'kc_install_snoozed';
@@ -55,7 +55,7 @@ export default function InstallPrompt() {
 
   const blocked = NO_PROMPT.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (!show || blocked) return null;
-  return <div className="fixed inset-x-3 bottom-20 z-[105] mx-auto max-w-md rounded-2xl bg-brand-navy p-4 text-sm text-white shadow-lg md:inset-x-auto md:right-4 md:bottom-4 md:mx-0 md:w-[22rem]">
+  return <div className="fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))] left-[max(.75rem,env(safe-area-inset-left))] right-[max(.75rem,env(safe-area-inset-right))] z-[105] mx-auto max-w-md rounded-2xl bg-brand-navy p-4 text-sm text-white shadow-lg md:inset-x-auto md:right-4 md:bottom-4 md:mx-0 md:w-[22rem]">
     <div className="flex items-start gap-3">
       <Download size={18} className="mt-0.5 shrink-0 text-[#f3c66a]" />
       <div className="flex-1">

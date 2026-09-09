@@ -62,9 +62,13 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   return <section id="intro" className="scroll-mt-24 overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
     <div className="relative">
       <ProfileBanner url={user.banner_url} className="rounded-t-3xl"/>
+      {/* Changing the cover lives here, where the cover is. Removing it does
+          not: an X floating on an image reads as "close this toolbar", and
+          pressing it used to delete the picture on the spot — which is what
+          happened to the first person who tried it. Remove is in Edit intro,
+          and asks first. */}
       {editable && <div className="absolute right-3 top-3 flex gap-2">
         <label className={overlay}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Camera size={14}/>}{user.banner_url ? 'Change cover' : 'Add a cover'}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>
-        {user.banner_url && <button type="button" disabled={busy} onClick={() => write({ banner_url: '' }, 'Could not remove the cover')} className={overlay} aria-label="Remove cover"><X size={14}/></button>}
       </div>}
     </div>
     <div className="px-6 pb-6">
@@ -82,6 +86,14 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
         </div>
       </div>
 
+      {open && user.banner_url && <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-brand-tint p-3 text-sm text-brand-body">
+        <span className="flex-1">Cover photo</span>
+        <button type="button" disabled={busy} onClick={() => { if (window.confirm('Remove your cover photo? You will need the original file to put it back.')) write({ banner_url: '' }, 'Could not remove the cover'); }} className="secondary py-1.5 text-xs"><X size={14}/>Remove cover</button>
+      </div>}
+      {open && user.avatar_url && <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl bg-brand-tint p-3 text-sm text-brand-body">
+        <span className="flex-1">Profile photo</span>
+        <button type="button" disabled={busy} onClick={() => { if (window.confirm('Remove your profile photo? You will need the original file to put it back.')) write({ avatar_url: '' }, 'Could not remove the photo'); }} className="secondary py-1.5 text-xs"><X size={14}/>Remove photo</button>
+      </div>}
       {open && form
         ? <form onSubmit={submit} className="mt-4 space-y-4 rounded-2xl bg-brand-tint/60 p-4 ring-1 ring-brand-line">
           <div className="grid gap-4 sm:grid-cols-2">

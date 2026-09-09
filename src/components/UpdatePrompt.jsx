@@ -31,7 +31,7 @@ export default function UpdatePrompt() {
   if (!needsRefresh) return null;
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-[110] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-brand-navy px-4 py-3 text-sm text-white shadow-lg">
+    <div className="fixed bottom-[max(.75rem,env(safe-area-inset-bottom))] left-[max(.75rem,env(safe-area-inset-left))] right-[max(.75rem,env(safe-area-inset-right))] z-[110] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-brand-navy px-4 py-3 text-sm text-white shadow-lg">
       <RefreshCw size={16} className="shrink-0" />
       <span className="flex-1">A new version of Klal is ready.</span>
       <button
