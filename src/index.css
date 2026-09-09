@@ -175,6 +175,11 @@
   .view-button.active { @apply bg-brand-navy text-white; }
   .icon-button { @apply grid h-9 w-9 place-items-center rounded-lg text-brand-teal hover:bg-brand-tint; }
   .icon-button svg { @apply h-4 w-4; }
-  .admin-nav { @apply flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-semibold hover:bg-brand-surface; }
+  .admin-nav { @apply flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-semibold hover:bg-brand-surface;
+  /* On a phone the sidebar is a scrolling row of chips, so the buttons must
+     size to their own text rather than stretch. */
+  @apply w-auto justify-start gap-2 whitespace-nowrap lg:flex lg:w-full lg:justify-between;
+}
+  .admin-nav-active { @apply bg-brand-navy text-white; }
   .admin-nav.active { @apply bg-brand-navy text-white shadow-md; }
 }

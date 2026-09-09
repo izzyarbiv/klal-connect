@@ -20,14 +20,23 @@ function HeaderAccount() {
   if (!user || isGuest) {
     const links = accountLinks(window.location.pathname + window.location.search);
     return <>
-      <NavLink to={links.login} className="ml-2 rounded-full px-4 py-2 text-sm font-medium text-brand-ink hover:bg-brand-surface">Log in</NavLink>
-      <NavLink to={links.register} className="rounded-full bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:opacity-90">Sign up</NavLink>
+      <NavLink to={links.login} className="ml-2 hidden rounded-full px-4 py-2 text-sm font-medium text-brand-ink hover:bg-brand-surface md:inline-flex">Log in</NavLink>
+      <NavLink to={links.register} className="rounded-full bg-brand-teal px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 md:px-4 md:py-2">Sign up</NavLink>
     </>;
   }
   return <>
-    {(user.role === 'admin' || user.role === 'moderator') && <NavLink to="/admin" className="ml-2 p-2 text-brand-muted hover:text-brand-teal" aria-label="Admin"><ShieldCheck size={19}/></NavLink>}
-    <button type="button" onClick={() => logout()} className="ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-brand-muted hover:bg-brand-surface hover:text-brand-ink" aria-label="Log out"><LogOut size={16}/><span className="hidden lg:inline">Log out</span></button>
+    <button type="button" onClick={() => logout()} className="ml-1 hidden items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-brand-muted hover:bg-brand-surface hover:text-brand-ink md:inline-flex" aria-label="Log out"><LogOut size={16}/><span className="hidden lg:inline">Log out</span></button>
   </>;
+}
+
+// Staff get into the review queues from here, on any screen. This used to
+// live inside the desktop-only nav, which left an admin on a phone with no
+// way into /admin at all.
+function StaffLink() {
+  const { user, authChecked } = useAuth();
+  if (!authChecked || !user) return null;
+  if (user.role !== 'admin' && user.role !== 'moderator') return null;
+  return <NavLink to="/admin" className={({ isActive }) => `p-2 hover:text-brand-teal ${isActive ? 'text-brand-teal' : 'text-brand-muted'}`} aria-label="Admin" title="Admin"><ShieldCheck size={19}/></NavLink>;
 }
 
 // The settings gear sits outside the desktop-only nav: on a phone the bottom
@@ -44,7 +53,7 @@ export default function AppLayout() {
     <AccountRequiredModal/>
     <ShabbosMode/>
     <TravelWarningBanner/>
-    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}<HeaderAccount/></nav><SettingsGear/><ThemeToggle/></div></div></header>
+    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}</nav><HeaderAccount/><StaffLink/><SettingsGear/><ThemeToggle/></div></div></header>
     {/* A page that throws should not take the header and the tab bar with it:
         the person needs a way to get somewhere else. The outer boundary in
         App.jsx still catches anything that breaks the layout itself. */}
