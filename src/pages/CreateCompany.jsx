@@ -68,6 +68,7 @@ export default function CreateCompany(){
           <label>City<CityInput value={data.city||''} onChange={v=>setData(d=>({...d,city:v}))} onPick={p=>setData(d=>({...d,city:p.city,state:p.region||d.state}))}/></label>
           <label>State<StateSelect value={data.state||''} onChange={v=>setData(d=>({...d,state:v}))}/></label>
           <Field label="Founded" name="founded" type="date" value={data.founded} onChange={change}/>
+          <Field label="Payment link (optional)" name="payment_link_url" type="url" value={data.payment_link_url||''} onChange={change} placeholder="Stripe Payment Link, PayPal.me, Venmo…"/>
         </div>
       </section>
       {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}

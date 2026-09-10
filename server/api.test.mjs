@@ -177,6 +177,32 @@ const connsAsAdmin = (await call('GET', '/entities/Connection', { token: admin }
 ok(connsAsAdmin.length > 0 && connsAsAdmin.every((c) => c.requester_id !== guestId && c.recipient_id !== guestId), 'admin does not see the seeded guest connections either');
 
 
+// ---- payment links: an external doorway, never Klal-handled money ---------
+// A listing/company owner can paste a Stripe Payment Link, PayPal.me, Venmo
+// or Zelle URL; it must be a real http(s) link (never javascript:) and only
+// the owner or an admin can set it.
+const payEmail = `pay${Date.now()}@example.com`;
+const payReg = await call('POST', '/auth/register', { body: { email: payEmail, password: 'password123' } });
+const payVer = await call('POST', '/auth/verify-otp', { body: { email: payEmail, otpCode: payReg.data.dev_code } });
+const payTok = payVer.data.access_token;
+const payListing = await call('POST', '/functions/createListing', { token: payTok, body: { name: 'Pay Test Biz', category: 'Food', short_description: 'x' } });
+const payProviderId = payListing.data.provider.id;
+
+let payR = await call('POST', '/functions/updateListingPaymentLink', { token: payTok, body: { provider_id: payProviderId, payment_link_url: 'javascript:alert(1)' } });
+ok(payR.status === 400, 'a javascript: payment link is refused');
+payR = await call('POST', '/functions/updateListingPaymentLink', { token: payTok, body: { provider_id: payProviderId, payment_link_url: 'https://buy.stripe.com/test_abc' } });
+ok(payR.status === 200 && payR.data.provider.payment_link_url === 'https://buy.stripe.com/test_abc', 'a real payment link saves');
+payR = await call('POST', '/functions/updateListingPaymentLink', { token: userB, body: { provider_id: payProviderId, payment_link_url: 'https://venmo.com/u/someone' } });
+ok(payR.status === 403, 'a non-owner cannot set another listing\'s payment link');
+const payCompany = await call('POST', '/entities/Company', { token: payTok, body: { name: 'Pay Test Co', payment_link_url: 'javascript:x()' } });
+ok(payCompany.status === 400, 'creating a company with a javascript: payment link is refused');
+const payCompanyOk = await call('POST', '/entities/Company', { token: payTok, body: { name: 'Pay Test Co' } });
+const payCompanyPatch = await call('PUT', `/entities/Company/${payCompanyOk.data.id}`, { token: payTok, body: { payment_link_url: 'https://paypal.me/paytestco' } });
+ok(payCompanyPatch.status === 200 && payCompanyPatch.data.payment_link_url === 'https://paypal.me/paytestco', 'a company\'s payment link can be set through the generic PUT route');
+const payClick = await call('POST', '/entities/ActivityEvent', { token: payTok, body: { type: 'payment_link_click', provider_id: payProviderId } });
+ok(payClick.status === 201, 'a payment_link_click event is recorded');
+
+
 
 console.log = log;
 server.close();

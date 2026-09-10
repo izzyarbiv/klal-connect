@@ -10,8 +10,10 @@ export default function ManageListings({user}){
   const [changes,setChanges]=useState('');
   const [done,setDone]=useState(false);
   const [taglineFor,setTaglineFor]=useState({});
+  const [paymentLinkFor,setPaymentLinkFor]=useState({});
   const [savingId,setSavingId]=useState(null);
   const [savedId,setSavedId]=useState(null);
+  const [payErrFor,setPayErrFor]=useState({});
 
   useEffect(()=>{api.entities.Provider.filter({created_by_id:user.id}).then(setItems)},[user.id]);
 
@@ -30,6 +32,15 @@ export default function ManageListings({user}){
     }finally{ setSavingId(null); }
   };
 
+  const savePaymentLink=async(id)=>{
+    setSavingId(id); setPayErrFor({...payErrFor,[id]:''});
+    try{
+      const r=await api.functions.invoke('updateListingPaymentLink',{provider_id:id,payment_link_url:paymentLinkFor[id]||''});
+      if(r.status<400){ setItems(items.map(x=>x.id===id?r.data.provider:x)); setSavedId(id); setTimeout(()=>setSavedId(null),1500); }
+      else setPayErrFor({...payErrFor,[id]:r.data?.error||'Could not save that link.'});
+    }finally{ setSavingId(null); }
+  };
+
   return <section className="panel mt-6 space-y-5">
     <h2 className="section-title">Manage my listings</h2>
     {items.length===0
@@ -42,6 +53,12 @@ export default function ManageListings({user}){
               {(() => { const c = listingCompleteness(p); return <CompletenessRing percent={c.percent} next={c.next} label="Listing" onAction={() => { setSelected(p.id); setChanges((t) => t || `${c.next.action}: `); document.getElementById('listing-change-request')?.scrollIntoView({ behavior: 'smooth' }); }}/>; })()}
               <HeadlineEdit label="Tagline" value={taglineFor[p.id]!=null?taglineFor[p.id]:(p.tagline||'')} onChange={v=>setTaglineFor({...taglineFor,[p.id]:v})} helper="Appears under your listing name across the app."/>
               <button onClick={()=>saveTagline(p.id)} disabled={savingId===p.id} className="primary text-sm">{savingId===p.id?'Saving…':'Save tagline'}{savedId===p.id?' ✓':''}</button>
+              <label className="block text-sm font-medium text-brand-ink">Payment link
+                <input type="url" className="field" placeholder="https://buy.stripe.com/... or venmo.com/u/you" value={paymentLinkFor[p.id]!=null?paymentLinkFor[p.id]:(p.payment_link_url||'')} onChange={e=>setPaymentLinkFor({...paymentLinkFor,[p.id]:e.target.value})}/>
+                <span className="helper">A Stripe Payment Link, PayPal.me, Venmo or Zelle page. Shows a "Pay" button on your listing. Klal never touches the money.</span>
+              </label>
+              {payErrFor[p.id]&&<p className="text-sm font-semibold text-brand-error">{payErrFor[p.id]}</p>}
+              <button onClick={()=>savePaymentLink(p.id)} disabled={savingId===p.id} className="secondary text-sm">{savingId===p.id?'Saving…':'Save payment link'}{savedId===p.id?' ✓':''}</button>
             </div>
           ))}
         </div>

@@ -57,7 +57,21 @@ function listingInput(payload) {
     : [];
   // WhatsApp wants the number as digits with the country code, no plus.
   const whatsapp = rest.whatsapp ? String(rest.whatsapp).replace(/\D/g, '').replace(/^1?(\d{10})$/, '1$1') : '';
-  return { ...rest, badges, whatsapp };
+  const payment_link_url = safeExternalUrl(rest.payment_link_url);
+  return { ...rest, badges, whatsapp, payment_link_url };
+}
+
+// A link a visitor will be sent to — a Stripe Payment Link, PayPal.me,
+// Venmo or Zelle page. Validated as a real http(s) URL so it can never
+// become a javascript: URL or similar when rendered as an href.
+export function safeExternalUrl(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  let url;
+  try { url = new URL(value); } catch { fail('Enter a full link starting with https://'); }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') fail('The link must start with http:// or https://');
+  if (value.length > 500) fail('That link is too long.');
+  return url.toString();
 }
 
 const need = (value, message) => {
@@ -135,6 +149,22 @@ export const functions = {
       user
     );
     return { provider };
+  },
+
+  // A business's own Stripe Payment Link, PayPal.me, Venmo or Zelle page.
+  // Klal never touches the money — this only stores where to send someone
+  // who wants to pay. Self-service, like the tagline, because it carries no
+  // review risk: it is either a working link or it is not.
+  async updateListingPaymentLink({ provider_id, payment_link_url }, user) {
+    await assertWritable(user);
+    const provider = await store.get('Provider', need(provider_id, 'Missing listing.'));
+    if (!provider) fail('Listing not found.', 404);
+    if (provider.created_by_id !== user.id && user.role !== 'admin') {
+      fail('You can only edit listings you manage.', 403);
+    }
+    const url = safeExternalUrl(payment_link_url);
+    const updated = await store.update('Provider', provider_id, { payment_link_url: url });
+    return { provider: updated };
   },
 
   async updateListingTagline({ provider_id, tagline }, user) {

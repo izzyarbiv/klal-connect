@@ -20,8 +20,8 @@ export default function CompanyEditor({ company, onDone }){
   const save=async e=>{
     e.preventDefault();
     setSaving(true);
-    const {name,tagline,description,industry,website,email,phone,city,state,founded,size,logo_url}=data;
-    const updated=await api.entities.Company.update(company.id,{name,tagline,description,industry,website,email,phone,city,state,founded,size,logo_url});
+    const {name,tagline,description,industry,website,email,phone,city,state,founded,size,logo_url,payment_link_url}=data;
+    const updated=await api.entities.Company.update(company.id,{name,tagline,description,industry,website,email,phone,city,state,founded,size,logo_url,payment_link_url});
     onDone(updated);
   };
 
@@ -51,6 +51,7 @@ export default function CompanyEditor({ company, onDone }){
         <label>City<CityInput value={data.city||''} onChange={v=>setData(d=>({...d,city:v}))} onPick={p=>setData(d=>({...d,city:p.city,state:p.region||d.state}))}/></label>
         <label>State<StateSelect value={data.state||''} onChange={v=>setData(d=>({...d,state:v}))}/></label>
         <Field label="Founded" name="founded" type="date" value={data.founded?data.founded.slice(0,10):''} onChange={change}/>
+        <Field label="Payment link (optional)" name="payment_link_url" type="url" value={data.payment_link_url||''} onChange={change} placeholder="Stripe Payment Link, PayPal.me, Venmo…"/>
       </div>
     </section>
     <div className="flex gap-3">

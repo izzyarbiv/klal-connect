@@ -13,7 +13,7 @@ import {
   attachUser, requireAuth, requireAdmin,
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
-import { functions, publicFunctions } from './functions.js';
+import { functions, publicFunctions, safeExternalUrl } from './functions.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
@@ -152,7 +152,7 @@ const CLIENT_WRITABLE = new Set([
 // this list ActivityEvent was simply not writable and every search, listing
 // view and tap-to-call was silently refused: the directory had no idea what
 // people were looking for.
-const CLIENT_EVENTS = new Set(['search', 'profile_view', 'call', 'text', 'share', 'share_whatsapp', 'whatsapp']);
+const CLIENT_EVENTS = new Set(['search', 'profile_view', 'call', 'text', 'share', 'share_whatsapp', 'whatsapp', 'payment_link_click']);
 
 // Entities a moderator works: the review queues and what they moderate.
 // A moderator never sees messages, saves, or anyone's private notifications.
@@ -322,6 +322,13 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
     body = stripProtected(body);
     if (CREATE_STATUS[entity]) body.status = CREATE_STATUS[entity];
   }
+  // A link a visitor is sent to. Validated wherever it can be written, not
+  // only through the dedicated function, because Company goes straight
+  // through this generic route.
+  if ('payment_link_url' in body) {
+    try { body.payment_link_url = safeExternalUrl(body.payment_link_url); }
+    catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
+  }
   if (entity === 'Connection') {
     const recipient = body.recipient_id ? await users.byId(body.recipient_id) : null;
     if (!recipient || recipient.email === GUEST_EMAIL) return res.status(400).json({ error: 'That member cannot receive connection requests.' });
@@ -348,6 +355,10 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
     } else {
       patch = stripProtected(req.body);
     }
+  }
+  if (patch && 'payment_link_url' in patch) {
+    try { patch = { ...patch, payment_link_url: safeExternalUrl(patch.payment_link_url) }; }
+    catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
   const updated = await store.update(entity, id, patch);
   // Every status change by staff leaves a trace: who, what, from, to.

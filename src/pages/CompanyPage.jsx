@@ -5,6 +5,7 @@ import { Image } from '@/components/ui/image';
 import { ArrowLeft, MapPin, Globe, Mail, Phone, Building2, Pencil, Calendar } from 'lucide-react';
 import CompanyEditor from '@/components/CompanyEditor';
 import ShareButton, { WhatsAppShare } from '@/components/ShareButton';
+import PayButton from '@/components/PayButton';
 import PublicListingCTA from '@/components/PublicListingCTA';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import Headline from '@/components/Headline';
@@ -61,7 +62,8 @@ function CompanyView({company,isOwner,onEdit}){
           {company.founded && <span className="flex items-center gap-1.5"><Calendar size={14} className="text-brand-teal"/>Founded {new Date(company.founded).getFullYear()}</span>}
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        {company.payment_link_url && <PayButton url={company.payment_link_url} targetType="company" targetId={company.id} className="inline-flex items-center gap-2 rounded-xl bg-brand-gold px-4 py-2.5 text-sm font-bold text-brand-gold-ink hover:opacity-90"/>}
         <ShareButton title={company.name}/>
         <WhatsAppShare title={`${company.name} on Klal Connect`}/>
         {isOwner && <button onClick={onEdit} className="secondary"><Pencil size={16}/>Edit page</button>}
