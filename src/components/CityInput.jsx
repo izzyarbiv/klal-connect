@@ -100,7 +100,6 @@ export default function CityInput({
               >
                 <MapPin size={14} className="shrink-0 text-brand-teal" />
                 <span className="min-w-0 flex-1 truncate">{p.label || p.city}</span>
-                {p.timezone && <span className="shrink-0 text-xs text-brand-muted">{p.timezone.split('/').pop().replace(/_/g, ' ')}</span>}
               </button>
             </li>
           ))}

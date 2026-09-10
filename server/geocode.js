@@ -281,6 +281,8 @@ const fromPlace = (p) => ({
   latitude: p.latitude,
   longitude: p.longitude,
   city: p.city,
+  // The state or province, so picking a city can fill the state field too.
+  region: p.region || '',
   country_code: p.country_code,
   timezone: tzFor(p.latitude, p.longitude),
   label: placeLabel(p),
