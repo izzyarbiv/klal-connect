@@ -23,7 +23,7 @@ export default function Feed(){
     const fetching=postId?api.entities.FeedPost.get(postId).then(p=>[p]).catch(()=>[]):api.entities.FeedPost.list('-created_date',50);
     return fetching.then(rows=>{ if(run.current===mine){ setPosts(rows); setLoading(false); } });
   };
-  useEffect(()=>{setPosts(null);setLoading(true);const mine=++run.current;(async()=>{if(!await api.auth.isAuthenticated())return api.auth.redirectToLogin(location.href);try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}if(run.current===mine)load();})();},[postId]);
+  useEffect(()=>{setPosts(null);setLoading(true);const mine=++run.current;(async()=>{if(await api.auth.isAuthenticated()){try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}}if(run.current===mine)load();})();},[postId]);
   const removed=id=>setPosts(ps=>ps?.filter(p=>p.id!==id));
   return <div className="page-shell py-4 md:py-7">
     <div className="mb-3 md:mb-5"><span className="eyebrow dark">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper hidden sm:block">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>

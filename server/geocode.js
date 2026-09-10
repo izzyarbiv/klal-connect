@@ -15,10 +15,13 @@
 import tzLookup from 'tz-lookup';
 import { geoCache } from './db.js';
 
+import { findPlaces, nearestPlace, placeLabel, distanceKm } from './places.js';
+
 const PROVIDER = (process.env.KC_GEOCODER || 'nominatim').toLowerCase();
 const API_KEY = process.env.KC_GEOCODER_KEY || '';
 const CONTACT = process.env.KC_GEOCODER_CONTACT || 'admin@example.com';
 const USER_AGENT = process.env.KC_GEOCODER_UA || `Klal/1.0 (${CONTACT})`;
+const LOCATION_UNAVAILABLE = 'Location lookup is temporarily unavailable.';
 
 const REVERSE_TTL = 30 * 24 * 60 * 60 * 1000; // a place's name rarely changes
 const SEARCH_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -47,24 +50,14 @@ async function getJSON(url) {
       },
     });
     if (!res.ok) {
-      // OSM blocks traffic it cannot attribute to a registered application,
-      // including most datacenter IPs — a 403 here is not a transient fault and
-      // retrying will not help. Say what actually fixes it. (Spoofing a browser
-      // User-Agent would get a 200 and is exactly what the policy forbids.)
-      if (res.status === 403 && PROVIDER === 'nominatim') {
-        throw new GeoError(
-          'OpenStreetMap declined the request. Nominatim is not usable for production traffic — ' +
-          'set KC_GEOCODER (google, mapbox, geoapify or locationiq) and KC_GEOCODER_KEY.',
-          503
-        );
-      }
-      throw new GeoError(`Geocoder returned ${res.status}`, res.status === 429 ? 429 : 502);
+      console.warn('[geocode] upstream rejected request', { provider: PROVIDER, status: res.status });
+      throw new GeoError(LOCATION_UNAVAILABLE, res.status === 429 ? 429 : 503);
     }
     return await res.json();
   } catch (err) {
     if (err instanceof GeoError) throw err;
-    if (err.name === 'AbortError') throw new GeoError('The geocoding service timed out.', 504);
-    throw new GeoError('The geocoding service is unavailable.', 502);
+    console.warn('[geocode] upstream request failed', { provider: PROVIDER, reason: err.name || 'unknown' });
+    throw new GeoError(LOCATION_UNAVAILABLE, 503);
   } finally {
     clearTimeout(timer);
   }
@@ -126,7 +119,8 @@ function googleStatus(d) {
   const status = d?.status;
   if (status === 'OK' || status === 'ZERO_RESULTS') return;
   const detail = d?.error_message ? ` — ${d.error_message}` : '';
-  throw new GeoError(`Google Geocoding: ${status || 'no status'}${detail}`, status === 'REQUEST_DENIED' ? 500 : 502);
+  console.warn('[geocode] Google rejected response', { status, detail: d?.error_message || '' });
+  throw new GeoError(LOCATION_UNAVAILABLE, 503);
 }
 
 function googleComponents(result) {
@@ -267,14 +261,31 @@ const providers = {
   },
 };
 
-function activeProvider() {
+// Whether an external provider can actually be called. Nominatim counts as
+// unusable in production: it answers 403 for traffic it cannot attribute, so
+// treating it as available only produced errors.
+function providerUsable() {
   const provider = providers[PROVIDER];
-  if (!provider) throw new GeoError(`Unknown KC_GEOCODER "${PROVIDER}"`, 500);
-  if (PROVIDER !== 'nominatim' && !API_KEY) {
-    throw new GeoError(`KC_GEOCODER is "${PROVIDER}" but KC_GEOCODER_KEY is not set.`, 500);
-  }
-  return provider;
+  if (!provider) return false;
+  if (PROVIDER === 'nominatim') return process.env.NODE_ENV !== 'production';
+  return Boolean(API_KEY);
 }
+
+function activeProvider() {
+  if (!providerUsable()) throw new GeoError(LOCATION_UNAVAILABLE, 503);
+  return providers[PROVIDER];
+}
+
+// The curated list of communities, in the shape the rest of the app expects.
+const fromPlace = (p) => ({
+  latitude: p.latitude,
+  longitude: p.longitude,
+  city: p.city,
+  country_code: p.country_code,
+  timezone: tzFor(p.latitude, p.longitude),
+  label: placeLabel(p),
+  source: 'klal',
+});
 
 // ---- public API -------------------------------------------------------------
 
@@ -286,6 +297,21 @@ export async function reverseGeocode(lat, lon) {
   const longitude = Number(lon);
   if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
     throw new GeoError('Coordinates out of range.', 400);
+  }
+
+  // A community we already know is a better answer than a provider's, and it
+  // needs no key: "Lakewood, NJ" rather than whichever township the point
+  // technically falls in.
+  const known = nearestPlace(latitude, longitude);
+  if (known) return { ...fromPlace(known), latitude, longitude, timezone: tzFor(latitude, longitude) };
+  if (!providerUsable()) {
+    // No provider and nowhere we recognise — but the time zone comes from the
+    // coordinates offline, and that is the part zmanim need. An unnamed
+    // location with the right zone beats an error that leaves the app with no
+    // candle-lighting time at all.
+    const timezone = tzFor(latitude, longitude);
+    if (timezone) return { latitude, longitude, city: '', country_code: '', timezone, label: '', source: 'coordinates' };
+    throw new GeoError(LOCATION_UNAVAILABLE, 503);
   }
 
   // ~1km precision: enough to name a neighbourhood, and it collapses the many
@@ -306,13 +332,35 @@ export async function searchPlaces(query, limit = 8) {
   if (q.length < 2) throw new GeoError('Enter at least two characters.', 400);
   const capped = Math.min(Math.max(Number(limit) || 8, 1), 10);
 
+  // The communities Klal serves answer first, instantly and without a key.
+  // A provider only sees what is left — a street address, a town nobody
+  // listed — and if there is no usable provider, the known places are still
+  // an answer rather than a 503.
+  const local = findPlaces(q, capped).map(fromPlace);
+  if (local.length >= capped || !providerUsable()) {
+    if (local.length) return local;
+    throw new GeoError(LOCATION_UNAVAILABLE, 503);
+  }
+
   const key = `search:${PROVIDER}:${capped}:${q.toLowerCase()}`;
   const hit = await geoCache.get(key);
-  if (hit) return hit;
+  if (hit) return dedupePlaces([...local, ...hit], capped);
 
-  const results = await call(() => activeProvider().search(q, capped));
+  const results = await call(() => activeProvider().search(q, capped - local.length));
   await geoCache.set(key, results, SEARCH_TTL);
-  return results;
+  return dedupePlaces([...local, ...results], capped);
+}
+
+// A provider will often return the same city the curated list already gave.
+// Coordinates within ~10km of one already listed are the same place.
+function dedupePlaces(rows, limit) {
+  const out = [];
+  for (const r of rows) {
+    if (out.some((k) => distanceKm(k.latitude, k.longitude, r.latitude, r.longitude) < 10)) continue;
+    out.push(r);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 // ---- IP fallback ------------------------------------------------------------

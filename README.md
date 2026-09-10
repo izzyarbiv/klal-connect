@@ -227,6 +227,26 @@ Vercel env and redeploy.
 The whole API is one function (`api/index.js`), so a warm instance keeps a single
 database pool rather than one per route.
 
+## Places and zmanim without a geocoding key
+
+`server/places.js` is a curated list of the communities Klal serves — roughly a
+hundred, from Lakewood and Boro Park to Jerusalem, Bnei Brak, Golders Green and
+Melbourne — with coordinates, the names people actually type (including Hebrew
+and nicknames like "rbs"), and a country code. City search and reverse lookup
+answer from it first: in process, no key, no rate limit.
+
+That matters because the default provider (Nominatim) answers 403 for
+production traffic, which used to leave onboarding, zmanim setup, map pinning
+and "nearest" sorting all broken with no way to tell. Now they work out of the
+box, and a real provider (`KC_GEOCODER=google|mapbox|geoapify|locationiq` plus
+`KC_GEOCODER_KEY`) is an upgrade rather than a prerequisite: it handles street
+addresses and towns nobody listed, and its results are merged with the curated
+ones, deduplicated by distance.
+
+Reverse lookup never fails outright: the time zone comes from the coordinates
+offline (`tz-lookup`), so a device anywhere gets working candle-lighting times
+even when the place has no name we know.
+
 ## Search
 
 The public surface is server-rendered so a directory can actually be found.

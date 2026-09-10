@@ -41,8 +41,7 @@ function ensureLocalDir() {
     localDirReady = true;
   } catch (err) {
     const e = new Error(
-      'Uploads are not configured on this deployment. Attach a Vercel Blob store, ' +
-      'or set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.'
+      'Photo uploads are temporarily unavailable. Please try again later.'
     );
     e.statusCode = 503;
     e.cause = err;
@@ -77,8 +76,10 @@ async function putSupabase(buffer, mimetype) {
     body: buffer,
   });
   if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`Upload failed (${res.status}): ${detail.slice(0, 200)}`);
+    await res.text().catch(() => '');
+    const error = new Error('Photo uploads are temporarily unavailable. Please try again later.');
+    error.statusCode = 503;
+    throw error;
   }
   // Bucket must be marked public for this URL to resolve.
   return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${name}`;
@@ -92,13 +93,20 @@ async function putLocal(buffer, mimetype) {
 }
 
 async function putVercelBlob(buffer, mimetype) {
-  const { url } = await putBlob(`uploads/${safeName(mimetype)}`, buffer, {
-    access: 'public',
-    contentType: mimetype,
-    addRandomSuffix: false,
-    token: BLOB_TOKEN,
-  });
-  return url;
+  try {
+    const { url } = await putBlob(`uploads/${safeName(mimetype)}`, buffer, {
+      access: 'public',
+      contentType: mimetype,
+      addRandomSuffix: false,
+      token: BLOB_TOKEN,
+    });
+    return url;
+  } catch (err) {
+    const error = new Error('Photo uploads are temporarily unavailable. Please try again later.');
+    error.statusCode = 503;
+    error.cause = err;
+    throw error;
+  }
 }
 
 /** @returns {Promise<string>} a URL the browser can load the file from */

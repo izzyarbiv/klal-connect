@@ -21,17 +21,18 @@ export default function People(){
   };
 
   useEffect(()=>{(async()=>{
-    if(!await api.auth.isAuthenticated()) return api.auth.redirectToLogin(location.href);
-    const u=await api.auth.me(); setMe(u);
+    const authenticated = await api.auth.isAuthenticated();
+    const u = authenticated ? await api.auth.me() : { id: null, guest: true, full_name: 'Guest' };
+    setMe(u);
     const [allUsers, conn] = await Promise.all([
       api.entities.User.list('-created_date', 200),
-      loadMyConnections(u.id),
+      authenticated ? loadMyConnections(u.id) : Promise.resolve({ sent: [], received: [], all: [] }),
     ]);
     const ranked = allUsers.filter(x => x.id !== u.id).map(x => ({ user: x }));
     setUsers(ranked);
     setConnections(conn);
     const excluded = [...connectedIds(conn)];
-    setSuggestions(await suggestSimilar(u, u.id, excluded));
+    setSuggestions(authenticated ? await suggestSimilar(u, u.id, excluded) : []);
     setLoading(false);
   })()},[]);
 

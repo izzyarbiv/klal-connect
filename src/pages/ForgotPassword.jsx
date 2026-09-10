@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Mail, ArrowLeft, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 
 export default function ForgotPassword() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -17,8 +18,10 @@ export default function ForgotPassword() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.auth.resetPasswordRequest(email);
-      setSent(true);
+      const result = await api.auth.resetPasswordRequest(email.trim());
+      const params = new URLSearchParams({ email: email.trim() });
+      if (result?.dev_code) params.set("code", result.dev_code);
+      navigate(`/reset-password?${params.toString()}`);
     } catch (err) {
       // 503 means the server has no way to email a code at all; say so
       // instead of promising a link that will never arrive. Any other failure
@@ -43,10 +46,10 @@ export default function ForgotPassword() {
       }
     >
       {unavailable ? (
-        <p className="text-sm text-foreground text-center">{unavailable}</p>
+        <p className="text-sm text-foreground text-center">{unavailable} Please email <a className="font-semibold text-primary hover:underline" href="mailto:hello@klalconnect.org">hello@klalconnect.org</a> for help.</p>
       ) : sent ? (
         <p className="text-sm text-foreground text-center">
-          If an account exists with that email, you'll receive a password reset link shortly.
+          Check your email for the six-digit reset code.
         </p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">

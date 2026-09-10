@@ -104,7 +104,7 @@ app.use((req, res, next) => {
 
 // Which entities a signed-out visitor may read. The directory is public by
 // design; everything else (messages, notifications, reports…) is not.
-const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch']);
+const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment']);
 
 // Entities that carry a moderation status. Everyone except an admin sees only
 // published rows — plus their own submissions, so an author can still find the
@@ -491,6 +491,10 @@ app.get('/api/config', (_req, res) => res.json({
   tileUrl: process.env.KC_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   tileAttribution: process.env.KC_TILE_ATTRIBUTION || '&copy; OpenStreetMap contributors',
   geocoder: GEO_PROVIDER,
+  // Whether a city can be looked up at all. The curated community list makes
+  // this true even with no provider key, so the client can stop treating
+  // location as unavailable.
+  placeLookup: true,
   guestReadOnly: GUEST_READONLY,
 }));
 

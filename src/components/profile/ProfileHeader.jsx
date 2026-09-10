@@ -20,6 +20,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [preview, setPreview] = useState(null);
   const open = editing === 'intro';
 
   const startEdit = () => setEditing('intro');
@@ -32,6 +33,12 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
     setErr('');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const cancel = () => setEditing(null);
+  React.useEffect(() => {
+    if (!preview) return undefined;
+    const close = (e) => { if (e.key === 'Escape') setPreview(null); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [preview]);
   // Every write from this header goes through here: one busy flag, one
   // error line, and a failed save never goes unnoticed.
   const write = async (patch, fallback) => {
@@ -47,6 +54,8 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
     // still fires a change event.
     e.target.value = '';
     if (!file) return;
+    if (!file.type.startsWith('image/')) { setErr('Please choose an image file.'); return; }
+    if (file.size > 4 * 1024 * 1024) { setErr('That image is too large. Please choose one under 4MB.'); return; }
     setBusy(true); setErr('');
     try { const { file_url } = await api.integrations.Core.UploadFile({ file }); await onSave({ [field]: file_url }); }
     catch (error) { setErr(error.message || 'That image could not be uploaded.'); }
@@ -59,23 +68,24 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   const profileUrl = `${window.location.origin}/profile/${user.id}`;
   const overlay = 'inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-brand-surface/90 px-3 py-1.5 text-xs font-semibold text-brand-ink shadow-sm ring-1 ring-brand-line backdrop-blur hover:bg-brand-surface';
 
-  return <section id="intro" className="scroll-mt-24 overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
+  return <>
+  <section id="intro" className="scroll-mt-24 overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
     <div className="relative">
-      <ProfileBanner url={user.banner_url} className="rounded-t-3xl"/>
+      <ProfileBanner url={user.banner_url} className="rounded-t-3xl" onClick={() => setPreview({ url: user.banner_url, alt: `${user.full_name || 'Profile'} cover photo` })}/>
       {/* Changing the cover lives here, where the cover is. Removing it does
           not: an X floating on an image reads as "close this toolbar", and
           pressing it used to delete the picture on the spot — which is what
           happened to the first person who tried it. Remove is in Edit intro,
           and asks first. */}
       {editable && <div className="absolute right-3 top-3 flex gap-2">
-        <label className={overlay}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Camera size={14}/>}{user.banner_url ? 'Change cover' : 'Add a cover'}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>
+        <label className={overlay} onClick={(e) => e.stopPropagation()}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Camera size={14}/>}{user.banner_url ? 'Change cover' : 'Add a cover'}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>
       </div>}
     </div>
     <div className="px-6 pb-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="relative z-10 -mt-12 sm:-mt-14">
           {user.avatar_url
-            ? <div className="h-24 w-24 overflow-hidden rounded-full ring-4 ring-brand-surface sm:h-28 sm:w-28"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24 sm:h-28 sm:w-28"/></div>
+            ? <button type="button" onClick={() => setPreview({ url: user.avatar_url, alt: `${user.full_name || 'Profile'} profile photo` })} className="h-24 w-24 cursor-zoom-in overflow-hidden rounded-full ring-4 ring-brand-surface sm:h-28 sm:w-28" aria-label="Open profile photo"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24 sm:h-28 sm:w-28"/></button>
             : <div className="grid h-24 w-24 place-items-center rounded-full bg-brand-tint text-2xl font-bold text-brand-teal ring-4 ring-brand-surface sm:h-28 sm:w-28">{initialsOf(user)}</div>}
           {editable && <label className="absolute -bottom-1 -right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-navy text-white shadow ring-2 ring-brand-surface hover:bg-brand-navy-hover" title={user.avatar_url ? 'Change photo' : 'Add a photo'}>{busy ? <Loader2 size={15} className="animate-spin"/> : <Camera size={15}/>}<input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={upload('avatar_url')} disabled={busy}/></label>}
         </div>
@@ -125,5 +135,10 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
           {err && <p className="mt-2 text-sm font-semibold text-brand-error">{err}</p>}
         </div>}
     </div>
-  </section>;
+  </section>
+  {preview && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-label={preview.alt} onClick={() => setPreview(null)}>
+    <button type="button" onClick={() => setPreview(null)} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-2xl text-brand-ink" aria-label="Close image viewer"><X size={22}/></button>
+    <img src={preview.url} alt={preview.alt} className="max-h-[90vh] max-w-[95vw] object-contain" onClick={(e) => e.stopPropagation()} />
+  </div>}
+  </>;
 }
