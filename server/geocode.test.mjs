@@ -68,7 +68,10 @@ for (const name of Object.keys(FIXTURES)) {
   check('reverse tz', rev.timezone === 'America/New_York', rev.timezone);
 
   mode = 'search';
-  const res = await mod.searchPlaces(`Lakewood ${name}`, 3);
+  // A query the curated list in places.js does NOT hold, so this exercises
+  // the provider adapter rather than the local answer. (The list is checked
+  // separately, below.)
+  const res = await mod.searchPlaces(`Zzyzx ${name}`, 3);
   const first = res[0] || {};
   check('search count', res.length === 1, res.length);
   check('search city', first.city === 'Lakewood', first.city);
@@ -79,5 +82,28 @@ for (const name of Object.keys(FIXTURES)) {
   check('search label', typeof first.label === 'string' && first.label.length > 0, first.label);
 }
 
-console.log(failures ? `\n${failures} FAILURE(S)` : '\nall provider adapters parse correctly');
+// The curated list answers a known community first, with no provider call at
+// all — that is what keeps city lookup, zmanim and map pins working with no
+// key configured.
+console.log('\ncurated places (no provider):');
+delete process.env.KC_GEOCODER;
+delete process.env.KC_GEOCODER_KEY;
+process.env.NODE_ENV = 'production';
+globalThis.fetch = async () => { throw new Error('the curated list must not call a provider'); };
+const local = await import(`${GEO_URL}?v=local`);
+for (const [query, city, tz] of [
+  ['Jerusalem', 'Jerusalem', 'Asia/Jerusalem'],
+  ['rbs', 'Beit Shemesh', 'Asia/Jerusalem'],
+  ['boro park', 'Boro Park', 'America/New_York'],
+  ['7200 Palmetto Circle N Boca Raton, FL 33433', 'Boca Raton', 'America/New_York'],
+]) {
+  const [hit] = await local.searchPlaces(query, 2);
+  check(`search ${JSON.stringify(query)}`, hit && hit.city === city && hit.timezone === tz, hit && `${hit.city} / ${hit.timezone}`);
+}
+const known = await local.reverseGeocode(31.7683, 35.2137);
+check('reverse names a known community', known.city === 'Jerusalem' && known.country_code === 'IL', `${known.city} / ${known.country_code}`);
+const unknown = await local.reverseGeocode(42.88, -78.87);
+check('reverse elsewhere still gives a time zone', unknown.timezone === 'America/New_York' && unknown.city === '', `${JSON.stringify(unknown.city)} / ${unknown.timezone}`);
+
+console.log(failures ? `\n${failures} FAILURE(S)` : '\nall provider adapters parse correctly, and the curated list answers without one');
 process.exit(failures ? 1 : 0);
