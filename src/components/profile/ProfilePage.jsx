@@ -11,7 +11,7 @@ import ProfileExperience from '@/components/profile/ProfileExperience';
 import ProfileActivity from '@/components/profile/ProfileActivity';
 import ProfileChecklist from '@/components/profile/ProfileChecklist';
 import { loadMyConnections, suggestSimilar, connectedIds } from '@/lib/connections';
-import { companyPath } from '@/lib/paths';
+import { companyPath, providerPath } from '@/lib/paths';
 
 // One page for every profile. Your own is the same page as everyone else's,
 // with the edit controls turned on — what you see is what they see.
@@ -24,6 +24,7 @@ export default function ProfilePage({ userId }) {
   const [theirs, setTheirs] = useState([]);
   const [members, setMembers] = useState([]);
   const [companies, setCompanies] = useState({});
+  const [companyLogos, setCompanyLogos] = useState({});
   const [suggestions, setSuggestions] = useState([]);
   const [editing, setEditing] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -57,10 +58,29 @@ export default function ProfilePage({ userId }) {
       setLoading(false);
       // Decoration, loaded after the page is usable.
       api.entities.User.list('-created_date', 500).then(set(setMembers)).catch(() => {});
-      api.entities.Company.filter({ status: 'published' }).then((rows) => {
+      // Both the link and the logo, so a role at a business in the directory
+      // shows that business's own mark rather than a generic briefcase.
+      Promise.all([
+        api.entities.Company.filter({ status: 'published' }).catch(() => []),
+        api.entities.Provider.filter({ status: 'published' }).catch(() => []),
+      ]).then(([companyRows, providerRows]) => {
         const byName = {};
-        for (const c of rows) if (c.name) byName[c.name.trim().toLowerCase()] = companyPath(c);
+        const logos = {};
+        for (const c of companyRows) {
+          if (!c.name) continue;
+          const key = c.name.trim().toLowerCase();
+          byName[key] = companyPath(c);
+          if (c.logo_url) logos[key] = c.logo_url;
+        }
+        // A listing can stand in for a company that has no page of its own.
+        for (const pr of providerRows) {
+          if (!pr.name) continue;
+          const key = pr.name.trim().toLowerCase();
+          if (!byName[key]) byName[key] = providerPath(pr);
+          if (!logos[key] && pr.logo_url) logos[key] = pr.logo_url;
+        }
         set(setCompanies)(byName);
+        set(setCompanyLogos)(logos);
       }).catch(() => {});
       if (self) {
         setTheirs(conn.all.filter((c) => c.status === 'accepted'));
@@ -105,7 +125,7 @@ export default function ProfilePage({ userId }) {
 
     <ProfileHeader user={user} me={me} editable={editable} onSave={save} connections={connections} onReload={reload} companies={companies} connectionCount={theirIds.size} mutual={mutual} editing={editing} setEditing={setEditing}/>
     <ProfileAbout user={user} editable={editable} onSave={save} editing={editing} setEditing={setEditing}/>
-    <ProfileExperience user={user} editable={editable} onSave={save} companies={companies} editing={editing} setEditing={setEditing}/>
+    <ProfileExperience user={user} editable={editable} onSave={save} companies={companies} companyLogos={companyLogos} editing={editing} setEditing={setEditing}/>
     <ProfileActivity user={user} me={me} editable={editable}/>
 
     {editable && <div className="panel"><p className="font-semibold text-brand-ink">Invite people from your community</p><p className="mb-3 text-sm text-brand-body">Klal works when the people you trust are on it. Your link is yours; anyone who joins through it is connected to you.</p><InviteButton/></div>}

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Compass, Wrench, Store, MapPin, Handshake, Plus } from 'lucide-react';
+import { ArrowRight, Compass, Wrench, Store, Handshake, Plus } from 'lucide-react';
 import { api } from '@/api/client';
 import { safeReturnTo } from '@/lib/authReturnTo';
 import { PROFILE_TYPES } from '@/lib/affiliations';
 import InviteButton from '@/components/InviteButton';
 import { locateFromCity } from '@/hooks/useDetectLocation';
+import CityInput from '@/components/CityInput';
 import ResourceCard from '@/components/ResourceCard';
 
 // The ninety seconds after sign-up: one question per card, every card
@@ -90,7 +91,7 @@ export default function Welcome() {
 
       {step === 1 && <>
         <div><span className="eyebrow dark">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first — the listings, people and asks near you.</p></div>
-        <label>City<div className="relative"><MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted"/><input className="field pl-9" value={city} onChange={(e) => { setCity(e.target.value); setPlaced(null); }} onBlur={(e) => saveCity(e.target.value)} placeholder="Lakewood, Brooklyn, Monsey…"/></div></label>
+        <label>City<CityInput value={city} onChange={(v) => { setCity(v); setPlaced(null); }} onPick={(p) => { setCity(p.city); setPlaced(p); save({ home_city: p.city, latitude: p.latitude, longitude: p.longitude, timezone: p.timezone, city: p.city, country_code: p.country_code, shabbos_mode_source: 'onboarding' }); }} onBlur={(e) => saveCity(e.target.value)} placeholder="Lakewood, Brooklyn, Jerusalem…"/></label>
         {placed && placed.timezone && <p className="rounded-xl bg-brand-tint p-3 text-sm text-brand-body">Shabbos and Yom Tov times will be computed for <b>{placed.city}</b> — time zone {placed.timezone}. You can change this any time in Settings.</p>}
         <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" disabled={placing} onClick={async () => { await saveCity(city); setStep((s) => s + 1); }} className="primary disabled:opacity-60">{placing ? 'Checking…' : 'Continue'}<ArrowRight size={16}/></button></div>
       </>}

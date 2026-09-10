@@ -4,7 +4,7 @@ import WorkExperienceEditor from '@/components/WorkExperienceEditor';
 import WorkExperienceTimeline from '@/components/WorkExperienceTimeline';
 
 // Roles held, as a timeline. The owner edits the whole list in place.
-export default function ProfileExperience({ user, editable, onSave, companies, editing, setEditing }) {
+export default function ProfileExperience({ user, editable, onSave, companies, companyLogos, editing, setEditing }) {
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -30,7 +30,7 @@ export default function ProfileExperience({ user, editable, onSave, companies, e
         <div className="flex items-center gap-3"><button type="button" onClick={save} className="primary" disabled={busy}>{busy ? <Loader2 size={15} className="animate-spin"/> : null}Save</button><button type="button" onClick={() => setEditing(null)} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Cancel</button></div>
       </div>
       : list.length > 0
-        ? <WorkExperienceTimeline value={list} companyLinks={companies}/>
+        ? <WorkExperienceTimeline value={list} companyLinks={companies} companyLogos={companyLogos}/>
         : <button type="button" onClick={start} className="inline-flex items-center gap-2 rounded-2xl border border-dashed border-brand-line px-4 py-3 text-sm text-brand-muted hover:border-brand-teal hover:text-brand-teal"><Plus size={16}/>Add your work or business. Roles show as a timeline, and a business in the directory links to its page.</button>}
   </section>;
 }

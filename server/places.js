@@ -124,23 +124,55 @@ export const placeLabel = (p) => [p.city, p.region, p.country_code === 'US' ? nu
 const fold = (s) => String(s || '').trim().toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, ' ');
 const namesOf = (p) => [fold(p.city), ...(p.aka || []).map(fold), fold(placeLabel(p)), fold(`${p.city} ${p.region}`)];
 
+// US state codes, so "FL" does not match Flatbush and a state on its own is
+// understood as a state.
+const STATE_CODES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+
 // Best matches first: an exact name, then one that starts with the query, then
-// one that contains it. Nothing fuzzy — a wrong city silently computing the
+// one contained in it either direction — which is what makes a full street
+// address resolve, since "7200 Palmetto Circle N Boca Raton, FL 33433"
+// contains "boca raton". Nothing fuzzy: a wrong city silently computing the
 // wrong candle lighting is worse than no answer at all.
 export function findPlaces(query, limit = 8) {
-  const q = fold(query);
+  const raw = String(query || '').trim();
+  const q = fold(raw);
   if (q.length < 2) return [];
+
+  // A bare state code is a state, not a city that happens to contain those
+  // two letters.
+  const asState = raw.trim().toUpperCase();
+  if (asState.length === 2 && STATE_CODES.has(asState)) {
+    return PLACES.filter((p) => p.region === asState).slice(0, limit);
+  }
+
   const scored = [];
   for (const p of PLACES) {
     const names = namesOf(p);
     let score = null;
     if (names.some((n) => n === q)) score = 0;
     else if (names.some((n) => n.startsWith(q))) score = 1;
-    else if (names.some((n) => n.includes(q))) score = 2;
-    if (score !== null) scored.push({ p, score });
+    else if (q.length >= 3 && names.some((n) => n.includes(q))) score = 2;
+    // The query contains a place name — an address, or "shul in Monsey".
+    // Only for names long enough not to appear inside other words.
+    else if (names.some((n) => n.length >= 4 && wordsContain(q, n))) score = 3;
+    if (score !== null) scored.push({ p, score, len: p.city.length });
   }
-  scored.sort((a, b) => a.score - b.score || a.p.city.length - b.p.city.length);
+  // Within the same score, the longest matched name wins: an address in
+  // "Beit Shemesh" should not resolve to "Beit" something shorter.
+  scored.sort((a, b) => a.score - b.score
+    || (a.score === 3 ? b.len - a.len : a.len - b.len)
+    || a.p.city.localeCompare(b.p.city));
   return scored.slice(0, limit).map(({ p }) => p);
+}
+
+// Does the haystack contain the needle as whole words? Prevents "elad" from
+// matching inside "philadelphia".
+function wordsContain(haystack, needle) {
+  const i = haystack.indexOf(needle);
+  if (i === -1) return false;
+  const before = i === 0 ? ' ' : haystack[i - 1];
+  const after = i + needle.length >= haystack.length ? ' ' : haystack[i + needle.length];
+  return !/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after);
 }
 
 const R_KM = 6371;

@@ -9,6 +9,7 @@ import ShareButton from '@/components/ShareButton';
 import ProfileBanner from '@/components/ProfileBanner';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import { PROFILE_TYPES } from '@/lib/affiliations';
+import CityInput from '@/components/CityInput';
 import { topJob } from '@/lib/connections';
 
 const initialsOf = (user) => (user.full_name || user.email || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
@@ -110,7 +111,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             <label className="sm:col-span-2">Name<input className="field" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="As people in the community know you" autoFocus/></label>
             <div className="sm:col-span-2"><HeadlineEdit label="Headline" value={form.headline} onChange={(v) => setForm({ ...form, headline: v })} suggestion={job ? `${job.title}${job.company ? ` — ${job.company}` : ''}` : null}/></div>
             <label>What brings you here<select className="field" value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })}>{PROFILE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
-            <label>General home city<input className="field" value={form.home_city} onChange={(e) => setForm({ ...form, home_city: e.target.value })} placeholder="Lakewood, Brooklyn, Monsey…"/><span className="helper">Your exact location is never displayed.</span></label>
+            <label>General home city<CityInput value={form.home_city} onChange={(v) => setForm({ ...form, home_city: v })} onPick={(p) => setForm({ ...form, home_city: p.city })} placeholder="Lakewood, Brooklyn, Monsey…"/><span className="helper">Your exact location is never displayed.</span></label>
             <label>Phone<input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel"/><span className="helper">Private. Only you and the admins can see it.</span></label>
           </div>
           {user.avatar_url && <button type="button" disabled={busy} onClick={() => write({ avatar_url: '' }, 'Could not remove the photo')} className="text-sm font-semibold text-brand-error hover:underline">Remove profile photo</button>}

@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
 import { api } from '@/api/client';
+import CityInput, { StateSelect } from '@/components/CityInput';
 import { Image } from '@/components/ui/image';
 import { Loader2, Building2 } from 'lucide-react';
 import HeadlineEdit from '@/components/HeadlineEdit';
@@ -47,8 +48,8 @@ export default function CompanyEditor({ company, onDone }){
         <Field label="Website" name="website" value={data.website||''} onChange={change}/>
         <Field label="Email" name="email" type="email" value={data.email||''} onChange={change}/>
         <Field label="Phone" name="phone" value={data.phone||''} onChange={change}/>
-        <Field label="City" name="city" value={data.city||''} onChange={change}/>
-        <Field label="State" name="state" value={data.state||''} onChange={change}/>
+        <label>City<CityInput value={data.city||''} onChange={v=>setData(d=>({...d,city:v}))} onPick={p=>setData(d=>({...d,city:p.city,state:p.region||d.state}))}/></label>
+        <label>State<StateSelect value={data.state||''} onChange={v=>setData(d=>({...d,state:v}))}/></label>
         <Field label="Founded" name="founded" type="date" value={data.founded?data.founded.slice(0,10):''} onChange={change}/>
       </div>
     </section>
