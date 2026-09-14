@@ -18,6 +18,7 @@ import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
+import { translateEnabled, LANGUAGES as TRANSLATE_LANGUAGES } from './translate.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
 import { healthReport } from './health.js';
@@ -507,6 +508,10 @@ app.get('/api/config', (_req, res) => res.json({
   // location as unavailable.
   placeLookup: true,
   guestReadOnly: GUEST_READONLY,
+  // Hidden entirely until a Google Cloud Translation key exists — see
+  // translateText in functions.js.
+  translateEnabled: translateEnabled(),
+  translateLanguages: TRANSLATE_LANGUAGES,
 }));
 
 // Issues a session for the shared guest account so a visitor can browse the

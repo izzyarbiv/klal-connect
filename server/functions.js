@@ -6,6 +6,7 @@
 import { store, users, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable as assertShabbosWritable } from './shabbos.js';
 import { canDeliverCodes } from './auth.js';
+import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
@@ -623,6 +624,17 @@ export const functions = {
       }
     }
     return await computeShabbosStatus(profile, now);
+  },
+
+  // ---- translation -----------------------------------------------------------
+
+  // Click-to-translate for posts and comments, so a Yiddish, Hebrew, or
+  // English post reaches everyone rather than only its own language's readers.
+  // Blocked for the shared guest session purely for cost control — a visitor
+  // can still read the original text.
+  async translateText({ text, target }, user) {
+    if (user.email === GUEST_EMAIL) fail('Create an account to translate posts.', 403);
+    return await translate(text, target);
   },
 };
 

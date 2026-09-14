@@ -5,6 +5,7 @@ import FeedCommentList from '@/components/feed/FeedCommentList';
 import FeedPostMenu, { ReportPostForm } from '@/components/feed/FeedPostMenu';
 import Headline from '@/components/Headline';
 import ReactionPicker, { useReactionPicker } from '@/components/feed/ReactionPicker';
+import TranslateToggle from '@/components/TranslateToggle';
 import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf, topReactions } from '@/lib/reactions';
 import { timeAgo, fullDate } from '@/lib/time';
@@ -13,8 +14,10 @@ export default function FeedPostItem({ post, user, onDeleted }) {
   const type=POST_TYPE_BY_ID[normalizePostType(post.post_type)];
   const isAsk=type.id==='question';
   const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null),[reporting,setReporting]=useState(false);
+  const [translate,setTranslate]=useState({enabled:false,languages:[]});
   const views=post.view_count||0;
   const picker=useReactionPicker();
+  React.useEffect(()=>{api.getConfig().then(c=>setTranslate({enabled:!!c.translateEnabled&&!!user&&!user.guest,languages:c.translateLanguages||[]})).catch(()=>{});},[user]);
   React.useEffect(()=>{(async()=>{if(user&&!user.guest){const rows=await api.entities.FeedLike.filter({post_id:post.id});const own=rows.find(r=>r.created_by_id===user.id);setMine(own?reactionOf(own):null);}})();},[post.id,user]);
   // Recording a view returns nothing: the count is the author's, and the
   // author never records one.
@@ -55,6 +58,7 @@ export default function FeedPostItem({ post, user, onDeleted }) {
       <FeedPostMenu post={post} user={user} onReport={()=>setReporting(true)} onDeleted={onDeleted}/>
     </div>
     <p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>
+    <TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages}/>
     {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-2xl ring-1 ring-brand-line"/>)}</div>}
     {reporting&&<ReportPostForm post={post} onClose={()=>setReporting(false)}/>}
     {(likes>0||cc>0||showViews)&&<div className="flex items-center gap-3 text-xs text-brand-muted">

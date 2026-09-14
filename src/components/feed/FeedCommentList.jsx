@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import { api } from '@/api/client';
 import { Send, ChevronUp, CheckCircle2 } from 'lucide-react';
 import Headline from '@/components/Headline';
+import TranslateToggle from '@/components/TranslateToggle';
 import { timeAgo, fullDate } from '@/lib/time';
 
 // Comments under a post. Under an ask they are answers: each can be upvoted
@@ -9,9 +10,11 @@ import { timeAgo, fullDate } from '@/lib/time';
 // that helped — it moves to the top with a gold mark, and the answerer hears.
 export default function FeedCommentList({ postId, user, authorId, isAsk, helpfulId, onHelpful, onCount }) {
   const [comments,setComments]=useState([]),[text,setText]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[myVotes,setMyVotes]=useState(new Set());
+  const [translate,setTranslate]=useState({enabled:false,languages:[]});
   const load=()=>api.entities.Comment.filter({post_id:postId},'-created_date').then(c=>{setComments(c);onCount?.(c.length);});
   useEffect(()=>{load();},[postId]);
   useEffect(()=>{(async()=>{if(!isAsk||!user||user.guest)return;try{const v=await api.entities.CommentVote.filter({post_id:postId});setMyVotes(new Set(v.map(x=>x.comment_id)));}catch{}})();},[postId,isAsk,user]);
+  useEffect(()=>{api.getConfig().then(c=>setTranslate({enabled:!!c.translateEnabled&&!!user&&!user.guest,languages:c.translateLanguages||[]})).catch(()=>{});},[user]);
   const submit=async e=>{
     e.preventDefault();
     if(!text.trim())return;
@@ -45,6 +48,7 @@ export default function FeedCommentList({ postId, user, authorId, isAsk, helpful
         <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-brand-ink">{c.author_name||'Community member'}</p>{c.created_date&&<time dateTime={c.created_date} title={fullDate(c.created_date)} className="text-[11px] text-brand-muted">{timeAgo(c.created_date)}</time>}{isHelpful&&<span className="inline-flex items-center gap-1 rounded-full bg-brand-surface px-2 py-0.5 text-[10px] font-bold text-brand-gold-ink"><CheckCircle2 size={11}/>Helped the asker</span>}</div>
         <Headline text={c.author_headline} className="text-[11px]"/>
         <p className="text-sm leading-6 text-brand-body">{c.body}</p>
+        <TranslateToggle text={c.body} enabled={translate.enabled} languages={translate.languages}/>
         {isAsk&&isAsker&&<button type="button" onClick={()=>helped(c)} className="mt-1 text-xs font-semibold text-brand-teal hover:underline">{isHelpful?'Unmark as helpful':'This helped'}</button>}
       </div>
     </div>;})}
