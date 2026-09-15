@@ -8,6 +8,9 @@ export const NOTIFICATION_TYPES = [
   { key: 'save', label: 'Saves of your listing' },
   { key: 'review', label: 'Positive reviews of your listing' },
   { key: 'message', label: 'Direct messages' },
+  { key: 'skill_endorsement', label: 'Skill endorsements' },
+  { key: 'recommendation', label: 'Recommendations written about you' },
+  { key: 'recommendation_accepted', label: 'Recommendations you wrote being shown' },
 ];
 
 // Create a notification for recipient_id, never notifying the actor about their own action.
@@ -35,6 +38,9 @@ export function notificationPath(n){
     case 'connection': return n.actor_id ? `/profile/${n.actor_id}` : '/people';
     case 'message': return n.actor_id ? `/messages/${n.actor_id}` : '/messages';
     case 'provider': return n.target_id ? `/provider/${n.target_id}` : '/directory';
+    case 'skill': return '/profile';
+    case 'recommendation': return '/profile';
+    case 'recommendation_accepted': return n.actor_id ? `/profile/${n.actor_id}` : '/profile';
     default: return '/';
   }
 }

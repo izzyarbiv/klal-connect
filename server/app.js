@@ -105,7 +105,7 @@ app.use((req, res, next) => {
 
 // Which entities a signed-out visitor may read. The directory is public by
 // design; everything else (messages, notifications, reports…) is not.
-const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement']);
+const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement', 'Recommendation']);
 
 // Entities that carry a moderation status. Everyone except an admin sees only
 // published rows — plus their own submissions, so an author can still find the
@@ -145,6 +145,7 @@ const OWNER_SCOPED = {
 const CLIENT_WRITABLE = new Set([
   'Provider', 'Company', 'Setting', 'Notification', 'Connection',
   'SavedProvider', 'ListingChangeRequest', 'Category', 'ActivityEvent',
+  'Recommendation',
 ]);
 
 // What the app is allowed to record about what someone did. Anything that
@@ -201,6 +202,11 @@ async function visibleRows(entity, rows, user) {
     // declined is between the two people on it and nobody else.
     if (user?.role !== 'admin') rows = rows.filter((row) => row.status === 'accepted' || (user && (row.requester_id === user.id || row.recipient_id === user.id)));
   }
+  // A recommendation is only public once its subject has accepted it — until
+  // then it is between the two people on it, same as a pending connection.
+  if (entity === 'Recommendation' && user?.role !== 'admin') {
+    rows = rows.filter((row) => row.status === 'accepted' || (user && (row.created_by_id === user.id || row.recipient_id === user.id)));
+  }
   // The guest has no messages, notifications, saves or votes of its own —
   // anything addressed to it would be readable by every visitor at once.
   if (isGuest(user) && OWNER_SCOPED[entity]) return [];
@@ -244,6 +250,10 @@ function canWrite(entity, user, row) {
 const RECIPIENT_PATCH = {
   Connection: (body) => (['accepted', 'declined'].includes(body?.status) ? { status: body.status } : null),
   Message: (body) => ({ read: !!body?.read }),
+  // A recommendation is written about someone, not by them — only the
+  // subject decides whether it goes on their profile, the same trust model
+  // as a connection request.
+  Recommendation: (body) => (['accepted', 'declined'].includes(body?.status) ? { status: body.status } : null),
 };
 function recipientPatch(entity, user, row, body) {
   const narrow = RECIPIENT_PATCH[entity];
@@ -264,7 +274,7 @@ const ENTITIES = new Set([
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'SavedPost',
-  'SkillEndorsement',
+  'SkillEndorsement', 'Recommendation',
 ]);
 
 app.param('entity', (req, res, next, entity) => {
@@ -309,7 +319,7 @@ const stripProtected = (body) => Object.fromEntries(Object.entries(body || {}).f
 // said. A connection request is pending until its recipient answers; a
 // listing or note waits for review; a company page publishes as it always
 // has (there is no review queue for companies).
-const CREATE_STATUS = { Connection: 'pending', Provider: 'pending', CommunityNote: 'pending', ListingChangeRequest: 'pending', Company: 'published' };
+const CREATE_STATUS = { Connection: 'pending', Provider: 'pending', CommunityNote: 'pending', ListingChangeRequest: 'pending', Company: 'published', Recommendation: 'pending' };
 
 app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   const { entity } = req.params;
@@ -336,6 +346,15 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
     if (!recipient || recipient.email === GUEST_EMAIL) return res.status(400).json({ error: 'That member cannot receive connection requests.' });
     if (recipient.id === req.user.id) return res.status(400).json({ error: 'You cannot connect with yourself.' });
     body.requester_id = req.user.id;
+  }
+  if (entity === 'Recommendation') {
+    const recipient = body.recipient_id ? await users.byId(body.recipient_id) : null;
+    if (!recipient || recipient.email === GUEST_EMAIL) return res.status(400).json({ error: 'That member cannot receive recommendations.' });
+    if (recipient.id === req.user.id) return res.status(400).json({ error: 'You cannot recommend yourself.' });
+    const text = String(body.body || '').trim();
+    if (text.length < 20) return res.status(400).json({ error: 'Please write at least 20 characters.' });
+    if (text.length > 2000) return res.status(400).json({ error: 'Recommendations must be 2000 characters or fewer.' });
+    body.body = text;
   }
   res.status(201).json(await store.create(entity, body, req.user));
 });

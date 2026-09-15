@@ -9,6 +9,7 @@ import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileAbout from '@/components/profile/ProfileAbout';
 import ProfileExperience from '@/components/profile/ProfileExperience';
 import ProfileSkills from '@/components/profile/ProfileSkills';
+import ProfileRecommendations from '@/components/profile/ProfileRecommendations';
 import ProfileActivity from '@/components/profile/ProfileActivity';
 import ProfileChecklist from '@/components/profile/ProfileChecklist';
 import { loadMyConnections, suggestSimilar, connectedIds } from '@/lib/connections';
@@ -128,6 +129,7 @@ export default function ProfilePage({ userId }) {
     <ProfileAbout user={user} editable={editable} onSave={save} editing={editing} setEditing={setEditing}/>
     <ProfileExperience user={user} editable={editable} onSave={save} companies={companies} companyLogos={companyLogos} editing={editing} setEditing={setEditing}/>
     <ProfileSkills user={user} me={me} editable={editable} onSave={save} editing={editing} setEditing={setEditing}/>
+    <ProfileRecommendations user={user} me={me} members={members} editable={editable} editing={editing} setEditing={setEditing}/>
     <ProfileActivity user={user} me={me} editable={editable}/>
 
     {editable && <div className="panel"><p className="font-semibold text-brand-ink">Invite people from your community</p><p className="mb-3 text-sm text-brand-body">Klal works when the people you trust are on it. Your link is yours; anyone who joins through it is connected to you.</p><InviteButton/></div>}

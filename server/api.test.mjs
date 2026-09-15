@@ -232,6 +232,38 @@ const skillGuestEndorse = await call('POST', '/functions/toggleSkillEndorsement'
 ok(skillGuestEndorse.status === 403, 'the shared guest cannot endorse');
 
 
+// ---- recommendations: written testimonials, subject approves before it's public ----
+const recSubjEmail = `recsubject${Date.now()}@example.com`;
+const recSubjReg = await call('POST', '/auth/register', { body: { email: recSubjEmail, password: 'password123' } });
+const recSubjTok = (await call('POST', '/auth/verify-otp', { body: { email: recSubjEmail, otpCode: recSubjReg.data.dev_code } })).data.access_token;
+const recSubjId = (await call('GET', '/auth/me', { token: recSubjTok })).data.id;
+
+const selfRec = await call('POST', '/entities/Recommendation', { token: recSubjTok, body: { recipient_id: recSubjId, body: 'x'.repeat(30) } });
+ok(selfRec.status === 400, 'cannot recommend yourself');
+
+const shortRec = await call('POST', '/entities/Recommendation', { token: userB, body: { recipient_id: recSubjId, body: 'too short' } });
+ok(shortRec.status === 400, 'a recommendation under 20 characters is refused');
+
+const recCreate = await call('POST', '/entities/Recommendation', { token: userB, body: { recipient_id: recSubjId, body: 'Worked with them for two years — reliable, thorough, and easy to reach.' } });
+ok(recCreate.status === 201 && recCreate.data.status === 'pending', 'a recommendation starts pending, whatever status was sent', JSON.stringify(recCreate.data));
+const recId = recCreate.data.id;
+
+const recPublicBeforeAccept = await call('GET', `/entities/Recommendation?query=${encodeURIComponent(JSON.stringify({ recipient_id: recSubjId }))}`);
+ok(recPublicBeforeAccept.status === 200 && recPublicBeforeAccept.data.length === 0, 'a pending recommendation is invisible to the public', JSON.stringify(recPublicBeforeAccept.data));
+
+const recVisibleToSubject = await call('GET', `/entities/Recommendation?query=${encodeURIComponent(JSON.stringify({ recipient_id: recSubjId }))}`, { token: recSubjTok });
+ok(recVisibleToSubject.status === 200 && recVisibleToSubject.data.length === 1, 'the pending recommendation is visible to its subject', JSON.stringify(recVisibleToSubject.data));
+
+const recAuthorEdit = await call('PUT', `/entities/Recommendation/${recId}`, { token: userB, body: { status: 'accepted' } });
+ok(recAuthorEdit.status === 200 && recAuthorEdit.data.status === 'pending', 'the author cannot accept their own recommendation on the subject\'s behalf', JSON.stringify(recAuthorEdit.data));
+
+const recAccept = await call('PUT', `/entities/Recommendation/${recId}`, { token: recSubjTok, body: { status: 'accepted', body: 'rewritten by the subject' } });
+ok(recAccept.status === 200 && recAccept.data.status === 'accepted' && recAccept.data.body !== 'rewritten by the subject', 'the subject can only change status, not the wording', JSON.stringify(recAccept.data));
+
+const recPublicAfterAccept = await call('GET', `/entities/Recommendation?query=${encodeURIComponent(JSON.stringify({ recipient_id: recSubjId }))}`);
+ok(recPublicAfterAccept.status === 200 && recPublicAfterAccept.data.length === 1, 'an accepted recommendation is publicly visible, like a vouch');
+
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');
