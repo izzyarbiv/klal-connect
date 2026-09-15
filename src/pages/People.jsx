@@ -6,6 +6,7 @@ import UserCard from '@/components/UserCard';
 import PeopleYouMayKnow from '@/components/PeopleYouMayKnow';
 import { loadMyConnections, suggestSimilar, sentThisWeekCount, connectedIds, topJob, WEEKLY_CAP } from '@/lib/connections';
 import InviteButton from '@/components/InviteButton';
+import { WORK_STATUSES } from '@/lib/workStatus';
 
 export default function People(){
   const [me,setMe]=useState();
@@ -13,6 +14,7 @@ export default function People(){
   const [connections,setConnections]=useState({ sent:[], received:[], all:[] });
   const [suggestions,setSuggestions]=useState([]);
   const [q,setQ]=useState('');
+  const [statusFilter,setStatusFilter]=useState('');
   const [loading,setLoading]=useState(true);
 
   const reload = async () => {
@@ -42,6 +44,7 @@ export default function People(){
       const hay = [user.full_name, user.headline, user.home_city, user.profile_type, topJob(user)?.title, topJob(user)?.company].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(q.toLowerCase())) return false;
     }
+    if (statusFilter && user.work_status !== statusFilter) return false;
     return true;
   });
 
@@ -65,6 +68,12 @@ export default function People(){
     <div className="relative">
       <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9AA8A2]"/>
       <input className="field pl-9" placeholder="Search by name, city, or company" value={q} onChange={e=>setQ(e.target.value)}/>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      {Object.values(WORK_STATUSES).map(s => (
+        <button key={s.id} type="button" onClick={()=>setStatusFilter(f=>f===s.id?'':s.id)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${statusFilter===s.id?s.badge.replace('ring-1 ',''):'bg-brand-surface text-brand-muted ring-brand-line'}`}>{s.label}</button>
+      ))}
     </div>
 
     {!q && <PeopleYouMayKnow suggestions={suggestions} me={me} connections={connections} onReload={reload}/>}

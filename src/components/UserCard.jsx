@@ -7,6 +7,7 @@ import Headline from '@/components/Headline';
 import ProfileBanner from '@/components/ProfileBanner';
 import ConnectButton from '@/components/ConnectButton';
 import MessageButton from '@/components/MessageButton';
+import { WorkStatusRing, WorkStatusBadge } from '@/components/WorkStatus';
 
 export default function UserCard({ user, me, connections, onReload }) {
   const job = topJob(user);
@@ -20,6 +21,7 @@ export default function UserCard({ user, me, connections, onReload }) {
       {/* relative z-10, or the banner paints over the avatar pulled up beneath it. */}
       <div className="relative z-10 -mt-8 space-y-3 px-5 pb-5">
         <Link to={`/profile/${user.id}`} className="block">
+          <WorkStatusRing user={user}>
           {user.avatar_url ? (
             <div className="h-14 w-14 overflow-hidden rounded-full ring-4 ring-brand-surface">
               <Image src={user.avatar_url} fittingType="fill" className="h-14 w-14" />
@@ -29,12 +31,14 @@ export default function UserCard({ user, me, connections, onReload }) {
               {initials}
             </div>
           )}
+          </WorkStatusRing>
           <div className="mt-2 min-w-0">
             <p className="truncate font-semibold text-brand-ink">{user.full_name || 'Community member'}</p>
             <Headline text={user.headline} />
             <p className="text-sm capitalize text-brand-teal">
               {(user.profile_type || 'community_member').replace('_', ' ')}
             </p>
+            <WorkStatusBadge user={user} className="mt-1.5" />
           </div>
         </Link>
 
