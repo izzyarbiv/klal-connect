@@ -105,7 +105,7 @@ app.use((req, res, next) => {
 
 // Which entities a signed-out visitor may read. The directory is public by
 // design; everything else (messages, notifications, reports…) is not.
-const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment']);
+const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement']);
 
 // Entities that carry a moderation status. Everyone except an admin sees only
 // published rows — plus their own submissions, so an author can still find the
@@ -264,6 +264,7 @@ const ENTITIES = new Set([
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'SavedPost',
+  'SkillEndorsement',
 ]);
 
 app.param('entity', (req, res, next, entity) => {
@@ -546,6 +547,23 @@ app.put('/api/auth/me', requireAuth, async (req, res, next) => {
   if (isGuest(req.user)) return res.status(403).json({ error: 'Create an account to have a profile of your own.', guest: true });
   // Role and verification are server-owned; a user cannot promote themselves.
   const { role, verified, password_hash, email, id, ...safe } = req.body || {};
+  // Free text a member can otherwise fill their profile with unbounded, one
+  // entry per line of a chip input — capped and de-duplicated (case-insensitive,
+  // first spelling wins) so the skills section cannot become a spam dumping
+  // ground or silently double-count "Excel" and "excel" as different skills.
+  if (Array.isArray(safe.skills)) {
+    const seen = new Set();
+    safe.skills = safe.skills
+      .map((s) => String(s || '').trim())
+      .filter((s) => {
+        if (!s || s.length > 40) return false;
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 30);
+  }
   res.json(userToPublic(await users.update(req.user.id, safe)));
 });
 

@@ -203,6 +203,34 @@ const payClick = await call('POST', '/entities/ActivityEvent', { token: payTok, 
 ok(payClick.status === 201, 'a payment_link_click event is recorded');
 
 
+// ---- skills & endorsements -------------------------------------------------
+const skillOwnerEmail = `skillowner${Date.now()}@example.com`;
+const skillOwnerReg = await call('POST', '/auth/register', { body: { email: skillOwnerEmail, password: 'password123' } });
+const skillOwnerTok = (await call('POST', '/auth/verify-otp', { body: { email: skillOwnerEmail, otpCode: skillOwnerReg.data.dev_code } })).data.access_token;
+const skillOwnerId = (await call('GET', '/auth/me', { token: skillOwnerTok })).data.id;
+
+const dupeSkills = await call('PUT', '/auth/me', { token: skillOwnerTok, body: { skills: ['Bookkeeping', 'bookkeeping', '  Excel  ', ''] } });
+ok(JSON.stringify(dupeSkills.data.skills) === JSON.stringify(['Bookkeeping', 'Excel']), 'skills are trimmed and case-insensitively de-duplicated', JSON.stringify(dupeSkills.data.skills));
+
+const selfEndorse = await call('POST', '/functions/toggleSkillEndorsement', { token: skillOwnerTok, body: { user_id: skillOwnerId, skill: 'Excel' } });
+ok(selfEndorse.status === 400, 'cannot endorse your own skill');
+
+const unlistedEndorse = await call('POST', '/functions/toggleSkillEndorsement', { token: userB, body: { user_id: skillOwnerId, skill: 'Welding' } });
+ok(unlistedEndorse.status === 400, 'cannot endorse a skill they did not list');
+
+let endorseR = await call('POST', '/functions/toggleSkillEndorsement', { token: userB, body: { user_id: skillOwnerId, skill: 'excel' } });
+ok(endorseR.status === 200 && endorseR.data.endorsed === true && endorseR.data.count === 1, 'endorsement is case-insensitive and counts', JSON.stringify(endorseR.data));
+
+const endorseAgain = await call('POST', '/functions/toggleSkillEndorsement', { token: userB, body: { user_id: skillOwnerId, skill: 'Excel' } });
+ok(endorseAgain.status === 200 && endorseAgain.data.endorsed === false && endorseAgain.data.count === 0, 'endorsing again removes it (toggle)', JSON.stringify(endorseAgain.data));
+
+await call('POST', '/functions/toggleSkillEndorsement', { token: userB, body: { user_id: skillOwnerId, skill: 'Excel' } });
+const endorsementsPublic = await call('GET', `/entities/SkillEndorsement?query=${encodeURIComponent(JSON.stringify({ user_id: skillOwnerId }))}`);
+ok(endorsementsPublic.status === 200 && endorsementsPublic.data.length === 1, 'endorsements are readable without auth, like a vouch count', JSON.stringify(endorsementsPublic.data));
+
+const skillGuestEndorse = await call('POST', '/functions/toggleSkillEndorsement', { token: guest, body: { user_id: skillOwnerId, skill: 'Excel' } });
+ok(skillGuestEndorse.status === 403, 'the shared guest cannot endorse');
+
 
 console.log = log;
 server.close();

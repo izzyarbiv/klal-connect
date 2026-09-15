@@ -3,7 +3,7 @@
 // These are functions rather than plain entity writes because each enforces
 // something the client must not be trusted with: moderation status, ownership,
 // counter integrity, or the Shabbos write-gate.
-import { store, users, GUEST_EMAIL } from './db.js';
+import { store, users, userToPublic, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable as assertShabbosWritable } from './shabbos.js';
 import { canDeliverCodes } from './auth.js';
 import { translate } from './translate.js';
@@ -292,6 +292,51 @@ export const functions = {
     }
     const invite = await store.create('Invite', { code, inviter_name: user.full_name || '', provider_id: null, provider_name: null, joined_user_ids: [], joined_count: 0 }, user);
     return { invite };
+  },
+
+  // ---- skills ----------------------------------------------------------------
+
+  // A skill only its owner listed can be endorsed — otherwise removing a
+  // skill would leave orphaned endorsements for something no longer claimed,
+  // and anyone could manufacture an endorsement for a skill nobody has.
+  async toggleSkillEndorsement({ user_id, skill }, user) {
+    await assertWritable(user);
+    need(user_id, 'Missing member.');
+    const clean = String(skill || '').trim();
+    need(clean, 'Missing skill.');
+    if (user_id === user.id) fail('You cannot endorse your own skill.');
+    const target = userToPublic(await users.byId(user_id));
+    if (!target) fail('Member not found.', 404);
+    // The owner's own spelling is the one of record, so "excel" and "Excel"
+    // land on the same row instead of splitting the count across two.
+    const canonical = (target.skills || []).find((s) => s.toLowerCase() === clean.toLowerCase());
+    if (!canonical) fail('That is not one of their listed skills.');
+
+    const existing = await store.filter('SkillEndorsement', { user_id, skill: canonical, created_by_id: user.id });
+    let endorsed;
+    if (existing.length) {
+      for (const row of existing) await store.delete('SkillEndorsement', row.id);
+      endorsed = false;
+    } else {
+      await store.create('SkillEndorsement', { user_id, skill: canonical }, user);
+      endorsed = true;
+    }
+    const count = await store.count('SkillEndorsement', { user_id, skill: canonical });
+
+    // One notification per person per skill, the same way a like is told
+    // once — endorsing, un-endorsing and endorsing again is not three events.
+    const target_id = `${user_id}::${canonical}`;
+    if (endorsed && !existing.length && !(await alreadyNotified(user_id, 'skill_endorsement', target_id, user.id))) {
+      await notify(user_id, {
+        type: 'skill_endorsement',
+        actor_id: user.id,
+        actor_name: user.full_name || user.email,
+        target_type: 'skill',
+        target_id,
+        message: `${user.full_name || 'Someone'} endorsed you for ${canonical}`,
+      });
+    }
+    return { endorsed, count };
   },
 
   // ---- asks: answers with upvotes, and the asker's "this helped" ---------
