@@ -43,6 +43,7 @@ const INITIAL_STATUS = REVIEW_FIRST ? 'pending' : 'published';
 // `post` and still exists on seeded rows, so it is folded in rather than
 // rejected — otherwise the "Updates" filter never matched those posts.
 const POST_TYPES = new Set(['post', 'question', 'insight', 'promotion']);
+const EMPLOYMENT_TYPES = new Set(['full_time', 'part_time', 'contract', 'seasonal', 'volunteer']);
 const postType = (value) => (value === 'update' ? 'post' : POST_TYPES.has(value) ? value : 'post');
 
 // Own keys only: a plain object also answers to 'constructor' and friends.
@@ -99,7 +100,15 @@ async function canMessage(senderId, recipientId) {
   ]);
   if (outbound.length || inbound.length) return true;
   const existing = await store.filter('Message', { sender_id: recipientId, recipient_id: senderId });
-  return existing.length > 0;
+  if (existing.length) return true;
+  // Applying to a job is an invited introduction — the poster asked for
+  // applicants — so an applicant and a poster may reach each other about it
+  // the same way an accepted connection can, whichever one of them is "sender".
+  const [applied, postedTo] = await Promise.all([
+    store.filter('JobApplication', { created_by_id: senderId, poster_id: recipientId }),
+    store.filter('JobApplication', { created_by_id: recipientId, poster_id: senderId }),
+  ]);
+  return applied.length > 0 || postedTo.length > 0;
 }
 
 const authorFields = (user) => ({
@@ -177,6 +186,71 @@ export const functions = {
     }
     if (String(tagline || '').length > 120) fail('Taglines must be 120 characters or fewer.');
     return { provider: await store.update('Provider', provider_id, { tagline: String(tagline || '') }) };
+  },
+
+  // ---- jobs -------------------------------------------------------------
+
+  async createJob(payload, user) {
+    await assertWritable(user);
+    need(payload.title, 'A job title is required.');
+    need(payload.category, 'Please choose a category.');
+    const description = String(payload.description || '').trim();
+    if (description.length < 30) fail('Please add a bit more detail to the description.');
+    const job = await store.create(
+      'Job',
+      {
+        title: String(payload.title).trim(),
+        company_name: String(payload.company_name || '').trim(),
+        category: payload.category,
+        employment_type: EMPLOYMENT_TYPES.has(payload.employment_type) ? payload.employment_type : 'full_time',
+        location: String(payload.location || '').trim(),
+        remote: !!payload.remote,
+        description,
+        apply_url: safeExternalUrl(payload.apply_url),
+        open: true,
+        status: INITIAL_STATUS,
+        ...authorFields(user),
+      },
+      user
+    );
+    return { job };
+  },
+
+  // In-app apply, for when a job has no external link: the poster is
+  // notified and — same as an accepted connection — can message the
+  // applicant back, and the applicant can message them, from here on.
+  async applyToJob({ job_id, note }, user) {
+    await assertWritable(user);
+    if (user.email === GUEST_EMAIL) fail('Create an account to apply.', 403);
+    const job = await store.get('Job', need(job_id, 'Missing job.'));
+    if (!job) fail('Job not found.', 404);
+    if (job.status !== 'published') fail('This job is not accepting applications right now.');
+    if (!job.open) fail('This job is no longer accepting applications.');
+    if (job.created_by_id === user.id) fail('You cannot apply to your own job.');
+    const existing = await store.filter('JobApplication', { job_id, created_by_id: user.id });
+    if (existing.length) fail('You already applied to this job.');
+
+    const application = await store.create(
+      'JobApplication',
+      {
+        job_id,
+        poster_id: job.created_by_id,
+        note: String(note || '').trim().slice(0, 1000),
+        applicant_name: user.full_name || user.email,
+        applicant_headline: user.headline || '',
+        applicant_avatar_url: user.avatar_url || '',
+      },
+      user
+    );
+    await notify(job.created_by_id, {
+      type: 'job_application',
+      actor_id: user.id,
+      actor_name: user.full_name || user.email,
+      target_type: 'job',
+      target_id: job_id,
+      message: `${user.full_name || 'Someone'} applied to your job: ${job.title}`,
+    });
+    return { application };
   },
 
   async createClaim(payload, user) {

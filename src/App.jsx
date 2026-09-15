@@ -25,6 +25,9 @@ import PublicProfile from '@/pages/PublicProfile';
 import CreateCompany from '@/pages/CreateCompany';
 import CompanyPage from '@/pages/CompanyPage';
 import Companies from '@/pages/Companies';
+import Jobs from '@/pages/Jobs';
+import PostJob from '@/pages/PostJob';
+import JobDetail from '@/pages/JobDetail';
 import Messages from '@/pages/Messages';
 import Conversation from '@/pages/Conversation';
 import Login from '@/pages/Login';
@@ -70,6 +73,9 @@ const AuthenticatedApp = () => {
         <Route path="/messages/:id" element={<Conversation />} />
         <Route path="/profile/:id" element={<PublicProfile />} />
         <Route path="/companies" element={<Companies />} />
+        <Route path="/jobs" element={<Jobs />} />
+        <Route path="/jobs/:id" element={<JobDetail />} />
+        <Route path="/post-job" element={<PostJob />} />
         <Route path="/company/:slug" element={<CompanyPage />} />
         <Route path="/create-company" element={<CreateCompany />} />
         <Route path="/browse" element={<Browse />} />

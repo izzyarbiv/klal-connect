@@ -75,7 +75,7 @@ const ENTITY_NAMES = [
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'User',
-  'SavedPost', 'SkillEndorsement', 'Recommendation',
+  'SavedPost', 'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication',
 ];
 
 function entityApi(name) {

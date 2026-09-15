@@ -264,6 +264,53 @@ const recPublicAfterAccept = await call('GET', `/entities/Recommendation?query=$
 ok(recPublicAfterAccept.status === 200 && recPublicAfterAccept.data.length === 1, 'an accepted recommendation is publicly visible, like a vouch');
 
 
+// ---- jobs: post, browse, apply, and the messaging door it opens -----------
+const posterEmail = `poster${Date.now()}@example.com`;
+const posterReg = await call('POST', '/auth/register', { body: { email: posterEmail, password: 'password123' } });
+const posterTok = (await call('POST', '/auth/verify-otp', { body: { email: posterEmail, otpCode: posterReg.data.dev_code } })).data.access_token;
+const posterId = (await call('GET', '/auth/me', { token: posterTok })).data.id;
+
+const shortJob = await call('POST', '/functions/createJob', { token: posterTok, body: { title: 'Bookkeeper', category: 'Business', description: 'too short' } });
+ok(shortJob.status === 400, 'a job description under 30 characters is refused');
+
+const jobR = await call('POST', '/functions/createJob', { token: posterTok, body: { title: 'Part-time bookkeeper', category: 'Business', employment_type: 'part_time', location: 'Lakewood, NJ', description: 'Looking for a detail-oriented bookkeeper for a growing local business, a few hours a week.' } });
+ok(jobR.status === 200 && jobR.data.job.status === 'published' && jobR.data.job.open === true, 'a job posts published and open', JSON.stringify(jobR.data));
+const jobId = jobR.data.job.id;
+
+const jobPublic = await call('GET', `/entities/Job?query=${encodeURIComponent(JSON.stringify({ status: 'published' }))}`);
+ok(jobPublic.status === 200 && jobPublic.data.some((j) => j.id === jobId), 'a published job is publicly browsable without auth');
+
+const selfApply = await call('POST', '/functions/applyToJob', { token: posterTok, body: { job_id: jobId, note: 'hi' } });
+ok(selfApply.status === 400, 'a poster cannot apply to their own job');
+
+const cantMessageYet = await call('POST', '/functions/sendMessage', { token: userB, body: { recipient_id: posterId, body: 'hello' } });
+ok(cantMessageYet.status === 403, 'a stranger cannot message the poster before applying');
+
+const applyR = await call('POST', '/functions/applyToJob', { token: userB, body: { job_id: jobId, note: 'I have three years of bookkeeping experience.' } });
+ok(applyR.status === 200 && applyR.data.application.poster_id === posterId, 'applying creates an application addressed to the poster', JSON.stringify(applyR.data));
+
+const dupeApply = await call('POST', '/functions/applyToJob', { token: userB, body: { job_id: jobId, note: 'again' } });
+ok(dupeApply.status === 400, 'cannot apply twice to the same job');
+
+const nowCanMessage = await call('POST', '/functions/sendMessage', { token: userB, body: { recipient_id: posterId, body: 'Following up on my application' } });
+ok(nowCanMessage.status === 200, 'applying opens a messaging door to the poster, like an accepted connection');
+const posterCanReply = await call('POST', '/functions/sendMessage', { token: posterTok, body: { recipient_id: idB, body: 'Thanks for applying!' } });
+ok(posterCanReply.status === 200, 'and the poster can message the applicant back');
+
+const appsAsPoster = await call('GET', `/entities/JobApplication?query=${encodeURIComponent(JSON.stringify({ job_id: jobId }))}`, { token: posterTok });
+ok(appsAsPoster.status === 200 && appsAsPoster.data.length === 1, 'the poster sees applications to their job');
+const appsAsStranger = await call('GET', `/entities/JobApplication?query=${encodeURIComponent(JSON.stringify({ job_id: jobId }))}`, { token: userC });
+ok(appsAsStranger.status === 200 && appsAsStranger.data.length === 0, 'nobody else sees who applied');
+
+const closeR = await call('PUT', `/entities/Job/${jobId}`, { token: posterTok, body: { open: false } });
+ok(closeR.status === 200 && closeR.data.open === false, 'the poster can mark their job filled');
+const applyToClosedR = await call('POST', '/functions/applyToJob', { token: userC, body: { job_id: jobId, note: 'x' } });
+ok(applyToClosedR.status === 400, 'cannot apply once a job is marked filled');
+
+const statusEscapeR = await call('PUT', `/entities/Job/${jobId}`, { token: posterTok, body: { status: 'pending' } });
+ok(statusEscapeR.status === 200 && statusEscapeR.data.status === 'published', 'an owner cannot change their own job\'s moderation status');
+
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');

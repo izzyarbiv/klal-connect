@@ -48,7 +48,14 @@ export default function Conversation(){
     setMe(u); setOther(target);
     if(u.guest||!target){ setLoading(false); return; }
     const conn = await loadMyConnections(u.id);
-    setConnected(connectionStatusWith(id, conn).status === 'accepted');
+    // Applying to a job opens the same door an accepted connection does —
+    // the poster asked for applicants, so the two of them may always reach
+    // each other about it. Mirrors canMessage on the server.
+    const [applied, postedTo] = await Promise.all([
+      api.entities.JobApplication.filter({ created_by_id: u.id, poster_id: id }).catch(() => []),
+      api.entities.JobApplication.filter({ created_by_id: id, poster_id: u.id }).catch(() => []),
+    ]);
+    setConnected(connectionStatusWith(id, conn).status === 'accepted' || applied.length > 0 || postedTo.length > 0);
     await load(u);
     setLoading(false);
   })()},[id]);

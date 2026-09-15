@@ -11,6 +11,7 @@ export const NOTIFICATION_TYPES = [
   { key: 'skill_endorsement', label: 'Skill endorsements' },
   { key: 'recommendation', label: 'Recommendations written about you' },
   { key: 'recommendation_accepted', label: 'Recommendations you wrote being shown' },
+  { key: 'job_application', label: 'Applications to your job posts' },
 ];
 
 // Create a notification for recipient_id, never notifying the actor about their own action.
@@ -41,6 +42,7 @@ export function notificationPath(n){
     case 'skill': return '/profile';
     case 'recommendation': return '/profile';
     case 'recommendation_accepted': return n.actor_id ? `/profile/${n.actor_id}` : '/profile';
+    case 'job': return n.target_id ? `/jobs/${n.target_id}` : '/jobs';
     default: return '/';
   }
 }

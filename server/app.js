@@ -105,13 +105,13 @@ app.use((req, res, next) => {
 
 // Which entities a signed-out visitor may read. The directory is public by
 // design; everything else (messages, notifications, reports…) is not.
-const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement', 'Recommendation']);
+const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement', 'Recommendation', 'Job']);
 
 // Entities that carry a moderation status. Everyone except an admin sees only
 // published rows — plus their own submissions, so an author can still find the
 // listing they sent to the review queue. Without this, anyone could read the
 // pending/hidden/declined queue straight off the API.
-const MODERATED = new Set(['Provider', 'Company', 'CommunityNote']);
+const MODERATED = new Set(['Provider', 'Company', 'CommunityNote', 'Job']);
 
 function moderationVisible(row, user) {
   if (row.status === 'published' || row.status === undefined) return true;
@@ -134,6 +134,9 @@ const OWNER_SCOPED = {
   Invite: (row, user) => row.created_by_id === user.id,
   // Searches, calls, post views: a member's own trail, nobody else's to read.
   ActivityEvent: (row, user) => row.created_by_id === user.id,
+  // An application is between the two people on it: whoever applied, and
+  // whoever posted the job — the same shape as a private message.
+  JobApplication: (row, user) => row.created_by_id === user.id || row.poster_id === user.id,
   PrivateReport: (row, user) => row.created_by_id === user.id,
   ListingReport: (row, user) => row.created_by_id === user.id,
   ClaimRequest: (row, user) => row.created_by_id === user.id,
@@ -145,7 +148,7 @@ const OWNER_SCOPED = {
 const CLIENT_WRITABLE = new Set([
   'Provider', 'Company', 'Setting', 'Notification', 'Connection',
   'SavedProvider', 'ListingChangeRequest', 'Category', 'ActivityEvent',
-  'Recommendation',
+  'Recommendation', 'Job',
 ]);
 
 // What the app is allowed to record about what someone did. Anything that
@@ -158,7 +161,7 @@ const CLIENT_EVENTS = new Set(['search', 'profile_view', 'call', 'text', 'share'
 
 // Entities a moderator works: the review queues and what they moderate.
 // A moderator never sees messages, saves, or anyone's private notifications.
-const MODERATED_BY_STAFF = new Set(['Provider', 'CommunityNote', 'ClaimRequest', 'ListingChangeRequest', 'ListingReport', 'PrivateReport']);
+const MODERATED_BY_STAFF = new Set(['Provider', 'CommunityNote', 'ClaimRequest', 'ListingChangeRequest', 'ListingReport', 'PrivateReport', 'Job']);
 const isModerator = (user) => user?.role === 'moderator';
 
 // Author fields are copied onto rows when they are created (functions.js
@@ -274,7 +277,7 @@ const ENTITIES = new Set([
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'SavedPost',
-  'SkillEndorsement', 'Recommendation',
+  'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication',
 ]);
 
 app.param('entity', (req, res, next, entity) => {
