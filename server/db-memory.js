@@ -8,6 +8,7 @@
 // Everything lives in the process, so writes survive only as long as a warm
 // instance and are not shared between instances. That is fine for showing the
 // app; it is not a database.
+import { randomInt } from 'node:crypto';
 import { nowISO, newId, userToPublic } from './db-shared.js';
 
 /**
@@ -163,7 +164,8 @@ const users = {
 
 const otp = {
   async issue(email, purpose, ttlMinutes = 15) {
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Mirrors the Postgres layer: unguessable codes, not Math.random.
+    const code = String(randomInt(100000, 1000000));
     const key = String(email).trim().toLowerCase();
     for (let i = otpRows.length - 1; i >= 0; i--) {
       if (otpRows[i].email === key && otpRows[i].purpose === purpose) otpRows.splice(i, 1);

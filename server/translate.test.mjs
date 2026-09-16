@@ -34,7 +34,7 @@ let calls = 0;
 globalThis.fetch = async (url, opts) => {
   calls++;
   const body = JSON.parse(opts.body);
-  check('request targets translate2', String(url).startsWith('https://translation.googleapis.com/language/translate2?key=test-key'), url);
+  check('request targets the v2 REST endpoint', String(url).startsWith('https://translation.googleapis.com/language/translate/v2?key=test-key'), url);
   check('request omits source (auto-detect)', body.source === undefined, body);
   return {
     ok: true,

@@ -12,7 +12,10 @@ export function useNotifications(){
       setPrefs(me.notification_prefs||{});
       const list=await api.entities.Notification.filter({recipient_id:me.id},'-created_date',30);
       setItems(list);
-    }catch{ setItems([]); }
+    // Keep the last good list. Resetting to [] made a failed request
+    // indistinguishable from "no notifications", so one flaky poll cleared
+    // the unread badge — and it polls every 20 seconds.
+    }catch{ /* keep whatever was last loaded */ }
     setLoading(false);
   },[]);
 

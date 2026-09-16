@@ -9,6 +9,7 @@ export default function CompanyEditor({ company, onDone }){
   const [data,setData]=useState(company);
   const [busy,setBusy]=useState(false);
   const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState('');
 
   const change=e=>setData({...data,[e.target.name]:e.target.value});
   const upload=async e=>{
@@ -17,15 +18,23 @@ export default function CompanyEditor({ company, onDone }){
     try{ const {file_url}=await api.integrations.Core.UploadFile({file}); setData({...data,logo_url:file_url}); }
     finally{ setBusy(false); }
   };
+  // The sibling create form already fixes this exact bug; the editor never
+  // got the same treatment. Without the catch a rejected update left
+  // `saving` true forever, so the button read "Saving…" with no message and
+  // the form looked frozen.
   const save=async e=>{
     e.preventDefault();
-    setSaving(true);
+    setSaving(true); setErr('');
     const {name,tagline,description,industry,website,email,phone,city,state,founded,size,logo_url,payment_link_url}=data;
-    const updated=await api.entities.Company.update(company.id,{name,tagline,description,industry,website,email,phone,city,state,founded,size,logo_url,payment_link_url});
-    onDone(updated);
+    try{
+      const updated=await api.entities.Company.update(company.id,{name,tagline,description,industry,website,email,phone,city,state,founded,size,logo_url,payment_link_url});
+      onDone(updated);
+    }catch(error){ setErr(error.message||'Could not save those changes.'); }
+    finally{ setSaving(false); }
   };
 
   return <form onSubmit={save} className="space-y-5">
+    {err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}
     <section className="panel space-y-4">
       <div className="flex items-center gap-5">
         {data.logo_url

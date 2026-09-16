@@ -73,7 +73,9 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   return <>
   <section id="intro" className="scroll-mt-24 overflow-hidden rounded-xl bg-brand-surface ring-1 ring-brand-line">
     <div className="relative">
-      <ProfileBanner url={user.banner_url} className="rounded-t-lg" onClick={() => setPreview({ url: user.banner_url, alt: `${user.full_name || 'Profile'} cover photo` })}/>
+      {/* No radius of its own: the section above clips with rounded-xl and
+          overflow-hidden, and a smaller radius here left a faint seam. */}
+      <ProfileBanner url={user.banner_url} onClick={() => setPreview({ url: user.banner_url, alt: `${user.full_name || 'Profile'} cover photo` })}/>
       {/* Changing the cover lives here, where the cover is. Removing it does
           not: an X floating on an image reads as "close this toolbar", and
           pressing it used to delete the picture on the spot — which is what

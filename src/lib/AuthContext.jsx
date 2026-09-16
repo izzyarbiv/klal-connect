@@ -45,7 +45,12 @@ export const AuthProvider = ({ children }) => {
       if (error.status === 401 || error.status === 403) {
         tokenStore.set(null);
         try {
-          if (await adoptDemoSession()) {
+          // `false` can also mean "somebody else already adopted one" — the
+          // helper refuses when a token exists. Without the second check, two
+          // concurrent recoveries left the winner signed in as a guest while
+          // this one rendered the whole app as signed-out until a reload.
+          const adopted = await adoptDemoSession();
+          if (adopted || tokenStore.get()) {
             const guest = await api.auth.me();
             setUser(guest);
             setIsAuthenticated(true);

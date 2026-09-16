@@ -22,12 +22,21 @@ const POLL_MS = 30 * 60 * 1000;
 const profileKeyOf = (status) =>
   status ? `${status.cityLabel || ""}|${status.tzid || ""}|${!!status.isInIsrael}` : "";
 
-function readCache() {
+// The profileKey written alongside the status has to be checked on the way
+// back out. Without this, moving city and reloading while the request is slow
+// or offline seeded the gate from the previous city's boundaries — the app
+// locking outside Shabbos, or worse, staying unlocked during it, labelled
+// with the old city. A cached answer for a different profile is no answer.
+function readCache(expectedKey) {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const cached = JSON.parse(raw);
-    return cached?.status ?? null;
+    const status = cached?.status ?? null;
+    if (!status) return null;
+    // Older entries predate the key; trust them only until the first refresh.
+    if (expectedKey && cached.profileKey && cached.profileKey !== expectedKey) return null;
+    return status;
   } catch {
     return null;
   }

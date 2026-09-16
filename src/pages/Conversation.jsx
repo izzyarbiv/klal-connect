@@ -42,9 +42,18 @@ export default function Conversation(){
     for(const m of unread){ try{ await api.entities.Message.update(m.id,{read:true}); }catch{} }
   };
 
-  useEffect(()=>{(async()=>{
+  useEffect(()=>{
+    // Every other detail view in this app guards this; this one did not, and
+    // it is the one where it matters most. Tap person A, go back, tap person
+    // B: A's slower response used to land last and render A's name and A's
+    // message history at B's URL — while the composer still posted to B. A
+    // reply meant for A was privately delivered to B.
+    let alive = true;
+    setLoading(true); setOther(undefined); setMessages([]); setConnected(false); setErr('');
+    (async()=>{
     if(!await api.auth.isAuthenticated()) return api.auth.redirectToLogin(location.href);
     const [u, target] = await Promise.all([ api.auth.me(), api.entities.User.get(id).catch(()=>null) ]);
+    if(!alive) return;
     setMe(u); setOther(target);
     if(u.guest||!target){ setLoading(false); return; }
     const conn = await loadMyConnections(u.id);
@@ -55,10 +64,14 @@ export default function Conversation(){
       api.entities.JobApplication.filter({ created_by_id: u.id, poster_id: id }).catch(() => []),
       api.entities.JobApplication.filter({ created_by_id: id, poster_id: u.id }).catch(() => []),
     ]);
+    if(!alive) return;
     setConnected(connectionStatusWith(id, conn).status === 'accepted' || applied.length > 0 || postedTo.length > 0);
     await load(u);
+    if(!alive) return;
     setLoading(false);
-  })()},[id]);
+  })();
+    return ()=>{ alive = false; };
+  },[id]);
 
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
 

@@ -9,6 +9,7 @@
 // is created once and kept small. Against Supabase it must point at the
 // transaction pooler, not the direct connection — a serverless platform opens
 // far more short-lived connections than Postgres will accept directly.
+import { randomInt } from 'node:crypto';
 import pg from 'pg';
 import tls from 'node:tls';
 import fs from 'node:fs';
@@ -377,7 +378,9 @@ export const users = {
 export const otp = {
   async issue(email, purpose, ttlMinutes = 15) {
     await ready();
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // randomInt, not Math.random: these codes reset passwords, and
+    // Math.random is neither uniform nor unguessable across a known seed.
+    const code = String(randomInt(100000, 1000000));
     await pool.query('DELETE FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2', [email, purpose]);
     await pool.query('INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES ($1, $2, $3, $4)', [
       email, code, purpose, Date.now() + ttlMinutes * 60_000,

@@ -85,7 +85,10 @@ export function useTravelCheck(){
   const dismiss=async (key)=>{
     setSuggestion(null);
     try{
-      const me=await api.auth.me();
+      // Forced: a cached session can be up to the TTL old, and two
+      // dismissals inside that window would drop the first one, so the
+      // suggestion kept coming back.
+      const me=await api.auth.me({ force:true });
       const list=me.travel_dismissals||[];
       if(!list.includes(key)) await api.auth.updateMe({ travel_dismissals:[...list, key] });
     }catch{}

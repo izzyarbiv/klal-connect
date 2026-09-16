@@ -8,7 +8,7 @@ import cors from 'cors';
 import multer from 'multer';
 import { randomBytes } from 'node:crypto';
 
-import { store, users, userToPublic, otp, GUEST_EMAIL } from './db.js';
+import { store, users, userToPublic, otp, geoCache, GUEST_EMAIL } from './db.js';
 import {
   attachUser, requireAuth, requireAdmin,
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
@@ -159,6 +159,12 @@ const CLIENT_WRITABLE = new Set([
 // people were looking for.
 const CLIENT_EVENTS = new Set(['search', 'profile_view', 'call', 'text', 'share', 'share_whatsapp', 'whatsapp', 'payment_link_click']);
 
+// The only notifications a member's own browser may create. Everything else
+// is written server-side from /api/functions. Without this list, Notification
+// being client-writable meant any member could post arbitrary text to anyone
+// — "Klal admin: verify your account at …" — with a forged actor name.
+const CLIENT_NOTIFICATION_TYPES = new Set(['save', 'connection_request', 'connection_accept', 'recommendation', 'recommendation_accepted']);
+
 // Entities a moderator works: the review queues and what they moderate.
 // A moderator never sees messages, saves, or anyone's private notifications.
 const MODERATED_BY_STAFF = new Set(['Provider', 'CommunityNote', 'ClaimRequest', 'ListingChangeRequest', 'ListingReport', 'PrivateReport', 'Job']);
@@ -238,7 +244,12 @@ function canWrite(entity, user, row) {
   // Settings are platform-wide (e.g. the global Shabbos override) and the
   // category list is the directory's structure — admin only.
   if (entity === 'Setting' || entity === 'Category') return false;
-  if (row && row.created_by_id && row.created_by_id !== user.id) {
+  // A row with no author is not everyone's to edit. The `created_by_id &&`
+  // that used to guard this meant server-written rows — every notification
+  // notify() creates without an actor — fell through to `return true`, so any
+  // member could rewrite or delete any notification by id, including
+  // somebody else's.
+  if (row && row.created_by_id !== user.id) {
     // Notifications are written by the server for a recipient, who may mark
     // them read; that is the one cross-author write we allow.
     return entity === 'Notification' && row.recipient_id === user.id;
@@ -322,7 +333,12 @@ const stripProtected = (body) => Object.fromEntries(Object.entries(body || {}).f
 // said. A connection request is pending until its recipient answers; a
 // listing or note waits for review; a company page publishes as it always
 // has (there is no review queue for companies).
-const CREATE_STATUS = { Connection: 'pending', Provider: 'pending', CommunityNote: 'pending', ListingChangeRequest: 'pending', Company: 'published', Recommendation: 'pending' };
+// A row created through the generic route with no status at all reads as
+// published to moderationVisible() and to the prerender, so every entity that
+// is client-writable needs an entry here. Job was missing: a direct POST
+// landed instantly public and skipped createJob's link validation, length
+// checks and rate limit entirely.
+const CREATE_STATUS = { Connection: 'pending', Provider: 'pending', CommunityNote: 'pending', ListingChangeRequest: 'pending', Company: 'published', Recommendation: 'pending', Job: 'pending' };
 
 app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   const { entity } = req.params;
@@ -340,8 +356,11 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   // A link a visitor is sent to. Validated wherever it can be written, not
   // only through the dedicated function, because Company goes straight
   // through this generic route.
-  if ('payment_link_url' in body) {
-    try { body.payment_link_url = safeExternalUrl(body.payment_link_url); }
+  // Every link that becomes an href a visitor can click. apply_url reaches
+  // JobDetail as one, so it is validated here too and not only in createJob.
+  for (const field of ['payment_link_url', 'apply_url']) {
+    if (!(field in body)) continue;
+    try { body[field] = safeExternalUrl(body[field]); }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
   if (entity === 'Connection') {
@@ -349,6 +368,15 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
     if (!recipient || recipient.email === GUEST_EMAIL) return res.status(400).json({ error: 'That member cannot receive connection requests.' });
     if (recipient.id === req.user.id) return res.status(400).json({ error: 'You cannot connect with yourself.' });
     body.requester_id = req.user.id;
+  }
+  if (entity === 'Notification' && req.user.role !== 'admin') {
+    if (!CLIENT_NOTIFICATION_TYPES.has(body.type)) {
+      return res.status(400).json({ error: 'Unknown notification type' });
+    }
+    // The actor is whoever is calling, never whoever they say they are.
+    body.actor_id = req.user.id;
+    body.actor_name = req.user.full_name || req.user.email;
+    body.actor_headline = req.user.headline || '';
   }
   if (entity === 'Recommendation') {
     const recipient = body.recipient_id ? await users.byId(body.recipient_id) : null;
@@ -380,8 +408,9 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
       patch = stripProtected(req.body);
     }
   }
-  if (patch && 'payment_link_url' in patch) {
-    try { patch = { ...patch, payment_link_url: safeExternalUrl(patch.payment_link_url) }; }
+  for (const field of ['payment_link_url', 'apply_url']) {
+    if (!patch || !(field in patch)) continue;
+    try { patch = { ...patch, [field]: safeExternalUrl(patch[field]) }; }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
   const updated = await store.update(entity, id, patch);
@@ -412,7 +441,13 @@ app.post('/api/entities/:entity/update-many', requireAuth, async (req, res, next
   const scoped = req.user.role === 'admin'
     ? query
     : { ...query, ...(entity === 'Notification' ? { recipient_id: req.user.id } : { created_by_id: req.user.id }) };
-  res.json({ updated: await store.updateMany(entity, scoped, update) });
+  // The same field guard the single-row routes apply. Without it this route
+  // was a way around every one of them: scoping to your own rows still let
+  // you accept a connection request you had sent yourself, publish and
+  // verify your own pending listing, inflate its counters, or push live a
+  // recommendation you wrote about somebody else.
+  const patch = req.user.role === 'admin' ? update : stripProtected(update);
+  res.json({ updated: await store.updateMany(entity, scoped, patch) });
 });
 
 // ------------------------------------------------------------------- users --
@@ -651,6 +686,13 @@ app.post('/api/auth/login', async (req, res, next) => {
   if (!row || !checkPassword(password, row.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
+  // `row` is the raw database row here, so the flag lives under data — and a
+  // deactivated account must not be able to sign back in. Until this check
+  // existed, deactivation removed the profile from listings while the
+  // password went on working.
+  if (row.data?.disabled === true) {
+    return res.status(403).json({ error: 'This account has been deactivated. Please contact us if you think that is a mistake.' });
+  }
   // An account that registered while email was on but never entered its code
   // is not in yet. A fresh code goes out and the client shows the same
   // verification screen sign-up uses. Accounts created before a mail provider
@@ -739,12 +781,38 @@ async function acceptInvite(invite, newUser) {
   }
 }
 
+// A six-digit code with a fifteen-minute window and no ceiling on guesses is
+// a million tries wide and unauthenticated — enough to take an account over
+// by looping /auth/reset-password. Issuing was throttled; verifying was not.
+//
+// Counted in the shared key-value table rather than a new column, so it holds
+// across serverless instances without a migration.
+const CODE_ATTEMPT_LIMIT = 8;
+const CODE_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const attemptKey = (email, purpose) => `otp-attempts:${purpose}:${String(email || '').trim().toLowerCase()}`;
+
+async function tooManyCodeAttempts(email, purpose, res) {
+  const used = Number(await geoCache.get(attemptKey(email, purpose)).catch(() => 0)) || 0;
+  if (used < CODE_ATTEMPT_LIMIT) return false;
+  res.status(429).json({ error: 'Too many incorrect codes. Request a new one and try again.' });
+  return true;
+}
+const recordCodeAttempt = async (email, purpose) => {
+  const key = attemptKey(email, purpose);
+  const used = Number(await geoCache.get(key).catch(() => 0)) || 0;
+  await geoCache.set(key, used + 1, CODE_ATTEMPT_WINDOW_MS).catch(() => {});
+};
+const clearCodeAttempts = (email, purpose) => geoCache.set(attemptKey(email, purpose), 0, 1000).catch(() => {});
+
 app.post('/api/auth/verify-otp', async (req, res, next) => {
   const { otpCode } = req.body || {};
   const email = normalizeEmail(req.body?.email);
+  if (await tooManyCodeAttempts(email, 'verify', res)) return;
   if (!(await otp.verify(String(email || '').trim(), 'verify', otpCode))) {
+    await recordCodeAttempt(email, 'verify');
     return res.status(400).json({ error: 'That code is incorrect or has expired' });
   }
+  await clearCodeAttempts(email, 'verify');
   const row = await users.byEmail(email);
   if (!row) return res.status(404).json({ error: 'Account not found' });
   await users.update(row.id, { verified: true });
@@ -775,9 +843,12 @@ app.post('/api/auth/reset-password', async (req, res, next) => {
   if (String(newPassword || '').length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
+  if (await tooManyCodeAttempts(email, 'reset', res)) return;
   if (!(await otp.verify(String(email || '').trim(), 'reset', resetToken))) {
+    await recordCodeAttempt(email, 'reset');
     return res.status(400).json({ error: 'That reset code is incorrect or has expired' });
   }
+  await clearCodeAttempts(email, 'reset');
   const row = await users.byEmail(email);
   if (!row) return res.status(404).json({ error: 'Account not found' });
   await users.update(row.id, { password_hash: hashPassword(newPassword) });
@@ -788,7 +859,10 @@ app.post('/api/auth/reset-password', async (req, res, next) => {
 
 app.post('/api/functions/:name', async (req, res, next) => {
   const { name } = req.params;
-  const fn = functions[name];
+  // Own properties only: `functions[name]` also answered to 'constructor',
+  // 'toString' and friends, so /api/functions/constructor resolved to
+  // something callable rather than a clean 404.
+  const fn = Object.hasOwn(functions, name) ? functions[name] : undefined;
   if (!fn) return res.status(404).json({ error: `Unknown function: ${name}` });
   if (!publicFunctions.has(name) && !req.user) {
     return res.status(401).json({ error: 'Authentication required' });

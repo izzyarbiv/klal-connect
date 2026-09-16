@@ -63,7 +63,11 @@ export async function translate(text, target) {
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   let data;
   try {
-    const res = await fetch(`https://translation.googleapis.com/language/translate2?key=${API_KEY}`, {
+    // Google's v2 REST path is /language/translate/v2. This said
+    // /language/translate2, which 404s on every call — so the whole feature
+    // would have failed closed the moment a key was added, and the unit test
+    // asserted the typo rather than the endpoint.
+    const res = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${API_KEY}`, {
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },

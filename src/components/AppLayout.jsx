@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut, Settings } from 'lucide-react';
 import Brand from '@/components/Brand';
@@ -65,7 +65,10 @@ export default function AppLayout() {
     {/* A page that throws should not take the header and the tab bar with it:
         the person needs a way to get somewhere else. The outer boundary in
         App.jsx still catches anything that breaks the layout itself. */}
-    <main><ErrorBoundary><Outlet/></ErrorBoundary></main>
+    {/* Suspense sits here, not around the router: a lazy route (admin, jobs)
+        loading on a slow connection should swap the page, not unmount the
+        header and the bottom nav down to a bare "Loading…". */}
+    <main><ErrorBoundary><Suspense fallback={<div className="loading">Loading…</div>}><Outlet/></Suspense></ErrorBoundary></main>
     <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{mobileLinks.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex flex-col items-center gap-1 text-[11px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={20}/><span>{n}</span></NavLink>)}<MobileNotificationBell/></nav>
   </div>;
 }

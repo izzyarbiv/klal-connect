@@ -16,18 +16,29 @@ export default function JobDetail() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { (async () => {
+  useEffect(() => {
+    // Reset and guard on id: without this, opening job A then job B showed
+    // A's title, description and apply button at /jobs/B until B arrived —
+    // and A's "Applied ✓" state could hide B's apply form entirely.
+    let alive = true;
+    setJob(undefined); setApplications([]); setMyApplication(null); setErr('');
+    (async () => {
     const authenticated = await api.auth.isAuthenticated();
     const u = authenticated ? await api.auth.me() : null;
+    if (!alive) return;
     setMe(u);
     const j = await api.entities.Job.get(id).catch(() => null);
+    if (!alive) return;
     setJob(j);
     if (!j) return;
     const isOwner = u && u.id === j.created_by_id;
     const rows = await api.entities.JobApplication.filter({ job_id: id }).catch(() => []);
+    if (!alive) return;
     if (isOwner) setApplications(rows);
     else if (u) setMyApplication(rows.find((r) => r.created_by_id === u.id) || null);
-  })(); }, [id]);
+    })();
+    return () => { alive = false; };
+  }, [id]);
 
   if (job === undefined) return <div className="loading">Loading job…</div>;
   if (!job) return <div className="empty">This job could not be found.</div>;

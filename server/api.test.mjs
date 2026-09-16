@@ -311,6 +311,81 @@ const statusEscapeR = await call('PUT', `/entities/Job/${jobId}`, { token: poste
 ok(statusEscapeR.status === 200 && statusEscapeR.data.status === 'published', 'an owner cannot change their own job\'s moderation status');
 
 
+// ---- the holes found in the code audit, pinned so they cannot reopen -----
+
+// update-many was the way around every single-row field guard: scoping to
+// your own rows still let you set the fields the PUT route strips.
+const ownConn = await call('POST', '/entities/Connection', { token: userA, body: { recipient_id: idB } });
+ok(ownConn.data.status === 'pending', 'a connection request starts pending');
+const selfAccept = await call('POST', '/entities/Connection/update-many', { token: userA, body: { query: { id: ownConn.data.id }, update: { status: 'accepted' } } });
+const connAfter = (await call('GET', `/entities/Connection/${ownConn.data.id}`, { token: userA })).data;
+ok(connAfter.status === 'pending', 'update-many cannot accept a connection request you sent yourself', JSON.stringify({ selfAccept: selfAccept.data, status: connAfter.status }));
+
+const ownListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Audit Listing', category: 'Business', short_description: 'x' } });
+const selfPublish = await call('POST', '/entities/Provider/update-many', { token: userA, body: { query: { id: ownListing.data.provider.id }, update: { verified: true, vouch_count: 999 } } });
+const listingAfter = (await call('GET', `/entities/Provider/${ownListing.data.provider.id}`, { token: userA })).data;
+ok(listingAfter.verified !== true && listingAfter.vouch_count !== 999, 'update-many cannot verify your own listing or inflate its counters', JSON.stringify({ selfPublish: selfPublish.data, verified: listingAfter.verified, vouches: listingAfter.vouch_count }));
+
+// A Job created through the generic route used to land with no status at all,
+// which reads as published — skipping createJob's link validation entirely.
+const rawJob = await call('POST', '/entities/Job', { token: userA, body: { title: 'Raw Job', category: 'Business', description: 'x'.repeat(40) } });
+ok(rawJob.status === 201 && rawJob.data.status === 'pending', 'a job created through the generic route is pending, not silently public', JSON.stringify(rawJob.data));
+const jsUrlJob = await call('POST', '/entities/Job', { token: userA, body: { title: 'XSS Job', category: 'Business', description: 'x'.repeat(40), apply_url: 'javascript:alert(1)' } });
+ok(jsUrlJob.status === 400, 'a javascript: apply link is refused on the generic route too', String(jsUrlJob.status));
+
+// Notification is client-writable, so the actor and the type are the server's
+// to decide — otherwise it is a phishing primitive.
+const forgedNotif = await call('POST', '/entities/Notification', { token: userA, body: { recipient_id: idB, type: 'admin_notice', message: 'Klal admin: verify at example.com' } });
+ok(forgedNotif.status === 400, 'an unknown notification type is refused', String(forgedNotif.status));
+const realNotif = await call('POST', '/entities/Notification', { token: userA, body: { recipient_id: idB, type: 'connection_request', actor_id: idB, actor_name: 'Somebody Else', message: 'hello' } });
+ok(realNotif.status === 201 && realNotif.data.actor_id === idA && realNotif.data.actor_name !== 'Somebody Else', 'the notification actor is the caller, not whoever they claim', JSON.stringify(realNotif.data));
+
+// A row written by the server has no author; that never meant "anyone's".
+const victimNotif = (await call('GET', '/entities/Notification', { token: userB })).data.find((n) => !n.created_by_id);
+if (victimNotif) {
+  const hijack = await call('PUT', `/entities/Notification/${victimNotif.id}`, { token: userA, body: { message: 'rewritten' } });
+  ok(hijack.status === 403, 'a member cannot rewrite a server-written notification addressed to someone else', String(hijack.status));
+} else {
+  ok(true, 'no server-written notification to test rewriting against (skipped)');
+}
+
+// Deactivation has to revoke access, not just hide the profile.
+const deadEmail = `dead${Date.now()}@example.com`;
+const deadReg = await call('POST', '/auth/register', { body: { email: deadEmail, password: 'password123' } });
+const deadTok = (await call('POST', '/auth/verify-otp', { body: { email: deadEmail, otpCode: deadReg.data.dev_code } })).data.access_token;
+const deadId = (await call('GET', '/auth/me', { token: deadTok })).data.id;
+await call('PUT', `/users/${deadId}`, { token: admin, body: { disabled: true } });
+const deadMe = await call('GET', '/auth/me', { token: deadTok });
+ok(deadMe.status === 401, 'a deactivated account\'s existing token stops working', String(deadMe.status));
+const deadLogin = await call('POST', '/auth/login', { body: { email: deadEmail, password: 'password123' } });
+ok(deadLogin.status === 403, 'a deactivated account cannot sign back in', String(deadLogin.status));
+
+// Codes are six digits with a fifteen-minute window, so guessing has to stop.
+const lockEmail = `lock${Date.now()}@example.com`;
+const lockReg = await call('POST', '/auth/register', { body: { email: lockEmail, password: 'password123' } });
+const realCode = lockReg.data.dev_code;
+let lockedAt = 0;
+for (let i = 1; i <= 12; i++) {
+  const attempt = await call('POST', '/auth/verify-otp', { body: { email: lockEmail, otpCode: '000000' } });
+  if (attempt.status === 429) { lockedAt = i; break; }
+}
+ok(lockedAt > 0 && lockedAt <= 10, `guessing a code is cut off after a few tries (locked on attempt ${lockedAt || 'never'})`);
+const afterLock = await call('POST', '/auth/verify-otp', { body: { email: lockEmail, otpCode: realCode } });
+ok(afterLock.status === 429, 'even the correct code is refused while locked out', String(afterLock.status));
+
+// ...and a wrong guess or two must not lock a real person out for good.
+const okEmail = `okcode${Date.now()}@example.com`;
+const okReg = await call('POST', '/auth/register', { body: { email: okEmail, password: 'password123' } });
+await call('POST', '/auth/verify-otp', { body: { email: okEmail, otpCode: '111111' } });
+await call('POST', '/auth/verify-otp', { body: { email: okEmail, otpCode: '222222' } });
+const recovered = await call('POST', '/auth/verify-otp', { body: { email: okEmail, otpCode: okReg.data.dev_code } });
+ok(recovered.status === 200 && recovered.data.access_token, 'the right code still works after a couple of wrong ones', String(recovered.status));
+
+// /api/functions/:name is a lookup on an object, so it answered to inherited keys.
+const proto = await call('POST', '/functions/constructor', { token: userA, body: {} });
+ok(proto.status === 404, 'an inherited property is not callable as a function', String(proto.status));
+
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');

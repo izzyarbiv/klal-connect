@@ -133,7 +133,9 @@ function inviteCode(user) {
 // to be worth a spammer's afternoon. Admins are exempt — seeding is their job.
 const DAY_MS = 24 * 60 * 60 * 1000;
 async function assertUnderDailyLimit(entity, user, limit, what) {
-  if (user.role === 'admin') return;
+  // Staff are exempt, moderators included — seeding and cleanup are their job,
+  // and a moderator adding a batch of real listings should not hit a 429.
+  if (user.role === 'admin' || user.role === 'moderator') return;
   const mine = await store.filter(entity, { created_by_id: user.id });
   const since = Date.now() - DAY_MS;
   const recent = mine.filter((row) => new Date(row.created_date).getTime() >= since);

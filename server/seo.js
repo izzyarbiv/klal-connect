@@ -235,9 +235,12 @@ export function mountSeo(app, shell) {
       const match = category ? categories.find((c) => slugify(c.name) === category) : null;
       if (category && !match) return notFound(req, res);
       const cityName = city ? city.replace(/-/g, ' ') : '';
+      // Matched as slugs so the round trip holds: slugify('Brooklyn, NY') is
+      // 'brooklyn-ny', and replacing dashes with spaces cannot put the comma
+      // back, so the sitemap was advertising URLs that matched no listing.
       const rows = all.filter((p) =>
         (!match || (p.category || '').toLowerCase() === match.name.toLowerCase())
-        && (!cityName || (p.city || '').toLowerCase() === cityName.toLowerCase()));
+        && (!city || slugify(p.city || '') === city));
       const where = cityName ? ` in ${cityName.replace(/\b\w/g, (m) => m.toUpperCase())}` : '';
       const what = match ? match.name : 'Community resources';
       const canonical = `${origin}${req.path.replace(/\/$/, '')}`;
@@ -364,7 +367,7 @@ export function mountSeo(app, shell) {
   // homepage's tab name. Not indexed either way.
   const PRIVATE_TITLES = {
     '/feed': 'Community feed', '/people': 'People', '/messages': 'Messages',
-    '/saved': 'Saved resources', '/profile': 'Your profile', '/settings': 'Settings',
+    '/saved': 'Saved resources', '/profile': 'Your profile', '/profile/': 'Member profile', '/settings': 'Settings',
     '/admin': 'Administration', '/welcome': 'Welcome', '/login': 'Log in',
     '/register': 'Create your account', '/forgot-password': 'Reset your password',
     '/reset-password': 'Reset your password', '/jobs': 'Jobs',
@@ -372,8 +375,11 @@ export function mountSeo(app, shell) {
   };
   app.get(PRIVATE, (req, res) => {
     const origin = siteOrigin(req);
+    // Exact path first, then "/profile/" for a path with a segment after it
+    // (someone else's profile is not "Your profile"), then the bare prefix.
     const base = `/${req.path.split('/')[1] || ''}`;
-    const label = PRIVATE_TITLES[req.path] || PRIVATE_TITLES[base];
+    const nested = req.path.split('/').length > 2 ? `${base}/` : '';
+    const label = PRIVATE_TITLES[req.path] || (nested && PRIVATE_TITLES[nested]) || PRIVATE_TITLES[base];
     send(res, renderPage(shell, {
       title: label ? `${label} · ${SITE_NAME}` : `${SITE_NAME} — ${TAGLINE}`,
       description: DEFAULT_DESCRIPTION,

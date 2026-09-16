@@ -37,7 +37,12 @@ function tokenFromRequest(req) {
 export async function attachUser(req, _res, next) {
   try {
     const claims = verifyToken(tokenFromRequest(req));
-    req.user = claims ? userToPublic(await users.byId(claims.sub)) : null;
+    const row = claims ? userToPublic(await users.byId(claims.sub)) : null;
+    // Deactivation has to revoke access, not merely hide a profile. This is
+    // the one chokepoint every authenticated route passes through, so a
+    // disabled account reads as no session at all and the 30-day token it is
+    // still holding stops working the moment an admin deactivates it.
+    req.user = row && row.disabled === true ? null : row;
     next();
   } catch (err) {
     next(err);

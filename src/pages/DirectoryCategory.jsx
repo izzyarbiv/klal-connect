@@ -15,15 +15,24 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 export default function DirectoryCategory() {
   const { category, city } = useParams();
   const { data: categories = [], isLoading: loadingCategories } = useQuery({ queryKey: ['categories'], queryFn: () => api.entities.Category.list('order') });
-  const { data: providers = [], isLoading: loadingProviders } = useQuery({ queryKey: ['providers', 'published'], queryFn: () => api.entities.Provider.filter({ status: 'published' }) });
+  // Not filter({status:'published'}): the prerender counts a row with no
+  // status at all as published (server/seo.js isPublished, and
+  // moderationVisible in server/app.js agree), so an exact-equality query
+  // here would drop legacy rows the server had just listed in the HTML and
+  // the JSON-LD — the page would prerender listings and hydrate to "none".
+  const { data: providers = [], isLoading: loadingProviders } = useQuery({ queryKey: ['providers', 'visible'], queryFn: () => api.entities.Provider.list() });
 
   const match = categories.find((c) => slugify(c.name) === category);
   const cityName = city ? city.replace(/-/g, ' ') : '';
   const where = cityName ? ` in ${cityName.replace(/\b\w/g, (m) => m.toUpperCase())}` : '';
 
+  // Compared as slugs. slugify('Brooklyn, NY') is 'brooklyn-ny', and turning
+  // dashes back into spaces can never restore the comma — so un-slugging and
+  // matching on text meant the sitemap advertised URLs that matched nothing.
   const rows = match
-    ? providers.filter((p) => (p.category || '').toLowerCase() === match.name.toLowerCase()
-        && (!cityName || (p.city || '').toLowerCase() === cityName.toLowerCase()))
+    ? providers.filter((p) => (p.status === 'published' || p.status === undefined)
+        && (p.category || '').toLowerCase() === match.name.toLowerCase()
+        && (!city || slugify(p.city || '') === city))
     : [];
 
   useMetaTags(match ? {

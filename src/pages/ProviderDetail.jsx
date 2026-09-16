@@ -14,7 +14,7 @@ import AdminBadgePanel from '@/components/AdminBadgePanel';
 
 export default function ProviderDetail(){
   const { slug } = useParams();
-  const [provider,setProvider]=useState(),[notes,setNotes]=useState([]),[vouchTick,setVouchTick]=useState(0);
+  const [provider,setProvider]=useState(),[notes,setNotes]=useState([]),[vouchTick,setVouchTick]=useState(0),[missing,setMissing]=useState(false);
 
   useEffect(()=>{
     let alive=true;
@@ -23,6 +23,10 @@ export default function ProviderDetail(){
       try{ const bySlug=await api.entities.Provider.filter({slug}); p=bySlug[0]; }catch{}
       if(!p){ try{ p=await api.entities.Provider.get(slug); }catch{} }
       if(!alive) return;
+      // Both lookups swallow their errors, so "not found" and "still
+      // loading" were the same undefined — a stale or unpublished link span
+      // on "Loading resource…" forever with no way out.
+      if(!p) setMissing(true);
       setProvider(p);
       if(p){
         api.entities.ActivityEvent.create({type:'profile_view',provider_id:p.id,category:p.category,city:p.city}).catch(()=>{});
@@ -39,6 +43,7 @@ export default function ProviderDetail(){
     url: window.location.href
   } : {});
 
+  if(missing)return <div className="page-shell py-10"><div className="empty"><p>That listing could not be found — it may have been removed or is awaiting review.</p><Link to="/browse" className="primary">Browse the directory</Link></div></div>;
   if(!provider)return <div className="loading">Loading resource…</div>;
   return <div className="page-shell py-7">
     <Link to="/browse" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to browse</Link>

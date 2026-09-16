@@ -18,6 +18,15 @@ export default function FeedPostItem({ post, user, onDeleted }) {
   const views=post.view_count||0;
   const picker=useReactionPicker();
   React.useEffect(()=>{api.getConfig().then(c=>setTranslate({enabled:!!c.translateEnabled&&!!user&&!user.guest,languages:c.translateLanguages||[]})).catch(()=>{});},[user]);
+  // These four are seeded from props into state, and posts are keyed by id —
+  // so a refetch remounts nothing and the counts froze at whatever they were
+  // on first render, drifting from the server for the life of the page. Kept
+  // in step with the server values here. Reactions are excluded on purpose:
+  // `mine` is the viewer's own and is loaded from FeedLike below, so it is
+  // never clobbered by an incoming prop.
+  React.useEffect(()=>{setLikes(post.like_count||0);setCounts(post.reaction_counts||{});},[post.like_count,post.reaction_counts]);
+  React.useEffect(()=>{setCc(post.comment_count||0);},[post.comment_count]);
+  React.useEffect(()=>{setHelpfulId(post.helpful_comment_id||null);},[post.helpful_comment_id]);
   React.useEffect(()=>{(async()=>{if(user&&!user.guest){const rows=await api.entities.FeedLike.filter({post_id:post.id});const own=rows.find(r=>r.created_by_id===user.id);setMine(own?reactionOf(own):null);}})();},[post.id,user]);
   // Recording a view returns nothing: the count is the author's, and the
   // author never records one.

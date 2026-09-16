@@ -13,7 +13,11 @@ useEffect(()=>{(async()=>{
   const [saves,savedPosts]=await Promise.all([api.entities.SavedProvider.list('-created_date'),api.entities.SavedPost.list('-created_date')]);
   // A saved post that has since been deleted is simply gone from the list.
   const [providers,found]=await Promise.all([
-    Promise.all(saves.map(s=>api.entities.Provider.get(s.provider_id))),
+    // .catch per item, exactly like the saved-posts line below. A listing
+    // that has since been hidden or archived answers 403, and one rejection
+    // rejected the whole Promise.all — which left the entire Saved page,
+    // saved posts included, stuck on "Loading saved resources…" forever.
+    Promise.all(saves.map(s=>api.entities.Provider.get(s.provider_id).catch(()=>null))),
     Promise.all(savedPosts.map(s=>api.entities.FeedPost.get(s.post_id).catch(()=>null))),
   ]);
   setPosts(savedPosts.map((s,i)=>({...s,post:found[i]})).filter(x=>x.post));

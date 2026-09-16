@@ -10,8 +10,14 @@ export const tokenStore = {
   get: () => {
     try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
   },
+  // Changing the token changes who you are, so the cached session below is
+  // dropped here rather than at each call site. Five places set a token
+  // directly — adopting a guest session, email login, Google login, register,
+  // verify-otp — and every one of them would otherwise leave a signed-in
+  // visitor reading a cached guest identity until the TTL expired.
   set: (token) => {
     try { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ }
+    forgetMe();
   },
 };
 
@@ -150,7 +156,10 @@ const auth = {
   // guest session. Reads work for the guest; writes do not.
   async hasAccount() {
     if (!(await this.isAuthenticated())) return false;
-    const me = await meNow().catch(() => null);
+    // Falls back to the last identity we were told rather than to "no
+    // account": on a transport failure this used to show a real member the
+    // "Join Klal to do that" modal in the middle of their own action.
+    const me = await meNow().catch(() => lastMe);
     return !!me && !me.guest;
   },
 
@@ -179,8 +188,13 @@ const auth = {
         tokenStore.set(null);
         forgetMe();
         if (await adoptDemoSession()) return true;
+        return false;
       }
-      return false;
+      // The server never answered — a flaky connection, not a signed-out
+      // visitor. Returning false here sent a signed-in member to /login
+      // mid-action and lost whatever they had typed. We are holding a token;
+      // believe it, and let the action itself fail loudly if it has to.
+      return true;
     }
   },
 
@@ -287,8 +301,15 @@ const geo = {
 };
 
 let configPromise = null;
-// Cached for the page's lifetime — it is static per deployment.
-const getConfig = () => (configPromise ??= request('GET', '/config').catch(() => ({})));
+// Cached for the page's lifetime — it is static per deployment. A *failure*
+// is not cached: one flaky request at boot used to pin `{}` for the whole
+// session, which silently disabled guest browsing (guestBrowsing falsy, so
+// adoptDemoSession refused) and left the Google sign-in button unrendered
+// until a manual reload.
+const getConfig = () => (configPromise ??= request('GET', '/config').catch((err) => {
+  configPromise = null;
+  throw err;
+})).catch(() => ({}));
 
 /**
  * On a demo instance, adopt the shared guest session so a visitor can browse the
@@ -296,18 +317,28 @@ const getConfig = () => (configPromise ??= request('GET', '/config').catch(() =>
  * real deployment, and never replaces an existing session.
  * @returns {Promise<boolean>} whether a demo session was adopted
  */
+// One shared attempt across concurrent callers. The token guard below is
+// checked before two awaits, so a cold load with several gates racing each
+// issued its own POST /auth/demo-session and threw away the losing token —
+// which is also what made the 401-recovery race below reachable.
+let adopting = null;
 export async function adoptDemoSession() {
   if (tokenStore.get()) return false;
-  const { guestBrowsing } = await getConfig();
-  if (!guestBrowsing) return false;
-  try {
-    const res = await request('POST', '/auth/demo-session');
-    if (!res?.access_token) return false;
-    tokenStore.set(res.access_token);
-    return true;
-  } catch {
-    return false;
-  }
+  adopting ??= (async () => {
+    try {
+      const { guestBrowsing } = await getConfig();
+      if (!guestBrowsing) return false;
+      const res = await request('POST', '/auth/demo-session');
+      if (!res?.access_token) return false;
+      tokenStore.set(res.access_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      adopting = null;
+    }
+  })();
+  return adopting;
 }
 
 // ------------------------------------------------------------ integrations --
