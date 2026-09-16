@@ -474,11 +474,18 @@ const isDisabled = (user) => user.disabled === true;
 const DEMO_EMAIL = (process.env.KC_DEMO_EMAIL || 'demo@klal.app').toLowerCase();
 const isSeedAdmin = (user) => String(user?.email || '').toLowerCase() === DEMO_EMAIL;
 
+// An account with no name yet is not someone to connect with either. Since
+// the name became optional at sign-up, anyone who registers and stops before
+// onboarding showed up in People as a blank row with a Connect button — which
+// is how a throwaway test account ended up listed as a member of the
+// community. They appear as soon as they enter a name.
+const isNameless = (user) => !String(user?.full_name || '').trim();
+
 async function memberList(viewer) {
   const all = (await users.all()).map(userToPublic);
   if (viewer?.role === 'admin') return all;
   // The guest is a session, not a member: it is not someone to connect with.
-  return all.filter((u) => !isDisabled(u) && !isGuest(u) && !isSeedAdmin(u)).map(publicProfile);
+  return all.filter((u) => !isDisabled(u) && !isGuest(u) && !isSeedAdmin(u) && !isNameless(u)).map(publicProfile);
 }
 
 app.get('/api/users', async (req, res, next) => {
