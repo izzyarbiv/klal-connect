@@ -31,6 +31,6 @@ export default function ProfileExperience({ user, editable, onSave, companies, c
       </div>
       : list.length > 0
         ? <WorkExperienceTimeline value={list} companyLinks={companies} companyLogos={companyLogos}/>
-        : <button type="button" onClick={start} className="inline-flex items-center gap-2 rounded-2xl border border-dashed border-brand-line px-4 py-3 text-sm text-brand-muted hover:border-brand-teal hover:text-brand-teal"><Plus size={16}/>Add your work or business. Roles show as a timeline, and a business in the directory links to its page.</button>}
+        : <button type="button" onClick={start} className="inline-flex items-center gap-2 rounded-lg border border-dashed border-brand-line px-4 py-3 text-sm text-brand-muted hover:border-brand-teal hover:text-brand-teal"><Plus size={16}/>Add your work or business. Roles show as a timeline, and a business in the directory links to its page.</button>}
   </section>;
 }

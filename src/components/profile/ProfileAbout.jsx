@@ -31,6 +31,6 @@ export default function ProfileAbout({ user, editable, onSave, editing, setEditi
       </div>
       : has
         ? <p className="whitespace-pre-line leading-7 text-brand-body">{user.bio}</p>
-        : <button type="button" onClick={start} className="w-full rounded-2xl border border-dashed border-brand-line px-4 py-5 text-left text-sm text-brand-muted hover:border-brand-teal hover:text-brand-teal">Add a short bio — what you do and who you help. Members read this before they connect.</button>}
+        : <button type="button" onClick={start} className="w-full rounded-lg border border-dashed border-brand-line px-4 py-5 text-left text-sm text-brand-muted hover:border-brand-teal hover:text-brand-teal">Add a short bio — what you do and who you help. Members read this before they connect.</button>}
   </section>;
 }

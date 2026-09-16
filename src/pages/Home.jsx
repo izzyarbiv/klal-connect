@@ -48,7 +48,7 @@ export default function Home(){
 
 function WayCard({ icon, title, body, action, accent }) {
   return <section className="panel space-y-4">
-    <div className="grid h-11 w-11 place-items-center rounded-2xl text-white" style={{background:accent}}>{icon}</div>
+    <div className="grid h-11 w-11 place-items-center rounded-lg text-white" style={{background:accent}}>{icon}</div>
     <h3 className="text-xl font-bold text-brand-ink">{title}</h3>
     <p className="leading-7 text-brand-body">{body}</p>
     <Link to={action.to} className="secondary inline-flex"><ArrowRight size={16}/>{action.label}</Link>

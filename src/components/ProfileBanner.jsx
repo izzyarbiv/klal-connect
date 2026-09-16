@@ -2,8 +2,9 @@ import React from 'react';
 import { Image } from '@/components/ui/image';
 
 // The wide cover image at the top of a profile, the way LinkedIn has one.
-// Without an image it falls back to a brand gradient rather than a grey box, so
-// a profile nobody has customised still looks deliberate.
+// Without an image it falls back to a flat brand-navy panel rather than a
+// grey box — deliberate, not decorative. A gradient here read as a generated
+// placeholder; a flat color reads as a real product decision.
 //
 // Height is a prop rather than something a caller overrides through className:
 // two competing h-* utilities in one class list resolve by CSS source order,
@@ -21,7 +22,7 @@ export default function ProfileBanner({ url, heightClass = 'h-32 sm:h-44', class
       {url ? (
         <Image src={url} fittingType="fill" className="h-full w-full" alt="" />
       ) : (
-        <div className="h-full w-full bg-gradient-to-br from-brand-navy via-brand-teal to-brand-navy opacity-90" />
+        <div className="h-full w-full bg-brand-navy" />
       )}
     </div>
   );

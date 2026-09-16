@@ -48,7 +48,7 @@ export default function ManageListings({user}){
       : <>
         <div className="space-y-4">
           {items.map(p=>(
-            <div key={p.id} className="space-y-2 rounded-2xl border border-brand-line p-4">
+            <div key={p.id} className="space-y-2 rounded-lg border border-brand-line p-4">
               <div className="flex items-center justify-between"><p className="font-semibold text-brand-ink">{p.name}</p><span className="text-xs font-semibold text-brand-muted">{p.status}</span></div>
               {(() => { const c = listingCompleteness(p); return <CompletenessRing percent={c.percent} next={c.next} label="Listing" onAction={() => { setSelected(p.id); setChanges((t) => t || `${c.next.action}: `); document.getElementById('listing-change-request')?.scrollIntoView({ behavior: 'smooth' }); }}/>; })()}
               <HeadlineEdit label="Tagline" value={taglineFor[p.id]!=null?taglineFor[p.id]:(p.tagline||'')} onChange={v=>setTaglineFor({...taglineFor,[p.id]:v})} helper="Appears under your listing name across the app."/>

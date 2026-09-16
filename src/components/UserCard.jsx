@@ -14,7 +14,7 @@ export default function UserCard({ user, me, connections, onReload }) {
   const initials = (user.full_name || user.email || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className="overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
+    <div className="overflow-hidden rounded-xl bg-brand-surface ring-1 ring-brand-line">
       {/* Shorter than the profile header's, so a card stays a card. */}
       <ProfileBanner url={user.banner_url} heightClass="h-20" />
 

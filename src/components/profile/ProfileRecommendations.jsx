@@ -58,7 +58,7 @@ export default function ProfileRecommendations({ user, me, members, editable, ed
       {canRecommend && !open && !mine && <button type="button" onClick={() => setEditing('recommend')} className="text-sm font-semibold text-brand-teal hover:underline">Write a recommendation</button>}
     </div>
 
-    {editable && pendingForMe.length > 0 && <div className="space-y-2 rounded-2xl bg-brand-tint/60 p-4">
+    {editable && pendingForMe.length > 0 && <div className="space-y-2 rounded-lg bg-brand-tint/60 p-4">
       <p className="text-sm font-semibold text-brand-ink">Waiting for your approval</p>
       {pendingForMe.map((r) => <div key={r.id} className="space-y-2 rounded-xl bg-brand-surface p-3 ring-1 ring-brand-line">
         <p className="text-xs font-semibold text-brand-ink">{nameFrom(members, r.created_by_id)}</p>
@@ -70,7 +70,7 @@ export default function ProfileRecommendations({ user, me, members, editable, ed
       </div>)}
     </div>}
 
-    {open && <div className="space-y-3 rounded-2xl bg-brand-tint/60 p-4 ring-1 ring-brand-line">
+    {open && <div className="space-y-3 rounded-lg bg-brand-tint/60 p-4 ring-1 ring-brand-line">
       <textarea className="field min-h-28" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`How do you know ${user.full_name || 'this person'}, and what would you tell someone about working with them?`} autoFocus/>
       <p className="text-xs text-brand-muted">Only visible on their profile if they choose to show it.</p>
       {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}

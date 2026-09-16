@@ -40,7 +40,7 @@ export default function ManageCompanies({ user }){
       ? <p className="text-sm text-brand-muted">You haven't created any company pages yet.</p>
       : <div className="space-y-4">{companies.map(c=>{
         const initials=(c.name||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
-        return <div key={c.id} className="space-y-3 rounded-2xl border border-brand-line p-4">
+        return <div key={c.id} className="space-y-3 rounded-lg border border-brand-line p-4">
           <Link to={companyPath(c)} className="flex items-center gap-3 rounded-xl p-1 hover:bg-brand-tint">
             {c.logo_url
               ? <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg ring-1 ring-brand-line"><Image src={c.logo_url} fittingType="fill" className="h-10 w-10"/></div>

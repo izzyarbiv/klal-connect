@@ -41,7 +41,7 @@ export default function FeedCommentList({ postId, user, authorId, isAsk, helpful
   const ordered=isAsk?[...comments].sort((a,b)=>(b.id===helpfulId)-(a.id===helpfulId)||(b.vote_count||0)-(a.vote_count||0)||new Date(a.created_date)-new Date(b.created_date)):comments;
 
   return <div className="space-y-3 pt-1">
-    {ordered.map(c=>{const isHelpful=isAsk&&c.id===helpfulId;return <div key={c.id} className={`flex gap-2 rounded-2xl p-3 ${isHelpful?'bg-brand-gold-bg ring-1 ring-brand-gold/40':'bg-brand-tint'}`}>
+    {ordered.map(c=>{const isHelpful=isAsk&&c.id===helpfulId;return <div key={c.id} className={`flex gap-2 rounded-lg p-3 ${isHelpful?'bg-brand-gold-bg ring-1 ring-brand-gold/40':'bg-brand-tint'}`}>
       {isAsk&&<button type="button" onClick={()=>vote(c)} disabled={!!user&&c.created_by_id===user.id} aria-label="Upvote this answer" className={`flex h-12 w-9 shrink-0 flex-col items-center justify-center rounded-xl text-xs font-bold ${myVotes.has(c.id)?'bg-brand-navy text-white':'bg-brand-surface text-brand-body hover:text-brand-ink'} disabled:opacity-40`}><ChevronUp size={16}/>{c.vote_count||0}</button>}
       {!isAsk&&<div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-surface text-xs font-bold text-brand-teal">{(c.author_name||' KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>}
       <div className="min-w-0 flex-1">

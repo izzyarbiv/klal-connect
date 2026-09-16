@@ -141,15 +141,16 @@
 
 @layer components {
   .page-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
-  /* The navy hero: deep navy with a teal glow in one corner, the one dark
-     band on an otherwise white page. Text inside it is set in white and the
-     bright gold (see .hero-gold) — the on-white gold token is too dark here. */
+  /* The navy hero: one flat dark band on an otherwise white page, not a
+     gradient glow — a solid colour reads as a deliberate choice, not a
+     generated placeholder. Text inside it is set in white and the bright
+     gold (see .hero-gold) — the on-white gold token is too dark here. */
   .hero {
-    background: radial-gradient(circle at 82% 15%, #1d6a68 0%, #123c4a 46%, #0b2c38 100%);
+    background: #0f2f3a;
     color: #fff;
   }
   .dark .hero {
-    background: radial-gradient(circle at 82% 15%, #17514f 0%, #0f323d 46%, #08222c 100%);
+    background: #0a2229;
   }
   .hero-gold { color: #f3c66a; }
   .hero .eyebrow { color: #f3c66a; }
@@ -158,7 +159,7 @@
   .title { @apply mt-2 font-heading text-2xl font-bold tracking-tight text-brand-ink; }
   .section-title { @apply font-heading text-xl font-bold text-brand-ink; }
   .section-head { @apply mb-5 flex items-end justify-between gap-4; }
-  .panel { @apply rounded-3xl bg-brand-surface p-5 shadow-sm ring-1 ring-brand-line sm:p-6; }
+  .panel { @apply rounded-xl bg-brand-surface p-5 ring-1 ring-brand-line sm:p-6; }
   .field { @apply mt-1 block w-full rounded-xl border border-brand-line bg-brand-surface px-3 py-2.5 text-sm text-brand-ink outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/10; }
   .primary { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-navy-hover; }
   .secondary, .action { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-brand-line bg-brand-surface px-4 py-2.5 text-sm font-semibold text-brand-ink hover:bg-brand-tint; }
@@ -168,7 +169,7 @@
   .info { @apply flex items-center gap-2 text-brand-body; }
   .info svg { @apply h-4 w-4 shrink-0 text-brand-teal; }
   .loading { @apply grid min-h-[60vh] place-items-center text-sm text-brand-muted; }
-  .empty { @apply grid min-h-52 place-items-center gap-3 rounded-3xl border border-dashed border-brand-line bg-brand-surface p-8 text-center text-brand-muted; }
+  .empty { @apply grid min-h-52 place-items-center gap-3 rounded-xl border border-dashed border-brand-line bg-brand-surface p-8 text-center text-brand-muted; }
   .tab { @apply rounded-xl px-3 py-3 text-xs font-bold text-brand-muted sm:text-sm; }
   .tab.active { @apply bg-brand-surface text-brand-navy shadow-sm; }
   .view-button { @apply flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold; }

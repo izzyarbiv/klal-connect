@@ -71,9 +71,9 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   const overlay = 'inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-brand-surface/90 px-3 py-1.5 text-xs font-semibold text-brand-ink shadow-sm ring-1 ring-brand-line backdrop-blur hover:bg-brand-surface';
 
   return <>
-  <section id="intro" className="scroll-mt-24 overflow-hidden rounded-3xl bg-brand-surface shadow-sm ring-1 ring-brand-line">
+  <section id="intro" className="scroll-mt-24 overflow-hidden rounded-xl bg-brand-surface ring-1 ring-brand-line">
     <div className="relative">
-      <ProfileBanner url={user.banner_url} className="rounded-t-3xl" onClick={() => setPreview({ url: user.banner_url, alt: `${user.full_name || 'Profile'} cover photo` })}/>
+      <ProfileBanner url={user.banner_url} className="rounded-t-lg" onClick={() => setPreview({ url: user.banner_url, alt: `${user.full_name || 'Profile'} cover photo` })}/>
       {/* Changing the cover lives here, where the cover is. Removing it does
           not: an X floating on an image reads as "close this toolbar", and
           pressing it used to delete the picture on the spot — which is what
@@ -109,7 +109,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
         <button type="button" disabled={busy} onClick={() => { if (window.confirm('Remove your profile photo? You will need the original file to put it back.')) write({ avatar_url: '' }, 'Could not remove the photo'); }} className="secondary py-1.5 text-xs"><X size={14}/>Remove photo</button>
       </div>}
       {open && form
-        ? <form onSubmit={submit} className="mt-4 space-y-4 rounded-2xl bg-brand-tint/60 p-4 ring-1 ring-brand-line">
+        ? <form onSubmit={submit} className="mt-4 space-y-4 rounded-lg bg-brand-tint/60 p-4 ring-1 ring-brand-line">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="sm:col-span-2">Name<input className="field" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="As people in the community know you" autoFocus/></label>
             <div className="sm:col-span-2"><HeadlineEdit label="Headline" value={form.headline} onChange={(v) => setForm({ ...form, headline: v })} suggestion={job ? `${job.title}${job.company ? ` — ${job.company}` : ''}` : null}/></div>

@@ -23,7 +23,7 @@ export function BadgePicker({ category, value = [], onChange }){
   },[category]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle=(id,on)=>onChange(on?[...value,id]:value.filter(x=>x!==id));
   const Row=({b})=><label className="flex items-start gap-2 text-sm text-brand-body"><input type="checkbox" className="mt-1" checked={value.includes(b.id)} onChange={e=>toggle(b.id,e.target.checked)}/><span><span className="font-medium text-brand-ink">{b.label}</span>{b.hint&&<span className="block text-xs text-brand-muted">{b.hint}</span>}</span></label>;
-  return <fieldset className="rounded-2xl border border-brand-line p-4">
+  return <fieldset className="rounded-lg border border-brand-line p-4">
     <legend className="px-1 text-sm font-semibold text-brand-ink">Community badges</legend>
     {!category
       ? <p className="helper mt-0">Choose a category above and the badges for that kind of business appear here.</p>

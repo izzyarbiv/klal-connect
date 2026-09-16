@@ -28,7 +28,7 @@ export default function DirectoryMap({ providers }) {
   const MapImpl = config?.googleMapsKey ? GoogleMap : LeafletMap;
 
   return (
-    <div className="h-[60vh] overflow-hidden rounded-3xl ring-1 ring-brand-line bg-brand-surface">
+    <div className="h-[60vh] overflow-hidden rounded-xl ring-1 ring-brand-line bg-brand-surface">
       {config && (
         <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-brand-muted">Loading map…</div>}>
           <MapImpl located={located} center={center} config={config} />

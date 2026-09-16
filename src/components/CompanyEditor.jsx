@@ -29,8 +29,8 @@ export default function CompanyEditor({ company, onDone }){
     <section className="panel space-y-4">
       <div className="flex items-center gap-5">
         {data.logo_url
-          ? <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl ring-2 ring-brand-line"><Image src={data.logo_url} fittingType="fill" className="h-20 w-20"/></div>
-          : <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-brand-tint text-brand-teal"><Building2 size={28}/></div>}
+          ? <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg ring-2 ring-brand-line"><Image src={data.logo_url} fittingType="fill" className="h-20 w-20"/></div>
+          : <div className="grid h-20 w-20 shrink-0 place-items-center rounded-lg bg-brand-tint text-brand-teal"><Building2 size={28}/></div>}
         <div>
           <label className="secondary cursor-pointer">
             {busy ? <><Loader2 size={16} className="animate-spin"/>Uploading…</> : <>Change logo</>}

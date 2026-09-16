@@ -67,7 +67,7 @@ export default function ReportIssueModal({ provider }) {
   if (!open) return <button onClick={openOrLogin} className="mt-6 text-xs font-medium text-brand-muted hover:text-brand-ink hover:underline">Report an issue with this listing</button>;
 
   return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4" onClick={close}>
-    <div className="w-full max-w-lg rounded-3xl bg-brand-surface p-6 shadow-xl ring-1 ring-brand-line" onClick={e => e.stopPropagation()}>
+    <div className="w-full max-w-lg rounded-xl bg-brand-surface p-6 shadow-xl ring-1 ring-brand-line" onClick={e => e.stopPropagation()}>
       {done ? (
         <div className="text-center">
           <ShieldCheck className="mx-auto text-brand-teal" size={32} />

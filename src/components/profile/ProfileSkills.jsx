@@ -94,7 +94,7 @@ export default function ProfileSkills({ user, me, editable, onSave, editing, set
             </button>;
           })}
         </div>
-        : <button type="button" onClick={start} className="w-full rounded-2xl border border-dashed border-brand-line px-4 py-5 text-left text-sm text-brand-muted hover:border-brand-teal hover:text-brand-teal">Add skills so people know what to ask you about — and connections can back you up.</button>}
+        : <button type="button" onClick={start} className="w-full rounded-lg border border-dashed border-brand-line px-4 py-5 text-left text-sm text-brand-muted hover:border-brand-teal hover:text-brand-teal">Add skills so people know what to ask you about — and connections can back you up.</button>}
     {!open && err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
   </section>;
 }

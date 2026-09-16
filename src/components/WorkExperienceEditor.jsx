@@ -39,7 +39,7 @@ export default function WorkExperienceEditor({ value=[], onChange }){
                 </div>
               </div>
             ) : (
-              <button type="button" onClick={()=>setOpen(i)} className="block w-full rounded-2xl bg-brand-surface px-4 py-3 text-left ring-1 ring-brand-line hover:bg-brand-tint">
+              <button type="button" onClick={()=>setOpen(i)} className="block w-full rounded-lg bg-brand-surface px-4 py-3 text-left ring-1 ring-brand-line hover:bg-brand-tint">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-semibold text-brand-ink">{job.title||'Untitled role'}</p>

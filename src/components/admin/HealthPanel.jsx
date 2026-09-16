@@ -55,7 +55,7 @@ export default function HealthPanel() {
       {err && <p className="mt-3 text-sm font-semibold text-brand-error">{err}</p>}
       {t && <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[['Members', t.members], ['Listings', t.listings_published], ['Awaiting review', t.listings_pending], ['Vouches', t.vouches], ['Listings vouched', t.listings_with_a_vouch]].map(([label, n]) => (
-          <div key={label} className="rounded-2xl bg-brand-tint p-3 text-center">
+          <div key={label} className="rounded-lg bg-brand-tint p-3 text-center">
             <p className="text-2xl font-bold text-brand-ink">{n}</p>
             <p className="text-xs font-semibold text-brand-body">{label}</p>
           </div>

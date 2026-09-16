@@ -47,7 +47,7 @@ export default function ListingLocationPicker({ value, onChange }) {
     }, () => { setBusy(false); setErr('Location permission denied. Search for the address instead.'); }, { timeout: 10000 });
   };
 
-  return <div className="space-y-3 rounded-2xl border border-brand-line p-4">
+  return <div className="space-y-3 rounded-lg border border-brand-line p-4">
     <div>
       <p className="font-semibold text-brand-ink">Map pin <span className="font-normal text-brand-muted">(optional)</span></p>
       <p className="helper">Pin the listing so people can find it on the map. Search the address or city, or use your current location if you are there now.</p>

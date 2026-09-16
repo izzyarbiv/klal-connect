@@ -100,7 +100,7 @@ export default function Conversation(){
             const own=m.reactions?.[me.id]||null;
             return <div key={m.id} className={`group flex ${mine?'justify-end':'justify-start'}`}>
               <div className="relative max-w-[78%]">
-                <div className={`rounded-2xl px-4 py-2.5 text-sm leading-6 ${mine?'bg-brand-navy text-white':'bg-brand-tint text-brand-ink'}`} title={fullDate(m.created_date)}>{m.body}</div>
+                <div className={`rounded-lg px-4 py-2.5 text-sm leading-6 ${mine?'bg-brand-navy text-white':'bg-brand-tint text-brand-ink'}`} title={fullDate(m.created_date)}>{m.body}</div>
                 {/* The "react" button sits beside the bubble: shown on hover,
                     and always faintly there on touch screens, where there is
                     no hover. */}

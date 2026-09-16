@@ -24,7 +24,7 @@ export default function NotificationBell(){
       <Bell size={19}/>
       {unread>0&&<span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-error px-1 text-[10px] font-bold text-white">{unread>9?'9+':unread}</span>}
     </button>
-    {open&&<div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-brand-line bg-brand-surface shadow-xl">
+    {open&&<div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-lg border border-brand-line bg-brand-surface shadow-xl">
       <div className="flex items-center justify-between border-b border-brand-line px-4 py-2.5">
         <span className="text-sm font-bold text-brand-ink">Notifications</span>
         {unread>0&&<button onClick={markAll} className="text-xs font-semibold text-brand-teal hover:underline">Mark all read</button>}

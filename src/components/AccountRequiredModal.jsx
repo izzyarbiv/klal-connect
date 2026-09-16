@@ -21,7 +21,7 @@ export default function AccountRequiredModal() {
   if (!open) return null;
   const here = window.location.pathname + window.location.search;
   return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4" onClick={() => setOpen(false)}>
-    <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-3xl bg-brand-surface p-6 shadow-xl ring-1 ring-brand-line" onClick={(e) => e.stopPropagation()}>
+    <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-xl bg-brand-surface p-6 shadow-xl ring-1 ring-brand-line" onClick={(e) => e.stopPropagation()}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-tint text-brand-teal"><UserPlus size={20}/></div>

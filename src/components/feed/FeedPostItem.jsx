@@ -59,7 +59,7 @@ export default function FeedPostItem({ post, user, onDeleted }) {
     </div>
     <p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>
     <TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages}/>
-    {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-2xl ring-1 ring-brand-line"/>)}</div>}
+    {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
     {reporting&&<ReportPostForm post={post} onClose={()=>setReporting(false)}/>}
     {(likes>0||cc>0||showViews)&&<div className="flex items-center gap-3 text-xs text-brand-muted">
       {likes>0&&<span className="flex items-center gap-1"><span className="flex -space-x-1">{stack.map(r=><span key={r.id} className="grid h-5 w-5 place-items-center rounded-full bg-brand-surface text-[13px] ring-1 ring-brand-line" title={r.label}>{r.emoji}</span>)}</span>{likes}</span>}

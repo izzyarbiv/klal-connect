@@ -51,8 +51,8 @@ function CompanyView({company,isOwner,onEdit}){
   return <section className="panel space-y-4">
     <div className="flex flex-wrap items-center gap-5">
       {company.logo_url
-        ? <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl ring-2 ring-brand-line"><Image src={company.logo_url} fittingType="fill" className="h-24 w-24"/></div>
-        : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-2xl bg-brand-tint text-2xl font-bold text-brand-teal">{initials}</div>}
+        ? <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg ring-2 ring-brand-line"><Image src={company.logo_url} fittingType="fill" className="h-24 w-24"/></div>
+        : <div className="grid h-24 w-24 shrink-0 place-items-center rounded-lg bg-brand-tint text-2xl font-bold text-brand-teal">{initials}</div>}
       <div className="min-w-0 flex-1">
         <h1 className="text-2xl font-bold text-brand-ink">{company.name}</h1>
         <Headline text={company.tagline} variant="header"/>

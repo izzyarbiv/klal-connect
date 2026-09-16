@@ -55,7 +55,7 @@ export default function InstallPrompt() {
 
   const blocked = NO_PROMPT.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (!show || blocked) return null;
-  return <div className="fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))] left-[max(.75rem,env(safe-area-inset-left))] right-[max(.75rem,env(safe-area-inset-right))] z-[105] mx-auto max-w-md rounded-2xl bg-brand-navy p-4 text-sm text-white shadow-lg md:inset-x-auto md:right-4 md:bottom-4 md:mx-0 md:w-[22rem]">
+  return <div className="fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))] left-[max(.75rem,env(safe-area-inset-left))] right-[max(.75rem,env(safe-area-inset-right))] z-[105] mx-auto max-w-md rounded-lg bg-brand-navy p-4 text-sm text-white shadow-lg md:inset-x-auto md:right-4 md:bottom-4 md:mx-0 md:w-[22rem]">
     <div className="flex items-start gap-3">
       <Download size={18} className="mt-0.5 shrink-0 text-[#f3c66a]" />
       <div className="flex-1">

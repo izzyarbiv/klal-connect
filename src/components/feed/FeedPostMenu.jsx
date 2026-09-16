@@ -97,7 +97,7 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
 
   return <div ref={ref} className="relative -mr-2 -mt-1 shrink-0">
     <button ref={btn} type="button" onClick={toggle} aria-haspopup="menu" aria-expanded={open} aria-label="Post options" className="icon-button text-brand-muted hover:text-brand-ink"><MoreHorizontal/></button>
-    {open&&<div role="menu" aria-label="Post options" className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-2xl bg-brand-surface py-1 shadow-lg ring-1 ring-brand-line">
+    {open&&<div role="menu" aria-label="Post options" className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-lg bg-brand-surface py-1 shadow-lg ring-1 ring-brand-line">
       <button type="button" role="menuitem" onClick={copy} className={item}><Link2 size={16}/>{note==='Copied'?'Copied':'Copy link'}</button>
       <a role="menuitem" href={waShareUrl(shareText)} target="_blank" rel="noreferrer" onClick={()=>setOpen(false)} className={item}><MessageCircle size={16} style={{color:WA_GREEN}}/>Share on WhatsApp</a>
       {!isOwn&&<button type="button" role="menuitem" onClick={save} disabled={busy||(member&&saved===null)} className={item}>{saved?<BookmarkCheck size={16} className="text-brand-teal"/>:<Bookmark size={16}/>}{note&&note!=='Copied'?note:(saved?'Unsave':'Save post')}</button>}
@@ -123,8 +123,8 @@ export function ReportPostForm({ post, onClose }) {
     if(r.status>=400){ setErr(r.data?.error||'Could not send the report'); return; }
     setErr(''); setDone(true);
   };
-  if(done)return <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-brand-tint px-4 py-3 text-sm"><p className="font-semibold text-brand-teal">Thanks — our team will look at it.</p><button type="button" onClick={onClose} className="text-xs font-semibold text-brand-body hover:underline">Close</button></div>;
-  return <form onSubmit={submit} className="space-y-3 rounded-2xl bg-brand-tint p-4">
+  if(done)return <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-tint px-4 py-3 text-sm"><p className="font-semibold text-brand-teal">Thanks — our team will look at it.</p><button type="button" onClick={onClose} className="text-xs font-semibold text-brand-body hover:underline">Close</button></div>;
+  return <form onSubmit={submit} className="space-y-3 rounded-lg bg-brand-tint p-4">
     <div>
       <p className="text-sm font-bold text-brand-ink">Report this post</p>
       <p className="text-xs text-brand-muted">Goes privately to the Klal team. The author is not told who reported it.</p>

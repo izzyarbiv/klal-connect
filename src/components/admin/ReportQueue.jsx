@@ -69,7 +69,7 @@ export default function ReportQueue({ user }) {
 
   return <div className="panel">
     <h2 className="section-title mb-4">Listing reports</h2>
-    {flaggedProviders.length > 0 && <div className="mb-5 rounded-2xl bg-brand-gold-bg p-4">
+    {flaggedProviders.length > 0 && <div className="mb-5 rounded-lg bg-brand-gold-bg p-4">
       <p className="flex items-center gap-2 text-sm font-bold text-brand-gold-ink"><Flag size={15} />Needs review — {flaggedProviders.length} listing{flaggedProviders.length > 1 ? 's' : ''} with {FLAG_THRESHOLD}+ reports in the last 90 days</p>
       <div className="mt-2 space-y-1">{flaggedProviders.map(p => <Link key={p.id} to={`/provider/${p.slug}`} className="block text-sm font-semibold text-brand-navy hover:underline">{p.name} · {p.city}</Link>)}</div>
     </div>}
@@ -146,7 +146,7 @@ function ReportDetail({ report, prov, reporter, others, flagged, user, onBack, o
       <div><p className="text-xs font-bold text-brand-muted">CONTACT OK</p><p className="mt-1 text-sm text-brand-body">{report.contact_ok ? 'Yes — reporter agreed to be contacted' : 'No'}</p></div>
       <div><p className="text-xs font-bold text-brand-muted">REPORTER (admin only)</p><p className="mt-1 text-sm text-brand-body">{reporter?.email || '—'}</p></div>
     </div>
-    {prov && <div className="rounded-2xl bg-brand-tint p-4">
+    {prov && <div className="rounded-lg bg-brand-tint p-4">
       <p className="text-xs font-bold text-brand-muted">LINKED LISTING</p>
       <div className="mt-1 flex flex-wrap items-center gap-3">
         <Link to={`/provider/${prov.slug}`} className="font-semibold text-brand-navy hover:underline">{prov.name}</Link>
