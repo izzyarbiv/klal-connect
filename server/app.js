@@ -433,11 +433,17 @@ function publicProfile(user) {
 // at it) but is nobody's business except an admin's.
 const isDisabled = (user) => user.disabled === true;
 
+// The seeded bootstrap admin. Real to the database, not a person anyone should
+// find in the member list — it showed up in People as "Demo Admin", which
+// reads exactly as unfinished as it sounds.
+const DEMO_EMAIL = (process.env.KC_DEMO_EMAIL || 'demo@klal.app').toLowerCase();
+const isSeedAdmin = (user) => String(user?.email || '').toLowerCase() === DEMO_EMAIL;
+
 async function memberList(viewer) {
   const all = (await users.all()).map(userToPublic);
   if (viewer?.role === 'admin') return all;
   // The guest is a session, not a member: it is not someone to connect with.
-  return all.filter((u) => !isDisabled(u) && !isGuest(u)).map(publicProfile);
+  return all.filter((u) => !isDisabled(u) && !isGuest(u) && !isSeedAdmin(u)).map(publicProfile);
 }
 
 app.get('/api/users', async (req, res, next) => {

@@ -38,7 +38,7 @@ export default function Directory(){
 
     <ProviderSection title="Popular near you" items={featured}/>
     <ProviderSection title="Recently added" items={recent}/>
-    <ProviderSection title="Community favorites" items={favorites}/>
+    <ProviderSection title="Featured resources" items={favorites}/>
 
     {gemachs.length>0&&(
       <section>
@@ -47,7 +47,7 @@ export default function Directory(){
       </section>
     )}
 
-    <section className="rounded-[2rem] bg-brand-navy p-7 text-white md:flex md:items-center md:justify-between md:p-10">
+    <section className="rounded-xl bg-brand-navy p-7 text-white md:flex md:items-center md:justify-between md:p-10">
       <div><h2 className="text-2xl font-bold">Is your business or resource missing?</h2><p className="mt-2 text-white/75">Add a community resource or claim your business listing — it's live the moment you post it.</p></div>
       <Link to="/add" className="mt-5 inline-block rounded-xl bg-brand-gold px-5 py-3 font-bold text-brand-navy md:mt-0">Add or claim a listing</Link>
     </section>

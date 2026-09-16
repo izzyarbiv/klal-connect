@@ -18,6 +18,7 @@
     "migrate": "node --env-file-if-exists=.env.local server/migrate.js",
     "test:gate": "node scripts/shabbos-gate-check.mjs ${KC_TEST_EMAIL:-} ${KC_TEST_PASSWORD:-}",
     "test:offline": "node scripts/sw-offline-check.mjs ${KC_TEST_EMAIL:-} ${KC_TEST_PASSWORD:-}",
+    "test:hydration": "node scripts/hydration-check.mjs ${KC_BASE_URL:-https://klalconnect.org}",
     "clear-demo": "node server/clear-demo.js",
     "import-blob": "node --env-file-if-exists=.env.local server/import-blob.js"
   },

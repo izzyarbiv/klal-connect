@@ -4,6 +4,7 @@ import { ImagePlus, Send } from 'lucide-react';
 import Headline from '@/components/Headline';
 import { AccountButtons } from '@/components/GuestPrompt';
 import { POST_TYPES, POST_TYPE_BY_ID } from '@/lib/postTypes';
+import { markEngaged } from '@/lib/engagement';
 
 export default function FeedComposer({ onPosted, user }) {
   const [body,setBody]=useState(''),[type,setType]=useState('post'),[uploading,setUploading]=useState(false),[imgs,setImgs]=useState([]),[busy,setBusy]=useState(false),[err,setErr]=useState('');
@@ -21,6 +22,7 @@ export default function FeedComposer({ onPosted, user }) {
     setBusy(true);
     const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs});
     if(r.status>=400){ setErr(r.data?.error||'Could not post'); setBusy(false); return; }
+    markEngaged();
     setErr(''); setBody(''); setImgs([]); setBusy(false);
     if(window.innerWidth<640) setOpen(false);
     onPosted?.();

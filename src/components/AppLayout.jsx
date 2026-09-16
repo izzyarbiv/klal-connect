@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut, Settings, Briefcase } from 'lucide-react';
+import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut, Settings } from 'lucide-react';
 import Brand from '@/components/Brand';
 import ThemeToggle from '@/components/ThemeToggle';
 import MobileNotificationBell from '@/components/MobileNotificationBell';
@@ -13,7 +13,15 @@ import { accountLinks } from '@/components/GuestPrompt';
 import { useAuth } from '@/lib/AuthContext';
 
 const Home = HomeIcon;
-const links = [['Home','/',Home],['Resources','/directory',LayoutGrid],['Feed','/feed',Newspaper],['People','/people',Users],['Jobs','/jobs',Briefcase],['Saved','/saved',Bookmark],['Profile','/profile',UserRound]];
+// Jobs is deliberately absent until real jobs exist: a nav item that always
+// leads to an empty room costs more trust than the feature earns. It is still
+// reachable at /jobs, and belongs back here once there is something in it.
+const links = [['Home','/',Home],['Resources','/directory',LayoutGrid],['Feed','/feed',Newspaper],['People','/people',Users],['Saved','/saved',Bookmark],['Profile','/profile',UserRound]];
+// The phone bar is not the desktop nav with smaller text: eight 47px targets
+// with 10px labels is a worse way to reach six places than five bigger ones.
+// Saved moves into the desktop nav and the profile page rather than competing
+// for a thumb.
+const mobileLinks = links.filter(([name]) => name !== 'Saved');
 function HeaderAccount() {
   const { user, isGuest, authChecked, logout } = useAuth();
   if (!authChecked) return null;
@@ -58,6 +66,6 @@ export default function AppLayout() {
         the person needs a way to get somewhere else. The outer boundary in
         App.jsx still catches anything that breaks the layout itself. */}
     <main><ErrorBoundary><Outlet/></ErrorBoundary></main>
-    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-8 border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{links.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex flex-col items-center gap-1 text-[10px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={19}/><span>{n}</span></NavLink>)}<MobileNotificationBell/></nav>
+    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{mobileLinks.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex flex-col items-center gap-1 text-[11px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={20}/><span>{n}</span></NavLink>)}<MobileNotificationBell/></nav>
   </div>;
 }

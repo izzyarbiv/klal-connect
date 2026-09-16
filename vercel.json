@@ -79,83 +79,83 @@
     },
     {
       "src": "/feed(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/people(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/messages(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/saved(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/profile(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/settings(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/admin(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/welcome(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/login(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/register(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/forgot-password(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/reset-password(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/join(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/browse(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/companies(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/jobs(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/post-job(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/create-company(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/add(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/privacy(/.*)?$",
-      "dest": "/index.html"
+      "dest": "/api"
     },
     {
       "src": "/(.*)",

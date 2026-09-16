@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Download, Share, X } from 'lucide-react';
+import { hasEngaged } from '@/lib/engagement';
 
 // "Add Klal to your home screen", offered on a repeat visit to a visitor who
 // hasn't installed the app. Chrome and Android expose beforeinstallprompt;
@@ -10,7 +11,11 @@ import { Download, Share, X } from 'lucide-react';
 // Never over a form someone is trying to submit. A banner across the bottom of
 // a laptop screen covered the "Create account" button, and being asked to
 // install an app you have not signed up for yet is the wrong moment anyway.
-const NO_PROMPT = ['/login', '/register', '/welcome', '/join', '/forgot-password', '/reset-password', '/add', '/profile', '/settings', '/provider', '/gemach', '/company', '/messages', '/admin'];
+// '/' and '/directory' are here because that is where the search box and the
+// sign-up buttons are: the banner sat on top of both. ('/' is safe in this
+// list — the startsWith check below tests `${p}/`, and no path starts with
+// '//', so it matches the homepage exactly and nothing else.)
+const NO_PROMPT = ['/', '/directory', '/login', '/register', '/welcome', '/join', '/forgot-password', '/reset-password', '/add', '/post-job', '/profile', '/settings', '/provider', '/gemach', '/company', '/messages', '/admin'];
 
 const VISITS_KEY = 'kc_visits';
 const SNOOZE_KEY = 'kc_install_snoozed';
@@ -39,9 +44,14 @@ export default function InstallPrompt() {
   useEffect(() => {
     if (isStandalone() || snoozed()) return;
     const visits = countVisit();
-    const onPrompt = (e) => { e.preventDefault(); setDeferred(e); if (visits >= 2) setShow(true); };
+    // A repeat visit is not enough on its own — a visitor can land twice and
+    // still have done nothing here. Asking only after they have saved,
+    // vouched, marked a listing used or posted means the question lands when
+    // the answer might be yes.
+    const earned = visits >= 2 && hasEngaged();
+    const onPrompt = (e) => { e.preventDefault(); setDeferred(e); if (earned) setShow(true); };
     window.addEventListener('beforeinstallprompt', onPrompt);
-    if (isIOS() && visits >= 2) { setIos(true); setShow(true); }
+    if (isIOS() && earned) { setIos(true); setShow(true); }
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
 
@@ -68,7 +78,9 @@ export default function InstallPrompt() {
           <button onClick={dismiss} className="text-xs text-white/60 hover:text-white">Not now</button>
         </div>
       </div>
-      <button onClick={dismiss} aria-label="Dismiss" className="shrink-0 text-white/60 hover:text-white"><X size={16} /></button>
+      {/* 44px of tap target, pulled back with a negative margin so the banner
+          does not grow. A 16px icon was a target only a mouse could hit. */}
+      <button onClick={dismiss} aria-label="Dismiss" className="-m-2.5 grid h-11 w-11 shrink-0 place-items-center text-white/60 hover:text-white"><X size={18} /></button>
     </div>
   </div>;
 }

@@ -311,11 +311,71 @@ export function mountSeo(app, shell) {
     return notFound(req, res);
   };
 
-  const PRIVATE = ['/feed', '/people', '/messages', '/messages/:id', '/saved', '/profile', '/profile/:id', '/settings', '/admin', '/welcome', '/login', '/register', '/forgot-password', '/reset-password', '/join/:code'];
-  app.get(PRIVATE, (req, res) => {
+  // The privacy policy is public and worth indexing, so it gets its own title
+  // rather than inheriting the homepage's.
+  app.get('/privacy', (req, res) => {
     const origin = siteOrigin(req);
     send(res, renderPage(shell, {
-      title: `${SITE_NAME} — ${TAGLINE}`,
+      title: `Privacy policy · ${SITE_NAME}`,
+      description: 'What Klal Connect collects, what it never collects, who can see your profile, and how to delete your account.',
+      canonical: `${origin}/privacy`,
+      image: ogFallback(origin),
+    }));
+  });
+
+  // Public, but only worth indexing once there is something on it. Same rule
+  // as an empty directory category: followed for its links, kept out of the
+  // index until it has content.
+  app.get('/companies', async (req, res, next) => {
+    try {
+      const origin = siteOrigin(req);
+      const companies = (await store.list('Company')).filter(isPublished);
+      send(res, renderPage(shell, {
+        title: `Company pages · ${SITE_NAME}`,
+        description: clamp(`${companies.length || 'No'} community company ${companies.length === 1 ? 'page' : 'pages'} on Klal Connect.`, 155),
+        canonical: `${origin}/companies`,
+        image: ogFallback(origin),
+        noindex: companies.length === 0,
+        body: companies.length
+          ? `<h1>Company pages</h1><ul>${companies.map((c) => `<li><a href="/company/${escapeHtml(c.slug || c.id)}">${escapeHtml(c.name)}</a></li>`).join('')}</ul>`
+          : '<h1>Company pages</h1><p>No company pages yet.</p>',
+      }));
+    } catch (err) { next(err); }
+  });
+
+  // A parameterised search view: real title, never indexed. The canonical
+  // directory pages are what belong in results.
+  app.get('/browse', (req, res) => {
+    const origin = siteOrigin(req);
+    send(res, renderPage(shell, {
+      title: `Search the directory · ${SITE_NAME}`,
+      description: DEFAULT_DESCRIPTION,
+      canonical: `${origin}/directory`,
+      image: ogFallback(origin),
+      noindex: true,
+    }));
+  });
+
+  // Everything a person signs in for, plus the surfaces that are still empty:
+  // a real title, and out of the index. /jobs and /post-job belong here until
+  // there are jobs; /add and /create-company are forms, never results.
+  const PRIVATE = ['/feed', '/people', '/messages', '/messages/:id', '/saved', '/profile', '/profile/:id', '/settings', '/admin', '/welcome', '/login', '/register', '/forgot-password', '/reset-password', '/join/:code', '/jobs', '/jobs/:id', '/post-job', '/add', '/create-company'];
+  // A per-path title, so a signed-in page is not eleven copies of the
+  // homepage's tab name. Not indexed either way.
+  const PRIVATE_TITLES = {
+    '/feed': 'Community feed', '/people': 'People', '/messages': 'Messages',
+    '/saved': 'Saved resources', '/profile': 'Your profile', '/settings': 'Settings',
+    '/admin': 'Administration', '/welcome': 'Welcome', '/login': 'Log in',
+    '/register': 'Create your account', '/forgot-password': 'Reset your password',
+    '/reset-password': 'Reset your password', '/jobs': 'Jobs',
+    '/post-job': 'Post a job', '/add': 'Add a listing', '/create-company': 'Create a company page',
+  };
+  app.get(PRIVATE, (req, res) => {
+    const origin = siteOrigin(req);
+    const base = `/${req.path.split('/')[1] || ''}`;
+    const label = PRIVATE_TITLES[req.path] || PRIVATE_TITLES[base];
+    send(res, renderPage(shell, {
+      title: label ? `${label} · ${SITE_NAME}` : `${SITE_NAME} — ${TAGLINE}`,
       description: DEFAULT_DESCRIPTION,
       canonical: `${origin}${req.path}`,
       image: ogFallback(origin),

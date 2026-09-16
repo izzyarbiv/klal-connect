@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -17,17 +18,21 @@ import Saved from '@/pages/Saved';
 import AddListing from '@/pages/AddListing';
 import Profile from '@/pages/Profile';
 import Settings from '@/pages/Settings';
-import Admin from '@/pages/Admin';
+// Split out of the first load: the admin screens are staff-only, and Jobs is
+// not in the nav until there are jobs. Neither belongs in the bundle a first
+// visitor downloads before seeing the directory.
+const Admin = lazy(() => import('@/pages/Admin'));
 import Feed from '@/pages/Feed';
 import Directory from '@/pages/Directory';
+import DirectoryCategory from '@/pages/DirectoryCategory';
 import People from '@/pages/People';
 import PublicProfile from '@/pages/PublicProfile';
 import CreateCompany from '@/pages/CreateCompany';
 import CompanyPage from '@/pages/CompanyPage';
 import Companies from '@/pages/Companies';
-import Jobs from '@/pages/Jobs';
-import PostJob from '@/pages/PostJob';
-import JobDetail from '@/pages/JobDetail';
+const Jobs = lazy(() => import('@/pages/Jobs'));
+const PostJob = lazy(() => import('@/pages/PostJob'));
+const JobDetail = lazy(() => import('@/pages/JobDetail'));
 import Messages from '@/pages/Messages';
 import Conversation from '@/pages/Conversation';
 import Login from '@/pages/Login';
@@ -63,11 +68,14 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
+    <Suspense fallback={<div className="loading">Loading…</div>}>
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/feed" element={<Feed />} />
         <Route path="/directory" element={<Directory />} />
+        <Route path="/directory/:category" element={<DirectoryCategory />} />
+        <Route path="/directory/:category/:city" element={<DirectoryCategory />} />
         <Route path="/people" element={<People />} />
         <Route path="/messages" element={<Messages />} />
         <Route path="/messages/:id" element={<Conversation />} />
@@ -96,6 +104,7 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </Suspense>
   );
 };
 

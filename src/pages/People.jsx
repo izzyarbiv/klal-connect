@@ -59,7 +59,6 @@ export default function People(){
       <p className="helper">Discover community members and connect.{!me.guest && ` You can send up to ${WEEKLY_CAP} connection requests per week.`}</p>
       {!me.guest && <p className="mt-2 text-sm font-semibold text-brand-teal">{used} / {WEEKLY_CAP} sent this week</p>}
       <div className="mt-2 flex gap-4 text-sm font-semibold text-brand-teal">
-        <Link to="/companies" className="hover:underline">Browse companies →</Link>
         <Link to="/messages" className="hover:underline">Messages →</Link>
       </div>
       {!me.guest && <div className="mt-4 rounded-lg bg-brand-tint p-4"><p className="text-sm font-semibold text-brand-ink">Know someone who should be here?</p><p className="mb-3 text-sm text-brand-body">Klal gets better with every person from your community. Anyone who joins through your link is connected to you.</p><InviteButton/></div>}

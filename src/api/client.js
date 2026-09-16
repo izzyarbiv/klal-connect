@@ -62,9 +62,31 @@ async function request(method, path, { body, query, raw } = {}) {
 export const ACCOUNT_REQUIRED_EVENT = 'kc:account-required';
 export const promptForAccount = () => window.dispatchEvent(new CustomEvent(ACCOUNT_REQUIRED_EVENT));
 
-// The last session the server described, so a gate does not need a round
-// trip on every click. Refreshed by every me() call.
+// The last session the server described, so a gate does not need a round trip
+// on every click.
+//
+// This used to be written and never read: me() overwrote it, isAuthenticated()
+// fired its own GET /auth/me and threw the body away, and requireAccount()
+// called both — so a single click could ask the server who you are three
+// times, and a cold page load asked it once per page component. Now every
+// caller goes through meNow(): one in-flight request shared by all of them,
+// and a short cache so a burst of gates costs nothing. Anything that changes
+// identity (a new token, a logout, a profile edit) clears it.
 let lastMe = null;
+let mePending = null;
+let meAt = 0;
+const ME_TTL_MS = 30_000;
+
+const forgetMe = () => { lastMe = null; mePending = null; meAt = 0; };
+
+function meNow({ force = false } = {}) {
+  if (!force && lastMe && Date.now() - meAt < ME_TTL_MS) return Promise.resolve(lastMe);
+  if (!force && mePending) return mePending;
+  mePending = request('GET', '/auth/me')
+    .then((me) => { lastMe = me; meAt = Date.now(); return me; })
+    .finally(() => { mePending = null; });
+  return mePending;
+}
 
 // ---------------------------------------------------------------- entities --
 
@@ -119,17 +141,17 @@ function toSamePath(target) {
 }
 
 const auth = {
-  async me() {
-    lastMe = await request('GET', '/auth/me');
-    return lastMe;
+  // Pass { force: true } right after something that changes the session.
+  async me(opts) {
+    return meNow(opts);
   },
 
   // True for a signed-in member with their own account — not the shared
   // guest session. Reads work for the guest; writes do not.
   async hasAccount() {
     if (!(await this.isAuthenticated())) return false;
-    const me = lastMe || await this.me();
-    return !me?.guest;
+    const me = await meNow().catch(() => null);
+    return !!me && !me.guest;
   },
 
   // Gate for anything that writes. Signed out → login page (and back here
@@ -146,7 +168,7 @@ const auth = {
     if (!tokenStore.get()) await adoptDemoSession();
     if (!tokenStore.get()) return false;
     try {
-      await request('GET', '/auth/me');
+      await meNow();
       return true;
     } catch (err) {
       // A token that no longer resolves — the account it referenced is gone, or
@@ -155,6 +177,7 @@ const auth = {
       // refuses to replace an existing token, and nothing else clears it.
       if (err.status === 401 || err.status === 403) {
         tokenStore.set(null);
+        forgetMe();
         if (await adoptDemoSession()) return true;
       }
       return false;
@@ -162,7 +185,10 @@ const auth = {
   },
 
   async updateMe(patch) {
-    return request('PUT', '/auth/me', { body: patch });
+    const updated = await request('PUT', '/auth/me', { body: patch });
+    // The profile just changed; keep the cache honest rather than stale.
+    forgetMe();
+    return updated;
   },
 
   // Google's ID token in, a Klal session out. Carries the invite code the
@@ -182,6 +208,7 @@ const auth = {
 
   setToken(token) {
     tokenStore.set(token);
+    forgetMe();
   },
 
   async loginViaEmailPassword(email, password) {
@@ -220,7 +247,7 @@ const auth = {
   },
 
   logout(redirectTo) {
-    lastMe = null;
+    forgetMe();
     tokenStore.set(null);
     window.location.href = redirectTo ? toSamePath(redirectTo) : '/';
   },

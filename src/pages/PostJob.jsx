@@ -2,12 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
 import CityInput from '@/components/CityInput';
+import GuestPrompt from '@/components/GuestPrompt';
+import { useAuth } from '@/lib/AuthContext';
 import { EMPLOYMENT_TYPES } from '@/lib/jobTypes';
 
 const blank = { title: '', company_name: '', category: '', employment_type: 'full_time', location: '', remote: false, description: '', apply_url: '' };
 
 export default function PostJob() {
   const navigate = useNavigate();
+  const { user, isGuest, authChecked } = useAuth();
   const [data, setData] = useState(blank);
   const [categories, setCategories] = useState([]);
   const [err, setErr] = useState('');
@@ -26,6 +29,15 @@ export default function PostJob() {
     if (r.status >= 400) { setErr(r.data?.error || 'Could not post this job'); setBusy(false); return; }
     navigate(`/jobs/${r.data.job.id}`);
   };
+
+  // Gated on arrival, not at the submit button — same reason as /add.
+  if (!authChecked) return <div className="loading">Loading…</div>;
+  if (!user || isGuest) {
+    return <GuestPrompt
+      title="Posting a job needs an account"
+      body="A job post carries your name, and applicants reach you through it. Create a free account first — it takes a minute, and the form is waiting."
+    />;
+  }
 
   return <div className="page-shell max-w-2xl py-9">
     <span className="eyebrow dark">HIRING</span>

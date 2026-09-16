@@ -36,7 +36,7 @@ export default function Home(){
         </div>
       </section>
 
-      <section className="rounded-[2rem] bg-brand-canvas p-7 text-center ring-1 ring-brand-line md:p-12">
+      <section className="rounded-xl bg-brand-canvas p-7 text-center ring-1 ring-brand-line md:p-12">
         <ShieldCheck size={28} className="mx-auto text-brand-teal"/>
         <h2 className="mt-4 title">Built on trust, not reviews</h2>
         <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews, no rating wars. Klal shows community usage and positive experiences, with corrections handled privately. Good connections support families, livelihoods, and local institutions.</p>

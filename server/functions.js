@@ -127,6 +127,21 @@ function inviteCode(user) {
   return `${first}-${tail}`;
 }
 
+// "New listings go live right away" is only a safe promise if one account
+// cannot paper the directory before anyone notices. Bounded per account per
+// day: more than enough for someone adding their own businesses, not enough
+// to be worth a spammer's afternoon. Admins are exempt — seeding is their job.
+const DAY_MS = 24 * 60 * 60 * 1000;
+async function assertUnderDailyLimit(entity, user, limit, what) {
+  if (user.role === 'admin') return;
+  const mine = await store.filter(entity, { created_by_id: user.id });
+  const since = Date.now() - DAY_MS;
+  const recent = mine.filter((row) => new Date(row.created_date).getTime() >= since);
+  if (recent.length >= limit) {
+    fail(`That is ${limit} ${what} from this account today. The rest can wait until tomorrow — or write to us if you have a lot to add at once.`, 429);
+  }
+}
+
 const ACTIVITIES = {
   save: { entity: 'SavedProvider', field: 'save_count' },
   use: { entity: 'ProviderUsage', field: 'usage_count' },
@@ -150,6 +165,7 @@ export const functions = {
 
   async createListing(payload, user) {
     await assertWritable(user);
+    await assertUnderDailyLimit('Provider', user, 5, 'listings');
     need(payload.name, 'A listing name is required.');
     need(payload.category, 'Please choose a category.');
     // New listings are never published directly — they go to the review queue.
@@ -192,6 +208,7 @@ export const functions = {
 
   async createJob(payload, user) {
     await assertWritable(user);
+    await assertUnderDailyLimit('Job', user, 5, 'job posts');
     need(payload.title, 'A job title is required.');
     need(payload.category, 'Please choose a category.');
     const description = String(payload.description || '').trim();
