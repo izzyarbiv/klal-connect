@@ -18,7 +18,6 @@ const welcomeUrl = () => { const rt = safeReturnTo(); return '/welcome' + (rt !=
 export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   // Set once the server has emailed a verification code; null until then, and
@@ -30,10 +29,6 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
     setLoading(true);
     try {
       const result = await api.auth.register({ email, password });
@@ -105,20 +100,10 @@ export default function Register() {
             onChange={(e) => setPassword(e.target.value)}
             className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             withIcon
+            minLength={8}
             required
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirm">Confirm Password</Label>
-          <PasswordInput
-            id="confirm"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            withIcon
-            required
-          />
+          <p className="text-xs text-muted-foreground">At least 8 characters. Use the eye icon to check what you typed.</p>
         </div>
         <Button type="submit" className="w-full h-12 font-medium" disabled={loading}>
           {loading ? (
