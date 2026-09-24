@@ -9,6 +9,17 @@
 // placement is labelled, styled as an ad rather than an endorsement, and
 // carries no check.
 
+// Fields that decide how prominent a listing is, or claim it was checked. A
+// listing never grants itself any of these.
+//
+// Exported from here because two different routes have to refuse them: the
+// generic entity route through PROTECTED_FIELDS in server/app.js, and
+// createListing through listingInput in server/functions.js. Those were two
+// hand-written lists and they drifted — the generic route was fixed while
+// createListing, which never sees stripProtected, still wrote all four onto
+// the row at creation time. One list now, imported by both.
+export const ADMIN_ONLY_LISTING_FIELDS = ['featured', 'sponsored', 'sponsored_until', 'last_confirmed_at'];
+
 export const VERIFIED_MEANING =
   'Klal Connect contacted this business or organization directly and confirmed it exists, that these details reach them, and that they agreed to be listed. It is not a recommendation, a kashrus certification, or any judgment of their work.';
 

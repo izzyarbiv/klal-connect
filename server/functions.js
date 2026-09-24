@@ -9,6 +9,7 @@ import { canDeliverCodes } from './auth.js';
 import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
+import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
@@ -52,7 +53,11 @@ const validReaction = (value) => (value === undefined || value === null || value
 // What a member may say about their own listing. Verification, status and
 // the counters are the server's and an admin's to set.
 function listingInput(payload) {
-  const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, owner_id, ...rest } = payload || {};
+  const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, owner_id, ...given } = payload || {};
+  // Prominence and confirmation are an admin's to grant, and this is a function
+  // route: stripProtected never runs here, so it has to refuse them itself —
+  // from the same list the generic route uses, not a second copy of it.
+  const rest = Object.fromEntries(Object.entries(given).filter(([key]) => !ADMIN_ONLY_LISTING_FIELDS.includes(key)));
   // Badges are category-specific: a plumber cannot claim Pas Yisroel, and the
   // check belongs here rather than only in the form.
   const badges = Array.isArray(rest.badges)
@@ -171,7 +176,11 @@ export const functions = {
     await assertUnderDailyLimit('Provider', user, 5, 'listings');
     need(payload.name, 'A listing name is required.');
     need(payload.category, 'Please choose a category.');
-    // New listings are never published directly — they go to the review queue.
+    // Published on submission unless KC_REVIEW_LISTINGS=1 puts the
+    // hold-for-approval step back — see REVIEW_FIRST above. This comment used
+    // to claim the opposite, which is worth more than a nitpick: a stale note
+    // about what moderation does is how someone later assumes a review
+    // happened when none did.
     const provider = await store.create(
       'Provider',
       { ...listingInput(payload), status: INITIAL_STATUS, claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },

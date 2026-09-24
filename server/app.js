@@ -14,6 +14,7 @@ import {
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
 import { functions, publicFunctions, safeExternalUrl } from './functions.js';
+import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
@@ -326,12 +327,15 @@ const PROTECTED_FIELDS = new Set([
   'status', 'verified', 'verified_at', 'verified_by', 'verified_badges', 'claimed', 'demo',
   'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
   // Prominence and confirmation, which a listing must never grant itself.
-  // `featured` was missing and Provider is client-writable, so an owner could
-  // PUT { featured: true } and appear in the directory's "Featured resources"
-  // rail — self-assertion buying standing, which is the same thing we refuse
+  // `featured` was missing here and Provider is client-writable, so an owner
+  // could PUT { featured: true } and appear in the directory's "Featured
+  // resources" rail — self-assertion buying standing, the same thing we refuse
   // to let payment buy. A forged `last_confirmed_at` is worse than none: it
   // dresses stale details up as checked.
-  'featured', 'sponsored', 'sponsored_until', 'last_confirmed_at',
+  //
+  // The list is shared with listingInput in functions.js rather than repeated,
+  // because repeating it is how createListing came to accept all four.
+  ...ADMIN_ONLY_LISTING_FIELDS,
 ]);
 const MODERATOR_FIELDS = new Set(['status', 'admin_notes', 'resolved_at', 'resolved_by']);
 const stripProtected = (body) => Object.fromEntries(Object.entries(body || {}).filter(([k]) => !PROTECTED_FIELDS.has(k)));

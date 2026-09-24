@@ -400,6 +400,17 @@ ok(!promoAfter.sponsored, 'an owner cannot mark their own listing sponsored', JS
 ok(!promoAfter.sponsored_until, 'an owner cannot set their own sponsorship window', JSON.stringify(promoAfter.sponsored_until));
 ok(!promoAfter.last_confirmed_at, 'an owner cannot forge a confirmation date', JSON.stringify(promoAfter.last_confirmed_at));
 
+// The same four fields through the other door. createListing is a function
+// route, so stripProtected never runs for it — and because the list of fields
+// to refuse was written out twice, it accepted all four at creation time while
+// the generic route above refused them. Both now read one shared list.
+const bornPromo = await call('POST', '/functions/createListing', { token: userB, body: { name: 'Door Two Plumbing', category: 'Home Services', short_description: 'Repairs and installations.', featured: true, sponsored: true, sponsored_until: '2030-01-01T00:00:00.000Z', last_confirmed_at: '2030-01-01T00:00:00.000Z' } });
+const born = bornPromo.data?.provider || {};
+ok(!born.featured, 'a listing cannot be born featured', JSON.stringify(born.featured));
+ok(!born.sponsored, 'a listing cannot be born sponsored', JSON.stringify(born.sponsored));
+ok(!born.sponsored_until, 'a listing cannot be born with a sponsorship window', JSON.stringify(born.sponsored_until));
+ok(!born.last_confirmed_at, 'a listing cannot be born already confirmed', JSON.stringify(born.last_confirmed_at));
+
 // ---- sensitive listings: no public record of who needed help -------------
 // The client does not render "I've used this" or a vouch button on a crisis
 // line, an addiction service, a fertility organization or a mikvah. That is
