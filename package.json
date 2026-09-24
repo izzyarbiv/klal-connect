@@ -21,6 +21,7 @@
     "test:hydration": "node scripts/hydration-check.mjs ${KC_BASE_URL:-https://klalconnect.org}",
     "test:home": "node scripts/home-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
     "test:search": "node scripts/search-check.mjs ${KC_BASE_URL:-https://klalconnect.org}",
+    "test:privacy": "node scripts/privacy-check.mjs ${KC_BASE_URL:-https://klalconnect.org}",
     "clear-demo": "node server/clear-demo.js",
     "import-blob": "node --env-file-if-exists=.env.local server/import-blob.js"
   },
