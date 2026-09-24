@@ -16,6 +16,9 @@ import { slugify } from './seo-shared.js';
 const SITE_NAME = 'Klal Connect';
 const TAGLINE = 'Community resources & business directory';
 const DEFAULT_DESCRIPTION = 'Klal Connect is a community-powered platform for finding trusted Jewish professionals, businesses, and resources near you.';
+// The homepage says something more specific than the site-wide description:
+// it names what someone can actually expect to find.
+const HOME_DESCRIPTION = 'Find businesses, gemachim, shuls, and everyday help across Jewish communities.';
 
 export const siteOrigin = (req) => {
   const host = req.get('x-forwarded-host') || req.get('host') || 'klalconnect.org';
@@ -294,8 +297,10 @@ export function mountSeo(app, shell) {
           },
         },
         body: [
-          '<h1>Helping each other grow. Strengthening our communities.</h1>',
-          `<p>${escapeHtml(DEFAULT_DESCRIPTION)}</p>`,
+          // Kept in step with the rendered homepage h1 on purpose: a crawler
+          // and a person should be told the same thing about this page.
+          '<h1>Your community. Wherever you are.</h1>',
+          `<p>${escapeHtml(HOME_DESCRIPTION)}</p>`,
           categories.length ? `<h2>Browse by category</h2><ul>${categories.map((c) => `<li><a href="/directory/${slugify(c.name)}">${escapeHtml(c.name)}</a></li>`).join('')}</ul>` : '',
         ].filter(Boolean).join('\n'),
       }));

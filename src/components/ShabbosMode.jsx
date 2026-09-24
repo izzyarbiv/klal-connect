@@ -4,11 +4,9 @@ import { MapPin } from 'lucide-react';
 import { useShabbosStatus, shabbosState } from '@/hooks/useShabbosStatus';
 import { tokenStore } from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
-
-// A Yom Tov that runs into Shabbos ends the following night, so a bare time
-// ("Havdalah · 7:38 PM") read as "this evening" when it was a day away. The
-// weekday appears whenever the moment is not today, in the location's zone.
-function fmt(ms,tzid,now=Date.now()){ if(!ms) return '—'; try{ const day=t=>new Intl.DateTimeFormat('en-CA',{timeZone:tzid,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t)); const sameDay=day(ms)===day(now); return new Intl.DateTimeFormat('en-US',{timeZone:tzid,...(sameDay?{}:{weekday:'short'}),hour:'numeric',minute:'2-digit'}).format(new Date(ms)); }catch{ return new Date(ms).toLocaleTimeString(); } }
+// Shared with the homepage's local section, so both show a Havdalah that falls
+// tomorrow the same way. See @/lib/time.
+import { timeInZone as fmt } from '@/lib/time';
 function countdown(ms){ if(!ms) return ''; const s=Math.max(0,Math.floor((ms-Date.now())/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 
 export default function ShabbosMode(){

@@ -9,7 +9,8 @@ import { useAuth } from '@/lib/AuthContext';
 // and it was inconsistent with messages/saved/profile, which say so up front.
 export default function AddListing() {
   const { user, isGuest, authChecked } = useAuth();
-  const [tab, setTab] = useState(new URLSearchParams(location.search).has('claim') ? 'claim' : 'add');
+  const params = new URLSearchParams(location.search);
+  const [tab, setTab] = useState(params.has('claim') ? 'claim' : 'add');
 
   if (!authChecked) return <div className="loading">Loading…</div>;
   if (!user || isGuest) {
@@ -27,6 +28,8 @@ export default function AddListing() {
       <button onClick={() => setTab('add')} className={`tab ${tab === 'add' ? 'active' : ''}`}>Add a Community Resource</button>
       <button onClick={() => setTab('claim')} className={`tab ${tab === 'claim' ? 'active' : ''}`}>List or Claim Your Business</button>
     </div>
-    <section className="panel">{tab === 'add' ? <ListingForm/> : <ClaimForm/>}</section>
+    {/* ?category= comes from an empty category tile on the homepage: the form
+        opens with that category chosen rather than asking for it again. */}
+    <section className="panel">{tab === 'add' ? <ListingForm initialCategory={params.get('category') || ''}/> : <ClaimForm/>}</section>
   </div>;
 }

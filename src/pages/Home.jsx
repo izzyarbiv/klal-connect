@@ -1,60 +1,203 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, MessageSquare, Building2, Users, ShieldCheck, Compass, ArrowRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/api/client';
+import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Compass } from 'lucide-react';
 import SearchPanel from '@/components/SearchPanel';
+import ResourceCard from '@/components/ResourceCard';
+import { iconFor, guessIcon } from '@/lib/categoryIcons';
+import { expandQuery, matchesQuery, providerHaystack } from '@/lib/searchTerms';
+import { servesPlace, communitiesFrom } from '@/lib/place';
+import { useCommunity } from '@/lib/community';
+import { useShabbosStatus } from '@/hooks/useShabbosStatus';
+import { timeInZone } from '@/lib/time';
 
-export default function Home(){
-  return <>
-    <section className="hero"><div className="page-shell py-16 md:py-28">
-      <span className="eyebrow">BUILT BY THE COMMUNITY, FOR THE COMMUNITY</span>
-      <h1 className="mt-5 max-w-3xl font-display text-4xl font-bold tracking-tight text-white md:text-6xl">Helping each other grow.<br/><span className="hero-gold">Strengthening our communities.</span></h1>
-      <p className="mt-5 max-w-2xl text-lg text-white/85">Klal Connect is a single home for the frum Jewish community to find trusted businesses, services, and resources — and to put your own business in front of the klal.</p>
-      <div className="mt-8"><SearchPanel/></div>
-      <div className="mt-5 flex flex-wrap gap-3">
-        <Link to="/directory" className="inline-flex items-center gap-2 rounded-xl bg-[#f3c66a] px-5 py-3 font-bold text-[#0b2c38] shadow-sm transition hover:bg-[#f6d187]"><Search size={17}/>Browse the directory</Link>
-        <Link to="/feed" className="inline-flex items-center gap-2 rounded-xl border border-white/40 px-5 py-3 font-semibold text-white transition hover:bg-white/10"><MessageSquare size={17}/>Open the community feed</Link>
+// The words people actually use, as searches rather than category filters —
+// "Plumbers" is not a category, and the alias layer in @/lib/searchTerms is
+// what turns it into results. A link with nothing behind it still leads
+// somewhere useful: the directory says so plainly and offers to ask the klal.
+const QUICK_LINKS = [
+  ['Plumbers', 'plumber'],
+  ['Therapists', 'therapist'],
+  ['Gemachim', 'gemach'],
+  ['Shuls', 'shul'],
+  ['Mikvahs', 'mikvah'],
+  ['Schools & Yeshivas', 'yeshiva'],
+];
+
+// Boca Raton is the launch community, so it is offered even before it is the
+// best-stocked one. Every other chip is earned by having listings behind it.
+const LAUNCH_COMMUNITY = 'Boca Raton';
+
+export default function Home() {
+  const { data: providers = [] } = useQuery({
+    queryKey: ['providers', 'all'],
+    queryFn: () => api.entities.Provider.filter({ status: 'published' }),
+  });
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.entities.Category.list('order'),
+  });
+  // Only to seed the community — a signed-in member should not have to tell us
+  // where they live twice.
+  const { data: me = null } = useQuery({
+    queryKey: ['me', 'home'],
+    queryFn: async () => (await api.auth.hasAccount() ? api.auth.me() : null),
+    retry: false,
+  });
+
+  const homeCity = String(me?.home_city || me?.city || '').trim();
+  const [community, setCommunity] = useCommunity(homeCity);
+
+  // What is available where they are. A listing that serves everywhere serves
+  // here too — see @/lib/place, which is also what the search uses.
+  const local = useMemo(() => providers.filter((p) => servesPlace(p, community)), [providers, community]);
+
+  const communities = useMemo(() => {
+    const found = communitiesFrom(providers);
+    const names = new Set(found.map((c) => c.city));
+    const extra = [LAUNCH_COMMUNITY, community].filter((c) => c && !names.has(c)).map((city) => ({ city, count: 0 }));
+    return [...found, ...extra].slice(0, 8);
+  }, [providers, community]);
+
+  // Counted against exactly what a click will return, so a number on a chip is
+  // a promise the directory keeps. Links with results come first; the rest stay
+  // visible, because a gap is also information — and an invitation.
+  const quickLinks = useMemo(() => QUICK_LINKS
+    .map(([label, q]) => {
+      const terms = expandQuery(q);
+      return { label, q, count: local.filter((p) => matchesQuery(providerHaystack(p), terms)).length };
+    })
+    .sort((a, b) => (b.count > 0) - (a.count > 0)), [local]);
+
+  // Real counts or none. A category with nothing in it is not hidden and is
+  // not promised as "coming soon" — nobody has committed to filling it. It
+  // asks for the first listing instead, which is the actual bottleneck.
+  const tiles = useMemo(() => categories
+    .map((c) => ({ ...c, count: local.filter((p) => p.category === c.name).length }))
+    .sort((a, b) => b.count - a.count || (a.order ?? 99) - (b.order ?? 99))
+    .slice(0, 8), [categories, local]);
+
+  const where = community || 'your community';
+  const browseHere = `/browse${community ? `?location=${encodeURIComponent(community)}` : ''}`;
+
+  return <div className="page-shell space-y-14 py-8 md:space-y-16 md:py-12">
+    {/* Search first. Everything that used to sit above it — slogan, mission,
+        a dark band — now sits below it. */}
+    <section>
+      <h1 className="max-w-3xl font-display text-3xl font-bold tracking-tight text-brand-ink md:text-5xl">Your community. Wherever you are.</h1>
+      <p className="mt-3 max-w-2xl text-lg text-brand-body">Find businesses, gemachim, shuls, and everyday help across Jewish communities.</p>
+      <div className="mt-6"><SearchPanel defaultLocation={community} /></div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {quickLinks.map(({ label, q, count }) => <Link
+          key={q}
+          to={`/browse?q=${encodeURIComponent(q)}${community ? `&location=${encodeURIComponent(community)}` : ''}`}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
+        >{label}{count > 0 && <span className="text-xs font-bold text-brand-teal/70">{count}</span>}</Link>)}
       </div>
-    </div></section>
+    </section>
 
-    <div className="page-shell space-y-16 py-14">
-      <section className="mx-auto max-w-3xl text-center">
-        <h2 className="title">One platform. Two ways to use it.</h2>
-        <p className="mt-4 text-lg leading-8 text-brand-body">You don't have to choose. Some people come to Klal just to <strong className="text-brand-navy">find what they need</strong>. Others use it to <strong className="text-brand-navy">grow their business and be seen</strong>. Do whichever fits you.</p>
-      </section>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <WayCard icon={<Compass size={24}/>} title="Use it as a resource" body="Find a doctor, a Gemach, a tutor, an insurance broker, a caterer — anywhere you are. Search, save, and connect with trusted community members whose services others rely on." action={{label:'Explore resources', to:'/directory'}} accent="#0D6B66"/>
-        <WayCard icon={<MessageSquare size={24}/>} title="Use it to grow your business" body="Post updates, share promotions, ask the klal a question, and keep your listing in front of the community — the same social-business networking, in a place that's ours." action={{label:'Open the feed', to:'/feed'}} accent="#B68A2E"/>
+    {/* Choosing a community here is remembered everywhere else on the site. */}
+    {communities.length > 0 && <section>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-ink"><MapPin size={15} className="text-brand-teal" />Community</span>
+        {communities.map(({ city, count }) => <button
+          key={city}
+          type="button"
+          onClick={() => setCommunity(city === community ? '' : city)}
+          className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${city === community ? 'bg-brand-navy text-white' : 'bg-brand-surface text-brand-body ring-1 ring-brand-line hover:text-brand-ink'}`}
+        >{city}{count > 0 && city !== community && <span className="ml-1.5 text-xs text-brand-muted">{count}</span>}</button>)}
+        {community && <button type="button" onClick={() => setCommunity('')} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Show everywhere</button>}
       </div>
+    </section>}
 
-      <section>
-        <div className="section-head"><div><span className="eyebrow dark">HOW IT WORKS</span><h2 className="title">Three simple steps</h2></div></div>
-        <div className="grid gap-5 md:grid-cols-3">
-          <Step n={1} icon={<Search size={20}/>} title="Find or be found" body="Search the directory by category, location, or need — or add your own listing so others can find you."/>
-          <Step n={2} icon={<Users size={20}/>} title="Connect with the klal" body="Save providers, share their info, and leave positive community notes. In the feed, comment and engage like you would expect."/>
-          <Step n={3} icon={<Building2 size={20}/>} title="Grow together" body="Providers claim their listing, post updates, and build trust through real community usage — not anonymous reviews."/>
-        </div>
-      </section>
+    <LocalSection community={community} where={where} local={local} browseHere={browseHere} />
 
-      <section className="rounded-xl bg-brand-canvas p-7 text-center ring-1 ring-brand-line md:p-12">
-        <ShieldCheck size={28} className="mx-auto text-brand-teal"/>
-        <h2 className="mt-4 title">Built on trust, not reviews</h2>
-        <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews, no rating wars. Klal shows community usage and positive experiences, with corrections handled privately. Good connections support families, livelihoods, and local institutions.</p>
-        <Link to="/add" className="mt-6 inline-flex items-center gap-2 primary"><ArrowRight size={16}/>Add your listing</Link>
-      </section>
+    <section>
+      <div className="section-head">
+        <div><span className="eyebrow dark">BROWSE</span><h2 className="title">Categories{community ? ` in ${community}` : ''}</h2></div>
+        {categories.length > tiles.length && <Link to="/directory" className="text-sm font-semibold text-brand-teal">All {categories.length} categories</Link>}
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {tiles.map((c) => {
+          const Icon = iconFor(c.icon && c.icon !== 'MoreHorizontal' ? c.icon : guessIcon(c.name));
+          const empty = c.count === 0;
+          return <Link
+            key={c.id || c.slug || c.name}
+            to={empty ? `/add?category=${encodeURIComponent(c.name)}` : `/browse?category=${encodeURIComponent(c.name)}${community ? `&location=${encodeURIComponent(community)}` : ''}`}
+            className={`group rounded-lg p-4 transition hover:-translate-y-0.5 hover:shadow-md ${empty ? 'border border-dashed border-brand-line bg-brand-canvas' : 'bg-brand-surface ring-1 ring-brand-line'}`}
+          >
+            <Icon className={`mb-3 ${empty ? 'text-brand-muted' : 'text-brand-teal'}`} size={22} />
+            <span className={`block text-sm font-semibold leading-tight ${empty ? 'text-brand-body' : 'text-brand-ink'}`}>{c.name}</span>
+            <span className="mt-1 block text-xs text-brand-muted">
+              {empty ? 'Add the first' : `${c.count} listed`}
+            </span>
+          </Link>;
+        })}
+      </div>
+    </section>
+
+    {/* The mission, and how the place works — below the useful part, not
+        above it. Someone who needs a phone number should never have to read
+        past a manifesto to reach the search box. */}
+    <section className="grid gap-6 md:grid-cols-2">
+      <div className="panel space-y-3">
+        <Compass size={22} className="text-brand-teal" />
+        <h2 className="font-heading text-xl font-bold text-brand-ink">Use it as a resource</h2>
+        <p className="leading-7 text-brand-body">Find a doctor, a gemach, a tutor, a caterer — wherever you are. Search, save, and reach people the community already relies on.</p>
+        <Link to="/directory" className="secondary inline-flex"><ArrowRight size={16} />Explore the directory</Link>
+      </div>
+      <div className="panel space-y-3">
+        <MessageCircle size={22} className="text-brand-gold-ink" />
+        <h2 className="font-heading text-xl font-bold text-brand-ink">Use it to be found</h2>
+        <p className="leading-7 text-brand-body">Add your business or organization, keep it current, and answer the people asking for exactly what you do.</p>
+        <Link to="/add" className="secondary inline-flex"><Plus size={16} />Add a listing</Link>
+      </div>
+    </section>
+
+    <section className="rounded-xl bg-brand-canvas p-7 text-center ring-1 ring-brand-line md:p-10">
+      <ShieldCheck size={26} className="mx-auto text-brand-teal" />
+      <h2 className="mt-3 font-heading text-xl font-bold text-brand-ink">Built on trust, not reviews</h2>
+      <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews and no rating wars. Klal Connect shows community usage and positive experiences, and handles corrections privately — because a livelihood is on the other end of every listing.</p>
+    </section>
+  </div>;
+}
+
+// Everything that serves this community, plus the times that govern the week
+// there. Shabbos times belong here, attached to a place, rather than in a band
+// across the top of the page: they matter enormously on Friday and not at all
+// to someone looking for an exterminator on Tuesday.
+function LocalSection({ community, where, local, browseHere }) {
+  const { status } = useShabbosStatus();
+  const shown = local.slice(0, 4);
+  const times = status?.cityLabel && (status.startsAt || status.endsAt) ? status : null;
+
+  return <section>
+    <div className="section-head">
+      <div>
+        <span className="eyebrow dark">NEAR YOU</span>
+        <h2 className="title">Help that serves {where}</h2>
+        {local.length > 0 && <p className="helper">{local.length} {local.length === 1 ? 'listing' : 'listings'} available{community ? ` in ${community}` : ''} — including organizations that help nationwide.</p>}
+      </div>
+      {local.length > shown.length && <Link to={browseHere} className="text-sm font-semibold text-brand-teal">See all {local.length}</Link>}
     </div>
-  </>;
-}
 
-function WayCard({ icon, title, body, action, accent }) {
-  return <section className="panel space-y-4">
-    <div className="grid h-11 w-11 place-items-center rounded-lg text-white" style={{background:accent}}>{icon}</div>
-    <h3 className="text-xl font-bold text-brand-ink">{title}</h3>
-    <p className="leading-7 text-brand-body">{body}</p>
-    <Link to={action.to} className="secondary inline-flex"><ArrowRight size={16}/>{action.label}</Link>
+    {times && <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-brand-surface px-4 py-3 text-sm ring-1 ring-brand-line">
+      <span className="font-semibold text-brand-ink">{times.cityLabel}</span>
+      {times.startsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Flame size={14} className="text-brand-gold-ink" />Candle lighting <b className="text-brand-ink">{timeInZone(times.startsAt, times.tzid)}</b></span>}
+      {times.endsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Moon size={14} className="text-brand-teal" />Havdalah <b className="text-brand-ink">{timeInZone(times.endsAt, times.tzid)}</b></span>}
+      {times.parsha && <span className="text-brand-muted">{times.parsha}</span>}
+    </div>}
+
+    {shown.length > 0
+      ? <div className="grid gap-4 lg:grid-cols-2">{shown.map((p) => <ResourceCard key={p.id} provider={p} />)}</div>
+      : <div className="empty">
+        <MapPin />
+        <p>Nothing is listed for {where} yet. It is a curated directory, so a gap means nobody has added it — not that it does not exist.</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Link to="/add" className="primary"><Plus size={16} />Add the first listing</Link>
+          <Link to="/feed" className="secondary"><MessageCircle size={16} />Ask the klal</Link>
+        </div>
+      </div>}
   </section>;
-}
-
-function Step({ n, icon, title, body }) {
-  return <div className="panel space-y-3"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-full bg-brand-tint font-bold text-brand-teal">{n}</span><span className="text-brand-teal">{icon}</span></div><h3 className="font-bold text-brand-ink">{title}</h3><p className="text-sm leading-6 text-brand-body">{body}</p></div>;
 }

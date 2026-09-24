@@ -4,7 +4,9 @@ import { api } from '@/api/client';
 import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
-import { expandQuery, matchesQuery } from '@/lib/searchTerms';
+import { expandQuery, matchesQuery, providerHaystack } from '@/lib/searchTerms';
+import { servesPlace } from '@/lib/place';
+import { readStoredCommunity, storeCommunity } from '@/lib/community';
 
 const rad = (x) => x * Math.PI / 180;
 const miles = (a, b, c, d) => {
@@ -23,7 +25,8 @@ export default function Browse() {
   const [providers, setProviders] = useState([]);
   const [categories, setCategories] = useState([]);
   const [q, setQ] = useState(params.get('q') || '');
-  const [place, setPlace] = useState(params.get('location') || '');
+  // The community chosen anywhere else on the site, unless this link names one.
+  const [place, setPlace] = useState(params.get('location') || readStoredCommunity());
   const [category, setCategory] = useState(params.get('category') || '');
   const [sort, setSort] = useState('nearest');
   const [verified, setVerified] = useState(false);
@@ -50,17 +53,12 @@ export default function Browse() {
 
   const terms = useMemo(() => expandQuery(q), [q]);
 
-  // Where someone is is not only where they sit: a listing that serves an
-  // area belongs in that area's results.
-  const servesPlace = (p, where) => {
-    if (!where) return true;
-    const loc = `${p.city || ''} ${p.neighborhood || ''} ${p.zip || ''} ${(p.service_areas || []).join(' ')} ${p.state || ''}`.toLowerCase();
-    return loc.includes(where.toLowerCase());
-  };
-  const matchesText = (p) => matchesQuery(
-    `${p.name || ''} ${p.tagline || ''} ${p.category || ''} ${p.subcategory || ''} ${p.short_description || ''} ${p.description || ''} ${(p.service_areas || []).join(' ')}`,
-    terms
-  );
+  // Narrowing to a place is also choosing a community — remembered, so the
+  // rest of the site opens where this search left off. servesPlace lives in
+  // @/lib/place: it is the same answer the homepage gives.
+  useEffect(() => { storeCommunity(place); }, [place]);
+
+  const matchesText = (p) => matchesQuery(providerHaystack(p), terms);
   const matches = (p, where) => matchesText(p)
     && servesPlace(p, where)
     && (!category || p.category === category)

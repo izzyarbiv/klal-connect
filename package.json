@@ -19,6 +19,7 @@
     "test:gate": "node scripts/shabbos-gate-check.mjs ${KC_TEST_EMAIL:-} ${KC_TEST_PASSWORD:-}",
     "test:offline": "node scripts/sw-offline-check.mjs ${KC_TEST_EMAIL:-} ${KC_TEST_PASSWORD:-}",
     "test:hydration": "node scripts/hydration-check.mjs ${KC_BASE_URL:-https://klalconnect.org}",
+    "test:home": "node scripts/home-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
     "clear-demo": "node server/clear-demo.js",
     "import-blob": "node --env-file-if-exists=.env.local server/import-blob.js"
   },

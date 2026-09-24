@@ -141,19 +141,10 @@
 
 @layer components {
   .page-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
-  /* The navy hero: one flat dark band on an otherwise white page, not a
-     gradient glow — a solid colour reads as a deliberate choice, not a
-     generated placeholder. Text inside it is set in white and the bright
-     gold (see .hero-gold) — the on-white gold token is too dark here. */
-  .hero {
-    background: #0f2f3a;
-    color: #fff;
-  }
-  .dark .hero {
-    background: #0a2229;
-  }
-  .hero-gold { color: #f3c66a; }
-  .hero .eyebrow { color: #f3c66a; }
+  /* The navy hero band is gone. It cost the homepage its most valuable space:
+     a dark full-bleed panel of slogan pushed the search box — the one thing
+     almost every visitor arrives to use — below the fold on a phone. The page
+     now opens flat on the ivory canvas with the search first. */
   .eyebrow { @apply text-[11px] font-bold tracking-[0.18em] text-brand-gold; }
   .eyebrow.dark { @apply text-brand-teal; }
   .title { @apply mt-2 font-heading text-2xl font-bold tracking-tight text-brand-ink; }

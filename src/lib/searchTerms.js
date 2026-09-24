@@ -128,6 +128,20 @@ export function expandQuery(raw) {
   return [...terms];
 }
 
+/**
+ * Everything about a listing that a search should look at.
+ *
+ * Shared, because the homepage counts how many listings a quick link will
+ * return and the directory decides which ones to show. Assembled twice, those
+ * two drift, and a tile that promises four results delivers three.
+ */
+export function providerHaystack(p) {
+  return [
+    p?.name, p?.tagline, p?.category, p?.subcategory,
+    p?.short_description, p?.description, (p?.service_areas || []).join(' '),
+  ].join(' ');
+}
+
 /** Does this text satisfy the query, allowing for aliases? */
 export function matchesQuery(haystack, terms) {
   if (!terms.length) return true;

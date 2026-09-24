@@ -3,11 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import SearchPanel from '@/components/SearchPanel';
+import { useCommunity } from '@/lib/community';
 import CategoryGrid from '@/components/CategoryGrid';
 import ResourceCard from '@/components/ResourceCard';
 
 export default function Directory(){
   const {data:categories=[]}=useQuery({queryKey:['categories'],queryFn:()=>api.entities.Category.list('order')});
+  // The community chosen on the homepage. Arriving here and finding the search
+  // box empty again is how a site tells someone it was not paying attention.
+  const [community]=useCommunity();
 
   // Each rail is ranked over ALL published listings, not over a recency window.
   // Previously every rail was computed from the newest 30, so the moment there
@@ -29,16 +33,23 @@ export default function Directory(){
     enabled:!!gemachCategory,
     queryFn:()=>api.entities.Provider.filter({...published,category:gemachCategory},'-created_date',3)});
   return <div className="page-shell space-y-12 py-10">
-    <div><span className="eyebrow dark">RESOURCES</span><h1 className="title">Find trusted community resources</h1><p className="helper">Search the directory, browse categories, or explore what's new and popular near you.</p><div className="mt-5"><SearchPanel/></div></div>
+    <div><span className="eyebrow dark">RESOURCES</span><h1 className="title">Find trusted community resources</h1><p className="helper">Search the directory, browse categories, or explore what's new and popular near you.</p><div className="mt-5"><SearchPanel defaultLocation={community}/></div></div>
 
     <section>
       <div className="section-head"><div><span className="eyebrow dark">EXPLORE</span><h2 className="title">Popular categories</h2></div><Link to="/browse" className="text-sm font-semibold text-brand-teal">View all</Link></div>
       <CategoryGrid categories={categories} limit={12}/>
     </section>
 
-    <ProviderSection title="Popular near you" items={featured}/>
+    {/* These three rails were mislabelled against their own queries: the
+        featured:true rail was titled "Popular near you" while the rail ranked
+        by usage was titled "Featured resources". With only a handful of
+        listings all three also showed the same cards, which is where the
+        "recently added vs featured" duplication came from. Each rail now
+        carries the name of what it actually ranks, and one with nothing to
+        rank does not appear at all. */}
+    <ProviderSection title="Featured resources" items={featured}/>
+    <ProviderSection title="Most used in the community" items={favorites.filter(p=>p.usage_count>0)}/>
     <ProviderSection title="Recently added" items={recent}/>
-    <ProviderSection title="Featured resources" items={favorites}/>
 
     {gemachs.length>0&&(
       <section>
