@@ -12,6 +12,8 @@ import VouchList from '@/components/VouchList';
 import BadgeChips from '@/components/BadgeChips';
 import AdminBadgePanel from '@/components/AdminBadgePanel';
 import { isSensitiveListing } from '@/lib/sensitivity';
+import TrustMarks from '@/components/TrustMarks';
+import { VERIFIED_MEANING } from '@/lib/trust';
 
 export default function ProviderDetail(){
   const { slug } = useParams();
@@ -67,7 +69,13 @@ export default function ProviderDetail(){
         <section className="panel"><ProviderActions provider={provider} onVouch={({count})=>{setProvider(p=>({...p,vouch_count:count}));setVouchTick(t=>t+1);}}/>{/* Three zeros under every listing read as "nobody has ever used this",
           which is worse than saying nothing at all while the directory is
           young. The row appears as soon as there is a single count to show. */}
-        {!sensitive&&(provider.vouch_count>0||provider.usage_count>0||provider.save_count>0)&&<div className="mt-5 grid grid-cols-3 gap-3 border-t pt-5 text-center"><Stat n={provider.vouch_count||0} label="Vouches"/><Stat n={provider.usage_count||0} label="Community uses"/><Stat n={provider.save_count||0} label="Saves"/></div>}<p className="mt-4 text-xs text-brand-muted">Verified status, when shown, is controlled by Klal administrators.</p></section>
+        {!sensitive&&(provider.vouch_count>0||provider.usage_count>0||provider.save_count>0)&&<div className="mt-5 grid grid-cols-3 gap-3 border-t pt-5 text-center"><Stat n={provider.vouch_count||0} label="Vouches"/><Stat n={provider.usage_count||0} label="Community uses"/><Stat n={provider.save_count||0} label="Saves"/></div>}{/* "Controlled by Klal administrators" told a reader who sets the mark
+            but never what it claims — so everyone supplied their own
+            definition, usually a more generous one than we earn. */}
+        <div className="mt-4 space-y-2 border-t pt-4">
+          <TrustMarks provider={provider}/>
+          <p className="text-xs leading-5 text-brand-muted">{provider.verified ? VERIFIED_MEANING : `Not yet verified. ${VERIFIED_MEANING}`}</p>
+        </div></section>
         <ReportForm provider={provider}/>
         <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>
         <AdminBadgePanel provider={provider} onChange={setProvider}/>

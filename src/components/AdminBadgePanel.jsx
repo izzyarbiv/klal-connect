@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BadgeCheck } from 'lucide-react';
 import { api } from '@/api/client';
 import { BADGES } from '@/lib/badges';
+import { VERIFIED_MEANING, confirmedLabel } from '@/lib/trust';
 
 // Admin-only: confirm (or withdraw) the badges a listing declared, and mark
 // the listing itself verified. Writes go through the entity route, which
@@ -34,6 +35,30 @@ export default function AdminBadgePanel({ provider, onChange }) {
       <input type="checkbox" disabled={busy} checked={!!provider.verified} onChange={(e) => save({ verified: e.target.checked, verified_at: e.target.checked ? new Date().toISOString() : null, verified_by: e.target.checked ? me.id : null })}/>
       <span className="font-medium text-brand-ink">Verified by Klal</span>
     </label>
+    <p className="text-xs leading-5 text-brand-muted">{VERIFIED_MEANING}</p>
+
+    {/* Confirming details is a smaller, more frequent act than verifying, and
+        the one that keeps a listing worth trusting a year from now. */}
+    <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+      <button type="button" disabled={busy} onClick={() => save({ last_confirmed_at: new Date().toISOString() })} className="secondary text-xs">Confirm details are current</button>
+      <span className="text-xs text-brand-muted">{confirmedLabel(provider) || 'Never confirmed'}</span>
+    </div>
+
+    {/* Paid placement is an admin field and reads as a label, never a check.
+        Kept visually apart from verification for the same reason. */}
+    <div className="space-y-2 border-t pt-3">
+      <label className="flex items-center gap-2 text-sm text-brand-body">
+        <input type="checkbox" disabled={busy} checked={!!provider.sponsored} onChange={(e) => save({ sponsored: e.target.checked, sponsored_until: e.target.checked ? provider.sponsored_until || null : null })}/>
+        <span className="font-medium text-brand-ink">Sponsored placement</span>
+      </label>
+      {provider.sponsored && <label className="block text-xs text-brand-muted">Runs until
+        <input type="date" disabled={busy} className="field mt-1 text-sm" value={(provider.sponsored_until || '').slice(0, 10)} onChange={(e) => save({ sponsored_until: e.target.value ? new Date(e.target.value).toISOString() : null })}/>
+      </label>}
+      <label className="flex items-center gap-2 text-sm text-brand-body">
+        <input type="checkbox" disabled={busy} checked={!!provider.featured} onChange={(e) => save({ featured: e.target.checked })}/>
+        <span className="font-medium text-brand-ink">Featured in the directory</span>
+      </label>
+    </div>
     {declared.length === 0
       ? <p className="text-xs text-brand-muted">This listing declares no badges.</p>
       : <div className="space-y-1.5">

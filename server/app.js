@@ -325,6 +325,13 @@ app.get('/api/entities/:entity/:id', async (req, res, next) => {
 const PROTECTED_FIELDS = new Set([
   'status', 'verified', 'verified_at', 'verified_by', 'verified_badges', 'claimed', 'demo',
   'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
+  // Prominence and confirmation, which a listing must never grant itself.
+  // `featured` was missing and Provider is client-writable, so an owner could
+  // PUT { featured: true } and appear in the directory's "Featured resources"
+  // rail — self-assertion buying standing, which is the same thing we refuse
+  // to let payment buy. A forged `last_confirmed_at` is worse than none: it
+  // dresses stale details up as checked.
+  'featured', 'sponsored', 'sponsored_until', 'last_confirmed_at',
 ]);
 const MODERATOR_FIELDS = new Set(['status', 'admin_notes', 'resolved_at', 'resolved_by']);
 const stripProtected = (body) => Object.fromEntries(Object.entries(body || {}).filter(([k]) => !PROTECTED_FIELDS.has(k)));

@@ -385,6 +385,21 @@ ok(recovered.status === 200 && recovered.data.access_token, 'the right code stil
 const proto = await call('POST', '/functions/constructor', { token: userA, body: {} });
 ok(proto.status === 404, 'an inherited property is not callable as a function', String(proto.status));
 
+// ---- prominence is not self-assertable -----------------------------------
+// Provider is client-writable, so every field that confers standing has to be
+// protected explicitly. `featured` was not, and the directory has a "Featured
+// resources" rail that queries it: an owner could promote themselves into it
+// with one PUT. A confirmation date is the same kind of claim — a forged one
+// is worse than none, because it dresses stale details as checked.
+const promoListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Promo Plumbing', category: 'Home Services', short_description: 'Repairs and installations.' } });
+const promoId = promoListing.data?.provider?.id;
+await call('PUT', `/entities/Provider/${promoId}`, { token: userA, body: { featured: true, sponsored: true, sponsored_until: '2030-01-01T00:00:00.000Z', last_confirmed_at: '2030-01-01T00:00:00.000Z' } });
+const promoAfter = (await call('GET', `/entities/Provider/${promoId}`, { token: userA })).data || {};
+ok(!promoAfter.featured, 'an owner cannot feature their own listing', JSON.stringify(promoAfter.featured));
+ok(!promoAfter.sponsored, 'an owner cannot mark their own listing sponsored', JSON.stringify(promoAfter.sponsored));
+ok(!promoAfter.sponsored_until, 'an owner cannot set their own sponsorship window', JSON.stringify(promoAfter.sponsored_until));
+ok(!promoAfter.last_confirmed_at, 'an owner cannot forge a confirmation date', JSON.stringify(promoAfter.last_confirmed_at));
+
 // ---- sensitive listings: no public record of who needed help -------------
 // The client does not render "I've used this" or a vouch button on a crisis
 // line, an addiction service, a fertility organization or a mikvah. That is
