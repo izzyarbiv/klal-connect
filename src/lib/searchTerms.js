@@ -43,10 +43,25 @@ const GROUPS = [
   ['chevra kadisha', 'chevrah kadisha'],
   ['eruv', 'eiruv'],
   ['kashrus', 'kashrut', 'hashgacha', 'kosher supervision'],
-  ['tomchei shabbos', 'tomchei shabbas', 'food pantry', 'food bank'],
+  ['tomchei shabbos', 'tomchei shabbas', 'food pantry', 'food bank', 'soup kitchen', 'hunger', 'free food', 'meals'],
 
   // Health and therapy
-  ['therapist', 'therapists', 'therapy', 'counselor', 'counsellor', 'counseling', 'counselling'],
+  //
+  // "mental health" is in this group because that is how organisations
+  // describe themselves while people search for a "therapist". Without it,
+  // searching therapist returned nothing while two mental-health services
+  // sat in the directory — which is the exact failure this file exists to
+  // prevent. Alias the words help is offered under to the words help is
+  // asked for.
+  ['therapist', 'therapists', 'therapy', 'counselor', 'counsellor', 'counseling', 'counselling',
+    'mental health', 'mental health services', 'behavioral health', 'behavioural health', 'emotional support'],
+  ['crisis', 'crisis intervention', 'emergency help', 'crisis center', 'crisis centre'],
+  ['abuse', 'sexual abuse', 'neglect', 'safety'],
+  ['addiction', 'substance abuse', 'recovery', 'rehab'],
+  ['infertility', 'fertility', 'ivf'],
+  ['foster care', 'foster', 'adoption', 'adoptive'],
+  ['bereavement', 'grief', 'shiva', 'loss'],
+  ['special needs', 'disability', 'disabilities', 'developmental'],
   ['physical therapy', 'physiotherapy', 'physio', 'pt'],
   ['occupational therapy', 'ot'],
   ['speech therapy', 'speech', 'slp', 'speech language'],
