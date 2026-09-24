@@ -284,7 +284,9 @@ export function mountSeo(app, shell) {
       const categories = await store.list('Category').catch(() => []);
       send(res, renderPage(shell, {
         title: `${SITE_NAME} — ${TAGLINE}`,
-        description: DEFAULT_DESCRIPTION,
+        // The homepage's own description, not the site-wide one: the snippet a
+        // search result shows should say what this page actually says.
+        description: HOME_DESCRIPTION,
         canonical: `${origin}/`,
         image: ogFallback(origin),
         schema: {
