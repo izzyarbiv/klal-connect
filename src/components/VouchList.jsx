@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Handshake } from 'lucide-react';
 import { api } from '@/api/client';
 import { loadMyConnections, connectedIds } from '@/lib/connections';
+import { isSensitiveListing } from '@/lib/sensitivity';
 
 // "Vouched for by …" on a listing. Names are public (a vouch is a statement,
 // not a bookmark); the "you know" count only appears for a signed-in member
@@ -28,6 +29,9 @@ export default function VouchList({ provider, refreshKey }) {
     return () => { alive = false; };
   }, [provider.id, refreshKey]);
 
+  // This section names people. On a sensitive listing it would publish who
+  // needed that service, so it does not exist there at all.
+  if (isSensitiveListing(provider)) return null;
   if (!vouches) return null;
   const shown = vouches.slice(0, 8);
   const more = vouches.length - shown.length;

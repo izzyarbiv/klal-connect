@@ -11,6 +11,7 @@ import Headline from '@/components/Headline';
 import VouchList from '@/components/VouchList';
 import BadgeChips from '@/components/BadgeChips';
 import AdminBadgePanel from '@/components/AdminBadgePanel';
+import { isSensitiveListing } from '@/lib/sensitivity';
 
 export default function ProviderDetail(){
   const { slug } = useParams();
@@ -45,6 +46,7 @@ export default function ProviderDetail(){
 
   if(missing)return <div className="page-shell py-10"><div className="empty"><p>That listing could not be found — it may have been removed or is awaiting review.</p><Link to="/browse" className="primary">Browse the directory</Link></div></div>;
   if(!provider)return <div className="loading">Loading resource…</div>;
+  const sensitive=isSensitiveListing(provider);
   return <div className="page-shell py-7">
     <Link to="/browse" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to browse</Link>
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -52,14 +54,20 @@ export default function ProviderDetail(){
         <section className="panel"><div className="flex gap-4"><div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-brand-tint text-xl font-bold text-brand-teal">{provider.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><div><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">{provider.name}</h1>{provider.verified&&<CheckCircle2 className="text-brand-gold-ink"/>}</div><Headline text={provider.tagline} variant="header"/><p className="mt-1 font-semibold text-brand-teal">{provider.category} · {provider.subcategory}</p><p className="mt-3 text-brand-body">{provider.short_description}</p><div className="mt-3"><BadgeChips provider={provider}/></div></div></div>{provider.demo&&<p className="mt-4 rounded-xl bg-brand-gold-bg p-3 text-xs font-semibold text-brand-gold-ink">Demonstration content — this is a fictional listing for development.</p>}</section>
         <section className="panel"><h2 className="section-title">About</h2><p className="mt-3 whitespace-pre-line leading-7 text-brand-body">{provider.description}</p><div className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><p className="info"><MapPin/> {provider.address||provider.city+', '+provider.state}</p><p className="info"><Clock/> {provider.hours||'Contact for hours'}</p><p className="info"><Languages/> {(provider.languages||['English']).join(', ')}</p><p className="info"><MapPin/> Serves {(provider.service_areas||[provider.city]).join(', ')}</p></div></section>
         <VouchList provider={provider} refreshKey={vouchTick}/>
-        <section className="panel"><h2 className="section-title">Positive community experiences</h2><p className="helper">{notes.length} community {notes.length === 1 ? 'member' : 'members'} shared a positive experience.</p><div className="mt-4 space-y-3">{notes.map(n=><blockquote key={n.id} className="rounded-lg bg-brand-tint p-4 text-sm leading-6">“{n.body}”</blockquote>)}{notes.length===0&&<p className="text-sm text-brand-muted">No published notes yet.</p>}</div></section>
-        <PositiveForm provider={provider}/>
+        {/* A community note is signed. On a sensitive listing that identifies
+            its author as someone who needed the service, so neither the notes
+            nor the form to add one appears — while Suggest a Correction still
+            reaches the team privately. */}
+        {!sensitive&&<>
+          <section className="panel"><h2 className="section-title">Positive community experiences</h2><p className="helper">{notes.length} community {notes.length === 1 ? 'member' : 'members'} shared a positive experience.</p><div className="mt-4 space-y-3">{notes.map(n=><blockquote key={n.id} className="rounded-lg bg-brand-tint p-4 text-sm leading-6">“{n.body}”</blockquote>)}{notes.length===0&&<p className="text-sm text-brand-muted">No published notes yet.</p>}</div></section>
+          <PositiveForm provider={provider}/>
+        </>}
       </div>
       <aside className="space-y-5">
         <section className="panel"><ProviderActions provider={provider} onVouch={({count})=>{setProvider(p=>({...p,vouch_count:count}));setVouchTick(t=>t+1);}}/>{/* Three zeros under every listing read as "nobody has ever used this",
           which is worse than saying nothing at all while the directory is
           young. The row appears as soon as there is a single count to show. */}
-        {(provider.vouch_count>0||provider.usage_count>0||provider.save_count>0)&&<div className="mt-5 grid grid-cols-3 gap-3 border-t pt-5 text-center"><Stat n={provider.vouch_count||0} label="Vouches"/><Stat n={provider.usage_count||0} label="Community uses"/><Stat n={provider.save_count||0} label="Saves"/></div>}<p className="mt-4 text-xs text-brand-muted">Verified status, when shown, is controlled by Klal administrators.</p></section>
+        {!sensitive&&(provider.vouch_count>0||provider.usage_count>0||provider.save_count>0)&&<div className="mt-5 grid grid-cols-3 gap-3 border-t pt-5 text-center"><Stat n={provider.vouch_count||0} label="Vouches"/><Stat n={provider.usage_count||0} label="Community uses"/><Stat n={provider.save_count||0} label="Saves"/></div>}<p className="mt-4 text-xs text-brand-muted">Verified status, when shown, is controlled by Klal administrators.</p></section>
         <ReportForm provider={provider}/>
         <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>
         <AdminBadgePanel provider={provider} onChange={setProvider}/>

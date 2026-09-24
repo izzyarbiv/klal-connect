@@ -8,6 +8,7 @@ import { computeShabbosStatus, assertWritable as assertShabbosWritable } from '.
 import { canDeliverCodes } from './auth.js';
 import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
+import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
@@ -287,6 +288,13 @@ export const functions = {
     await assertWritable(user);
     need(provider_id, 'Missing listing.');
     if (String(body || '').trim().length < 10) fail('Please share a little more detail.');
+    // A community note is signed, so a public note on a sensitive listing
+    // identifies its author as someone who needed that service. Same rule as
+    // vouches — and corrections still reach the team privately.
+    const subject = await store.get('Provider', provider_id);
+    if (subject && isSensitiveListing(subject)) {
+      fail('Public notes are turned off for this kind of listing. Use Suggest a Correction to reach the Klal team privately.');
+    }
     const note = await store.create(
       'CommunityNote',
       { provider_id, provider_name, body: String(body).trim(), status: INITIAL_STATUS, ...authorFields(user) },
@@ -645,6 +653,16 @@ export const functions = {
 
     const kind = ACTIVITIES[activity];
     if (!kind) fail('Unknown activity.');
+    // A vouch names the member who gave it and a use is counted in public. On
+    // a crisis line, an addiction service, a fertility organization or a
+    // mikvah, that record says something about the member's own life to
+    // everyone, permanently. The client does not render these controls there;
+    // this is what makes that a rule rather than a decoration.
+    //
+    // Saving stays allowed: a save is private to the person who made it.
+    if (activity !== 'save' && isSensitiveListing(provider)) {
+      fail('Public "used this" and vouches are turned off for this kind of listing.');
+    }
     if (activity === 'vouch' && (provider.created_by_id === user.id || provider.owner_id === user.id)) {
       fail('You cannot vouch for your own listing.');
     }

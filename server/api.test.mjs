@@ -385,6 +385,37 @@ ok(recovered.status === 200 && recovered.data.access_token, 'the right code stil
 const proto = await call('POST', '/functions/constructor', { token: userA, body: {} });
 ok(proto.status === 404, 'an inherited property is not callable as a function', String(proto.status));
 
+// ---- sensitive listings: no public record of who needed help -------------
+// The client does not render "I've used this" or a vouch button on a crisis
+// line, an addiction service, a fertility organization or a mikvah. That is
+// presentation. These assertions are the rule: a named vouch or a counted use
+// on such a listing publishes something about the member's own life, so the
+// server refuses it however the request arrives.
+const sensListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Crisis Support Line', category: 'Health', short_description: 'Confidential crisis intervention and counseling.' } });
+const sensId = sensListing.data?.provider?.id;
+ok(!!sensId, 'a sensitive listing can be created', JSON.stringify(sensListing.data || {}).slice(0, 120));
+
+const sensVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userB, body: { providerId: sensId, activity: 'vouch' } });
+ok(sensVouch.status >= 400, 'a vouch is refused on a sensitive listing', String(sensVouch.status));
+
+const sensUse = await call('POST', '/functions/toggleCommunityActivity', { token: userB, body: { providerId: sensId, activity: 'use' } });
+ok(sensUse.status >= 400, 'a public "used this" is refused on a sensitive listing', String(sensUse.status));
+
+// Saving is private to whoever did it, so it must keep working — someone needs
+// to be able to keep the number without telling anyone they kept it.
+const sensSave = await call('POST', '/functions/toggleCommunityActivity', { token: userB, body: { providerId: sensId, activity: 'save' } });
+ok(sensSave.status === 200 && sensSave.data?.active === true, 'saving a sensitive listing still works', String(sensSave.status));
+
+const sensNote = await call('POST', '/functions/createReview', { token: userB, body: { provider_id: sensId, provider_name: 'Crisis Support Line', body: 'They helped me through a very hard time.' } });
+ok(sensNote.status >= 400, 'a signed public note is refused on a sensitive listing', String(sensNote.status));
+
+// And the rule is narrow rather than blanket: public trust still works where
+// it helps, which is most of the directory.
+const plainListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Reliable Plumbing Co', category: 'Home Services', short_description: 'Repairs and installations for kitchens and bathrooms.' } });
+const plainId = plainListing.data?.provider?.id;
+const plainVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userB, body: { providerId: plainId, activity: 'vouch' } });
+ok(plainVouch.status === 200 && plainVouch.data?.active === true, 'a plumber can still be vouched for', String(plainVouch.status));
+
 
 console.log = log;
 server.close();
