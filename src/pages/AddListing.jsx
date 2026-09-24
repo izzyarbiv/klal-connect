@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import ListingForm from '@/components/ListingForm';
 import ClaimForm from '@/components/ClaimForm';
 import GuestPrompt from '@/components/GuestPrompt';
@@ -11,6 +12,7 @@ export default function AddListing() {
   const { user, isGuest, authChecked } = useAuth();
   const params = new URLSearchParams(location.search);
   const [tab, setTab] = useState(params.has('claim') ? 'claim' : 'add');
+  const fromPost = params.get('from_post') || '';
 
   if (!authChecked) return <div className="loading">Loading…</div>;
   if (!user || isGuest) {
@@ -28,8 +30,15 @@ export default function AddListing() {
       <button onClick={() => setTab('add')} className={`tab ${tab === 'add' ? 'active' : ''}`}>Add a Community Resource</button>
       <button onClick={() => setTab('claim')} className={`tab ${tab === 'claim' ? 'active' : ''}`}>List or Claim Your Business</button>
     </div>
-    {/* ?category= comes from an empty category tile on the homepage: the form
-        opens with that category chosen rather than asking for it again. */}
-    <section className="panel">{tab === 'add' ? <ListingForm initialCategory={params.get('category') || ''}/> : <ClaimForm/>}</section>
+    {/* ?category= comes from an empty category tile on the homepage and
+        ?from_post= from an answer to an ask: either way the form opens with
+        what we already know filled in rather than asking for it again. */}
+    {fromPost && <p className="mb-5 rounded-lg bg-brand-tint p-3 text-sm text-brand-body">
+      You're turning an answer into a listing, so the next person searching finds it instead of having to ask.{' '}
+      <Link to={`/feed?post=${encodeURIComponent(fromPost)}`} className="font-semibold text-brand-teal hover:underline">See the original ask</Link>
+    </p>}
+    <section className="panel">{tab === 'add'
+      ? <ListingForm initialCategory={params.get('category') || ''} initialName={params.get('name') || ''} sourcePostId={fromPost}/>
+      : <ClaimForm/>}</section>
   </div>;
 }

@@ -1,9 +1,20 @@
 import React,{useEffect,useState} from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import { Send, ChevronUp, CheckCircle2 } from 'lucide-react';
 import Headline from '@/components/Headline';
 import TranslateToggle from '@/components/TranslateToggle';
 import { timeAgo, fullDate } from '@/lib/time';
+
+// An answer to "who does X?" is often just a name and a number — "Moshe Green
+// Plumbing, 555-0134" — which is a good first guess at a listing name. A
+// paragraph is not, and pasting one into the name field would be worse than
+// leaving it empty, so prose is left alone.
+const nameGuess = (body) => {
+  const line = String(body || '').trim().split('\n')[0].trim();
+  const words = line.split(/\s+/).length;
+  return line && line.length <= 48 && words <= 7 && !/[.!?]$/.test(line) ? line : '';
+};
 
 // Comments under a post. Under an ask they are answers: each can be upvoted
 // by anyone but its author, and the person who asked can mark one as the one
@@ -49,7 +60,14 @@ export default function FeedCommentList({ postId, user, authorId, isAsk, helpful
         <Headline text={c.author_headline} className="text-[11px]"/>
         <p className="text-sm leading-6 text-brand-body">{c.body}</p>
         <TranslateToggle text={c.body} enabled={translate.enabled} languages={translate.languages}/>
-        {isAsk&&isAsker&&<button type="button" onClick={()=>helped(c)} className="mt-1 text-xs font-semibold text-brand-teal hover:underline">{isHelpful?'Unmark as helpful':'This helped'}</button>}
+        {/* The loop the directory runs on: someone asks, someone answers, and
+            the answer becomes a listing the next person finds instead of an
+            answer that scrolls away. Offered to anyone, not only the asker —
+            whoever knows the business is the one who can list it. */}
+        {isAsk&&<div className="mt-1 flex flex-wrap items-center gap-3">
+          {isAsker&&<button type="button" onClick={()=>helped(c)} className="text-xs font-semibold text-brand-teal hover:underline">{isHelpful?'Unmark as helpful':'This helped'}</button>}
+          <Link to={`/add?from_post=${encodeURIComponent(postId)}${nameGuess(c.body)?`&name=${encodeURIComponent(nameGuess(c.body))}`:''}`} className="text-xs font-semibold text-brand-navy hover:underline">Add to the directory</Link>
+        </div>}
       </div>
     </div>;})}
     {comments.length===0&&<p className="text-xs text-brand-muted">{isAsk?'No answers yet. Know someone? Answer below or share this ask on WhatsApp.':'No comments yet.'}</p>}
