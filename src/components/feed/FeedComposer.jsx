@@ -6,10 +6,14 @@ import { AccountButtons } from '@/components/GuestPrompt';
 import { POST_TYPES, POST_TYPE_BY_ID } from '@/lib/postTypes';
 import { markEngaged } from '@/lib/engagement';
 
-export default function FeedComposer({ onPosted, user }) {
-  const [body,setBody]=useState(''),[type,setType]=useState('post'),[uploading,setUploading]=useState(false),[imgs,setImgs]=useState([]),[busy,setBusy]=useState(false),[err,setErr]=useState('');
-  // Expanded on a wide screen, a single line on a phone until tapped.
-  const [open,setOpen]=useState(()=>typeof window==='undefined'||window.innerWidth>=640);
+// initialBody/initialType arrive from /feed?ask=… — a search that found
+// nothing, handed straight to the people who might know the answer.
+export default function FeedComposer({ onPosted, user, initialBody = '', initialType = '' }) {
+  const [body,setBody]=useState(initialBody),[type,setType]=useState(initialType||'post'),[uploading,setUploading]=useState(false),[imgs,setImgs]=useState([]),[busy,setBusy]=useState(false),[err,setErr]=useState('');
+  // Expanded on a wide screen, a single line on a phone until tapped — but
+  // always expanded when it arrives prefilled, or the text a visitor was
+  // handed sits hidden behind a collapsed bar.
+  const [open,setOpen]=useState(()=>!!initialBody||typeof window==='undefined'||window.innerWidth>=640);
   const upload=async e=>{
     setUploading(true);
     const {file_url}=await api.integrations.Core.UploadFile({file:e.target.files[0]});
