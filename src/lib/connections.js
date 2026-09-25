@@ -63,6 +63,11 @@ export function similarityScore(a, b){
   return score;
 }
 
+// Suggestions, so a sample is legitimate here — unlike a lookup of specific
+// people, nobody goes missing from a ranked list by being outside it. Worth
+// naming rather than leaving implicit: the pool is the 200 newest members, so
+// once the community is larger than that, suggestions stop considering the rest.
+// Ranking server-side is the fix when that starts to matter.
 export async function suggestSimilar(targetUser, meId, excludedIds){
   const users = await api.entities.User.list('-created_date', 200);
   const blocked = new Set([targetUser?.id, meId, ...(excludedIds || [])].filter(Boolean));

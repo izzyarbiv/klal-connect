@@ -23,7 +23,12 @@ useEffect(()=>{(async()=>{
   setPosts(savedPosts.map((s,i)=>({...s,post:found[i]})).filter(x=>x.post));
   setItems(saves.map((s,i)=>({...s,provider:providers[i]})));
 })()},[]);
-const remove=async item=>{await api.entities.SavedProvider.delete(item.id);setItems(items.filter(x=>x.id!==item.id))};
+// Through the toggle, not a direct delete: save_count is recounted server-side,
+// and deleting the row here left the listing reading one save higher forever.
+// Same shape as unsave below, including the already-unsaved-elsewhere guard.
+const remove=async item=>{let r=await api.functions.invoke('toggleCommunityActivity',{providerId:item.provider_id,activity:'save'});if(r.status>=400)return;
+if(r.data?.active){r=await api.functions.invoke('toggleCommunityActivity',{providerId:item.provider_id,activity:'save'});if(r.status>=400)return;}
+setItems(items.filter(x=>x.id!==item.id))};
 const unsave=async x=>{let r=await api.functions.invoke('toggleSavePost',{post_id:x.post_id});if(r.status>=400)return;
 // The toggle re-saved it: this row had already been unsaved somewhere else. Toggle once more so the outcome is "not saved".
 if(r.data?.saved){r=await api.functions.invoke('toggleSavePost',{post_id:x.post_id});if(r.status>=400)return;}

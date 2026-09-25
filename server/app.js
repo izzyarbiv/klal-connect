@@ -48,7 +48,14 @@ const isAllowedOrigin = (origin) => {
   if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
   // Vercel builds every deploy its own hostname; the preview of this project
   // has to be able to call its own API.
-  return /^https:\/\/klal-connect-[a-z0-9-]+\.vercel\.app$/.test(origin);
+  //
+  // Scoped to the account, not just the project name: `klal-connect-[anything]`
+  // also matches a project a stranger creates, and anyone can name a Vercel
+  // project `klal-connect-whatever`. A deploy of ours is always
+  // klal-connect-<hash>-<team slug>.vercel.app, and the team slug is not
+  // something someone else can take. Override with KC_ALLOWED_ORIGINS if the
+  // team is ever renamed.
+  return /^https:\/\/klal-connect-[a-z0-9-]+-izzyarbivs-projects\.vercel\.app$/.test(origin);
 };
 app.use(cors({
   origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
@@ -146,9 +153,16 @@ const OWNER_SCOPED = {
 
 // Entities the client may write directly. Anything with moderation state or
 // counters goes through /functions instead.
+// SavedProvider is deliberately absent. A save is the only write here that a
+// public counter depends on, and the generic route does not recount: several
+// rows created directly for one listing inflated save_count the next time
+// anyone toggled a save on it, and a direct delete left the count reading high
+// for good. toggleCommunityActivity owns both sides and recounts from the rows,
+// so saves go through it. Reading is unaffected — PERSONAL and OWNER_SCOPED
+// below still scope a save to the person who made it.
 const CLIENT_WRITABLE = new Set([
   'Provider', 'Company', 'Setting', 'Notification', 'Connection',
-  'SavedProvider', 'ListingChangeRequest', 'Category', 'ActivityEvent',
+  'ListingChangeRequest', 'Category', 'ActivityEvent',
   'Recommendation', 'Job',
 ]);
 
@@ -198,7 +212,15 @@ async function readable(entity, rows, user) {
 
 // The guest's id, looked up once per process. Null where there is no guest.
 let guestIdPromise = null;
-const guestId = () => (guestIdPromise ??= users.byEmail(GUEST_EMAIL).then((row) => row?.id || null).catch(() => { guestIdPromise = null; return null; }));
+// Cached only once the row is actually found. A rejected lookup already cleared
+// itself, but a successful lookup that found nothing resolved to null and `??=`
+// then kept that miss for the life of the process: the first call on a cold
+// start can arrive before the guest row is seeded, and every call afterwards
+// answered null from cache — so the guest mask was quietly off for that
+// instance until it recycled.
+const guestId = () => (guestIdPromise ??= users.byEmail(GUEST_EMAIL)
+  .then((row) => { if (!row?.id) guestIdPromise = null; return row?.id || null; })
+  .catch(() => { guestIdPromise = null; return null; }));
 
 async function visibleRows(entity, rows, user) {
   // The demo seed connects the guest to everyone so the demo has something to
@@ -499,7 +521,13 @@ async function memberList(viewer) {
   return all.filter((u) => !isDisabled(u) && !isGuest(u) && !isSeedAdmin(u) && !isNameless(u)).map(publicProfile);
 }
 
-app.get('/api/users', async (req, res, next) => {
+// requireAuth, because this is the whole member directory — every name,
+// headline, photo and city. It was readable by anyone on the internet with one
+// unauthenticated GET, which is a scraped community list, not a public page.
+// Browsing still works without an account: a visitor holds the shared guest
+// session, which is a real token, so nothing about the signed-out experience
+// changes — it just stops being available to a script that never loaded the app.
+app.get('/api/users', requireAuth, async (req, res, next) => {
   const list = await memberList(req.user);
   res.json(req.query.limit ? list.slice(0, Number(req.query.limit)) : list);
 });
@@ -553,7 +581,9 @@ app.put('/api/users/:id/role', requireAdmin, async (req, res, next) => {
   res.json(userToPublic(updated));
 });
 
-app.get('/api/users/:id', async (req, res, next) => {
+// Same reasoning as the list above: one profile at a time is still the same
+// directory, just fetched in a loop.
+app.get('/api/users/:id', requireAuth, async (req, res, next) => {
   const user = userToPublic(await users.byId(req.params.id));
   const isAdmin = req.user?.role === 'admin';
   const isSelfOrAdmin = req.user && user && (req.user.id === user.id || isAdmin);

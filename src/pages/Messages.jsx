@@ -4,6 +4,7 @@ import { api } from '@/api/client';
 import { Image } from '@/components/ui/image';
 import Headline from '@/components/Headline';
 import { loadMyConnections, connectedIds } from '@/lib/connections';
+import { membersByIds } from '@/lib/members';
 import GuestPrompt from '@/components/GuestPrompt';
 
 export default function Messages(){
@@ -16,25 +17,30 @@ export default function Messages(){
     if(!await api.auth.isAuthenticated()) return api.auth.redirectToLogin(location.href);
     const u=await api.auth.me(); setMe(u);
     if(u.guest){ setLoading(false); return; }
-    const [sent, received, users, myConnections] = await Promise.all([
+    const [sent, received, myConnections] = await Promise.all([
       api.entities.Message.filter({ sender_id: u.id }, '-created_date', 500),
       api.entities.Message.filter({ recipient_id: u.id }, '-created_date', 500),
-      api.entities.User.list('-created_date', 200),
       loadMyConnections(u.id),
     ]);
-    const userMap=new Map(users.map(x=>[x.id,x]));
     const byUser=new Map();
     const touch=(otherId,m,mine)=>{ const ex=byUser.get(otherId)||{last:m,unread:0}; if(new Date(m.created_date)>new Date(ex.last.created_date)) ex.last=m; if(!mine&&!m.read) ex.unread+=1; byUser.set(otherId,ex); };
     [...sent,...received].forEach(m=>{ const otherId=m.sender_id===u.id?m.recipient_id:m.sender_id; touch(otherId,m,m.sender_id===u.id); });
-    const list=[...byUser.entries()].map(([otherId,c])=>({ otherId, user:userMap.get(otherId), ...c })).sort((a,b)=>new Date(b.last.created_date)-new Date(a.last.created_date));
-    setConvos(list);
-
     // Everyone you are connected to, so a conversation can be started here
     // rather than only from a profile page.
     const accepted = { ...myConnections, all: myConnections.all.filter(c => c.status === 'accepted') };
+    const connIds = [...connectedIds(accepted)].filter(id => id !== u.id);
+
+    // Names and faces for exactly the people on this screen. This used to read
+    // them out of a 200-row page of the directory, which stops working at 200
+    // members — and not gracefully: a conversation lost its name, and any
+    // connection outside that window disappeared from the list below, so there
+    // was no way left to message them.
+    const userMap = await membersByIds([...byUser.keys(), ...connIds]);
+
+    const list=[...byUser.entries()].map(([otherId,c])=>({ otherId, user:userMap.get(otherId), ...c })).sort((a,b)=>new Date(b.last.created_date)-new Date(a.last.created_date));
+    setConvos(list);
     setConnections(
-      [...connectedIds(accepted)]
-        .filter(id => id !== u.id)
+      connIds
         .map(id => userMap.get(id))
         .filter(Boolean)
         .sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || '')))

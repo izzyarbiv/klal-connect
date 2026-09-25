@@ -135,6 +135,33 @@ if (chips?.length) {
   ok(prefilled === city, 'the directory search opens on the remembered community', JSON.stringify(prefilled));
 }
 
+// --- a page does not inherit another page's share card -------------------
+// useMetaTags restored only the title, so og:title, og:description and
+// og:image went on describing the last listing viewed. Navigating here has to
+// be client-side: a full page load would rebuild the head from index.html and
+// prove nothing about the cleanup this is checking.
+{
+  const listingId = await ev(`(async()=>{const r=await fetch('/api/entities/Provider?limit=1');const j=await r.json();return (j[0]&&j[0].id)||''})()`);
+  const ogTitle = `document.querySelector('meta[property="og:title"]')?.getAttribute('content') || ''`;
+  if (!listingId) {
+    console.log('  info  no listings available to check share-card restoration');
+  } else {
+    await go(`${BASE}/provider/${listingId}`);
+    const onListing = await ev(ogTitle);
+    ok(!!onListing, 'a listing page sets its own og:title', JSON.stringify(onListing));
+    // Client-side navigation away, via the link the page already offers.
+    const left = await ev(`(()=>{const a=[...document.querySelectorAll('a')].find(x=>/Back to browse/i.test(x.textContent));if(!a)return false;a.click();return true})()`);
+    await sleep(2500);
+    if (!left) {
+      console.log('  info  no in-page link to navigate away with; skipped');
+    } else {
+      const afterLeaving = await ev(ogTitle);
+      ok(afterLeaving !== onListing, 'leaving the listing drops its og:title',
+        `was ${JSON.stringify(onListing)}, now ${JSON.stringify(afterLeaving)}`);
+    }
+  }
+}
+
 // --- nothing threw -------------------------------------------------------
 // Vite's dev client and a missing favicon are noise, not defects.
 const real = pageErrors.filter((e) => !/favicon|\[vite\]|manifest|sw\.js/i.test(e));

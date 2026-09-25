@@ -381,10 +381,25 @@ export const otp = {
     // randomInt, not Math.random: these codes reset passwords, and
     // Math.random is neither uniform nor unguessable across a known seed.
     const code = String(randomInt(100000, 1000000));
-    await pool.query('DELETE FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2', [email, purpose]);
-    await pool.query('INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES ($1, $2, $3, $4)', [
-      email, code, purpose, Date.now() + ttlMinutes * 60_000,
-    ]);
+    // One transaction, because this runs on however many serverless instances
+    // are warm. As two statements, two registrations for the same address could
+    // interleave — one instance's DELETE landing after the other's INSERT — and
+    // leave either two live codes or none, so the code in someone's inbox was
+    // already gone by the time they typed it.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2', [email, purpose]);
+      await client.query('INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES ($1, $2, $3, $4)', [
+        email, code, purpose, Date.now() + ttlMinutes * 60_000,
+      ]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
     return code;
   },
   // When the live code for this address was issued, so the routes can refuse
@@ -401,14 +416,20 @@ export const otp = {
   },
   async verify(email, purpose, code) {
     await ready();
+    // Claiming the row and judging it have to be one statement. As a SELECT
+    // followed by a DELETE, two requests arriving together could both read the
+    // same live code and both succeed — one code, used twice.
+    //
+    // The code and expiry are in the WHERE, so a wrong or late guess matches
+    // nothing and deletes nothing: a mistyped digit must not burn the code the
+    // person is still holding. Attempt limits are handled by the route.
     const { rows } = await pool.query(
-      'SELECT * FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2',
-      [email, purpose]
+      `DELETE FROM otp_codes
+        WHERE lower(email) = lower($1) AND purpose = $2 AND code = $3 AND expires_at >= $4
+        RETURNING code`,
+      [email, purpose, String(code).trim(), Date.now()]
     );
-    const row = rows[0];
-    if (!row || Number(row.expires_at) < Date.now() || row.code !== String(code).trim()) return false;
-    await pool.query('DELETE FROM otp_codes WHERE lower(email) = lower($1) AND purpose = $2', [email, purpose]);
-    return true;
+    return rows.length > 0;
   },
 };
 
