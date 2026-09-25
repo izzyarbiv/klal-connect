@@ -65,19 +65,44 @@ const ok = (cond, label, extra = '') => {
   console.log(`  ${cond ? 'ok  ' : 'FAIL'}  ${label}${extra ? `  ${extra}` : ''}`);
 };
 
+// Every assertion below this is about something NOT being on the page, and a
+// page that has not finished rendering satisfies all of them. So the listing's
+// own name has to be on screen before anything is judged absent — otherwise a
+// slow response reads as a privacy guarantee.
 async function visit(provider) {
   await send('Page.navigate', { url: `${BASE}/provider/${provider.id}` });
-  await sleep(4000);
-  return ev('document.body.innerText');
+  const needle = JSON.stringify(String(provider.name || '').slice(0, 18));
+  const deadline = Date.now() + 25000;
+  let ready = false;
+  while (Date.now() < deadline) {
+    // The listing's name is not proof the app is running: server/seo.js
+    // prerenders it into the HTML. Keying on the name matched that
+    // server-rendered text and judged the sidebar absent before React had drawn
+    // it — reporting a missing Save button on a page that has one.
+    //
+    // "Back to browse" is drawn only by the hydrated ProviderDetail, and is not
+    // one of the things this script asserts, so it cannot mask a real failure.
+    ready = await ev(`(() => {
+      const t = document.body.innerText || '';
+      return t.includes('Back to browse') && t.includes(${needle});
+    })()`);
+    if (ready) break;
+    await sleep(400);
+  }
+  if (!ready) console.log(`  info  ${provider.name} never rendered; treating the checks below as unreliable`);
+  return { body: await ev('document.body.innerText'), ready };
 }
 
 console.log(`\nprivacy checks against ${BASE}`);
 console.log(`${sensitive.length} sensitive listing(s) checked, ${ordinary.length} ordinary\n`);
 
 for (const p of sensitive) {
-  const body = await visit(p);
+  const { body, ready } = await visit(p);
   const name = (p.name || '').slice(0, 30);
   console.log(`  — ${name}`);
+  // Asserted, not merely noted: without this, a listing that never rendered
+  // would satisfy every "is not present" check below and report a pass.
+  ok(ready, `    the page rendered, so "absent" means absent`);
   ok(!/I've Used This|Used ✓/i.test(body), `    no public "used this" control`);
   ok(!/vouch for this/i.test(body), `    no vouch control`);
   ok(!/Vouched for by/i.test(body), `    no public list of who vouched`);
@@ -88,7 +113,7 @@ for (const p of sensitive) {
 }
 
 for (const p of ordinary) {
-  const body = await visit(p);
+  const { body } = await visit(p);
   console.log(`  — ${(p.name || '').slice(0, 30)} (ordinary listing)`);
   ok(/vouch for this/i.test(body), `    public vouching still works where it helps`);
 }

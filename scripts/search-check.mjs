@@ -66,17 +66,56 @@ const ok = (cond, label, extra = '') => {
   console.log(`  ${cond ? 'ok  ' : 'FAIL'}  ${label}${extra ? `  ${extra}` : ''}`);
 };
 
+// Wait until the page has actually answered, rather than pausing a fixed
+// number of seconds and hoping.
+//
+// The first request after a deploy hits a cold serverless function, and a flat
+// 4s wait reported three false failures immediately after one — the searches
+// were correct, the page just had not rendered yet. A check that cries wolf
+// after every deploy is worse than no check, because the next real failure gets
+// waved away as "probably the cold start again".
+// Readiness is "the directory has loaded", not "some text appeared".
+//
+// The first version of this waited for the results line, which was wrong in a
+// way worth recording: before the listings arrive, Browse legitimately renders
+// "No matches" over an empty array, so the check read that first paint as the
+// answer and reported seven failures against a search that works. The ask link
+// is gated on having listings too, so even the zero-result case mis-reported.
+//
+// The category filter prints "All categories (N)" straight from the loaded rows,
+// which is only non-zero once the data is really in hand. No backslashes in the
+// page expression on purpose — escaping through this template is its own trap.
+async function settled(timeoutMs = 25000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ready = await ev(`(() => {
+      if (document.querySelectorAll('a[href^="/provider/"]').length > 0) return true;
+      const opt = [...document.querySelectorAll('option')].find((o) => o.textContent.indexOf('All categories') === 0);
+      if (!opt) return false;
+      const digits = opt.textContent.replace(/[^0-9]/g, '');
+      return digits !== '' && Number(digits) > 0;
+    })()`);
+    if (ready) return true;
+    await sleep(400);
+  }
+  return false;
+}
+
 // One search, described by what a person would see afterwards.
 async function search(q, place) {
   const url = `${BASE}/browse?q=${encodeURIComponent(q)}${place ? `&location=${encodeURIComponent(place)}` : ''}`;
   await send('Page.navigate', { url });
-  await sleep(4000);
+  if (!(await settled())) console.log('  info  the results area never settled; the assertions below say what was there');
   return {
     cards: await ev(`document.querySelectorAll('a[href^="/provider/"]').length`),
     body: await ev('document.body.innerText'),
     ask: await ev(`!!document.querySelector('a[href*="/feed?ask="]')`),
   };
 }
+
+// Warm the function before the first assertion, so a cold start is not
+// mistaken for a broken search.
+await fetch(`${BASE}/api/entities/Provider?limit=1`).catch(() => {});
 
 console.log(`\nsearch checks against ${BASE}\n`);
 
