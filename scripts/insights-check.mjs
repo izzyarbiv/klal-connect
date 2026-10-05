@@ -34,10 +34,16 @@ const ver = await api('POST', '/auth/verify-otp', { body: { email, otpCode: reg.
 const token = ver.data?.access_token;
 if (!token) { console.error('could not create a member to record searches as'); process.exit(1); }
 
+// Tagged per run. The first version seeded plain "exterminator" three times and
+// asserted the literal "3×", which passed once and then failed on every later
+// run against the same server: the counts accumulate, so the row read 6×. A
+// check that only works on a fresh store is a check that cries wolf.
+const TAG = Math.random().toString(36).slice(2, 7);
+const MISSING = `exterminator ${TAG}`;
 const WANTED = [
-  ['exterminator', 'Boca Raton'], ['exterminator', 'Boca Raton'], ['exterminator', 'Boca Raton'],
-  ['sheitel macher', 'Boca Raton'], ['sheitel macher', 'Boca Raton'],
-  ['plumber', 'Lakewood'],
+  [MISSING, 'Boca Raton'], [MISSING, 'Boca Raton'], [MISSING, 'Boca Raton'],
+  [`sheitel macher ${TAG}`, 'Boca Raton'], [`sheitel macher ${TAG}`, 'Boca Raton'],
+  [`plumber ${TAG}`, 'Lakewood'],
 ];
 for (const [query, city] of WANTED) {
   await api('POST', '/entities/ActivityEvent', { token, body: { type: 'search', query, city, results: 0, zero_result: true } });
@@ -116,8 +122,21 @@ await sleep(3500);
 
 const body = await ev('document.body.innerText');
 ok(/Searches that found nothing/.test(body), 'the empty-search panel renders');
-ok(/exterminator/.test(body), 'a wanted-but-missing listing is named', /exterminator/.test(body) ? '' : body.slice(0, 200));
-ok(/3×/.test(body) || /3x/.test(body), 'repeat asks are counted together');
+ok(body.includes(MISSING), 'a wanted-but-missing listing is named', body.includes(MISSING) ? '' : body.slice(0, 200));
+
+// This run's own row, found by its tag — not the top row, and not "is 3×
+// anywhere on the page". Assuming the top row was ours failed too: a store that
+// has been checked before still holds rows from earlier runs with higher counts,
+// and they outrank it. Only our row's own count is a fact about this run.
+const ourRow = await ev(`(() => {
+  const h = [...document.querySelectorAll('h2')].find((x) => x.textContent.indexOf('Searches that found nothing') >= 0);
+  const panel = h && h.closest('.panel');
+  if (!panel) return '';
+  const rows = [...panel.querySelectorAll('.divide-y > div')];
+  const row = rows.find((r) => r.innerText.indexOf(${JSON.stringify(MISSING)}) >= 0);
+  return row ? row.innerText.split('\\n').join(' ').trim() : '';
+})()`);
+ok(ourRow.includes('3×'), 'a gap asked three times is counted as three', JSON.stringify(ourRow));
 ok(/Asks nobody answered/.test(body), 'the unanswered-asks panel renders');
 ok(/Searches that worked/.test(body), 'the successful-search panel renders');
 ok(/most recent recorded events/.test(body), 'the panel says what window it is based on');
