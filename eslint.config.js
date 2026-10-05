@@ -9,7 +9,16 @@ import pluginUnusedImports from "eslint-plugin-unused-imports";
 // wholesale — so none of the recommended rules (no-undef included) actually
 // ran. Keeping them as separate entries lets ESLint merge the rules.
 const CLIENT = ["src/**/*.{js,mjs,cjs,jsx}"];
-const CLIENT_IGNORES = ["src/lib/**/*", "src/components/ui/**/*"];
+// src/components/ui is vendored component code and stays out of it.
+//
+// src/lib used to be ignored alongside it, which had become the wrong call:
+// it now holds the logic with the least room for error in the whole repo —
+// the sensitivity rule that decides whether a member's use of a crisis line
+// can be published, the trust definitions, place matching, search aliases —
+// and server/functions.js imports several of those modules, so an undefined
+// identifier there is not a UI glitch but a failed request on a privacy check.
+// The least-protected code was the code that most needed protecting.
+const CLIENT_IGNORES = ["src/components/ui/**/*"];
 const SERVER = ["server/**/*.{js,mjs}", "api/**/*.js"];
 
 export default [
@@ -46,6 +55,13 @@ export default [
       // `catch {}` is the deliberate "best effort, ignore failure" idiom here.
       "no-empty": ["error", { allowEmptyCatch: true }],
     },
+  },
+  // Test files under src are run by node (`npm test` executes
+  // src/lib/shabbosState.test.mjs directly), not loaded by the browser, so they
+  // need node's globals on top of the client block above.
+  {
+    files: ["src/**/*.test.{js,mjs}"],
+    languageOptions: { globals: globals.node, ecmaVersion: 2022, sourceType: "module" },
   },
   {
     ...pluginJs.configs.recommended,
