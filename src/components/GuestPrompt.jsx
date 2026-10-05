@@ -24,7 +24,7 @@ export default function GuestPrompt({ title = "You're browsing as a guest", body
   const here = window.location.pathname + window.location.search;
   return <div className="page-shell max-w-2xl py-9">
     <div className="panel space-y-4 text-center sm:text-left">
-      <span className="eyebrow dark">GUEST</span>
+      <span className="eyebrow">GUEST</span>
       <h1 className="title text-2xl">{title}</h1>
       <p className="helper">{body}</p>
       <div className="flex justify-center sm:justify-start"><AccountButtons returnTo={here}/></div>

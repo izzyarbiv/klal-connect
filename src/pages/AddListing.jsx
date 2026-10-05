@@ -23,7 +23,7 @@ export default function AddListing() {
   }
 
   return <div className="page-shell max-w-4xl py-9">
-    <span className="eyebrow dark">CONTRIBUTE</span>
+    <span className="eyebrow">CONTRIBUTE</span>
     <h1 className="title text-3xl">Help our directory grow</h1>
     <p className="helper mb-6">New listings go live right away. Claims are checked with the business before the listing is handed over.</p>
     <div className="mb-6 grid grid-cols-2 rounded-lg bg-brand-tint p-1">

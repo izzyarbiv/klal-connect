@@ -81,7 +81,7 @@ export default function Welcome() {
     {dots}
     <div className="panel mt-6 space-y-6">
       {step === 0 && <>
-        <div><span className="eyebrow dark">WELCOME</span><h1 className="title text-3xl">First, your name</h1><p className="helper">Vouches, answers and invites carry your name — that is what makes them worth something here.</p></div>
+        <div><span className="eyebrow">WELCOME</span><h1 className="title text-3xl">First, your name</h1><p className="helper">Vouches, answers and invites carry your name — that is what makes them worth something here.</p></div>
         <label>Your name (optional for now)<input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="As people in the community know you" autoFocus/></label>
         {twin && <div className="rounded-lg bg-brand-gold-bg p-4 text-sm text-brand-gold-ink"><p className="font-semibold">There is already a {twin.full_name} on Klal{twin.headline ? ` — ${String(twin.headline).trim().replace(/[.\s]+$/, '')}` : ''}.</p><p className="mt-1">If that is you, <button type="button" onClick={() => api.auth.logout('/login')} className="font-semibold underline">log in to that account</button> instead of starting a second one. If it is someone else with your name, carry on.</p></div>}
         <div><h2 className="section-title">What brings you to Klal?</h2><p className="helper">You can do all three. This just picks where we start.</p></div>
@@ -90,14 +90,14 @@ export default function Welcome() {
       </>}
 
       {step === 1 && <>
-        <div><span className="eyebrow dark">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first — the listings, people and asks near you.</p></div>
+        <div><span className="eyebrow">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first — the listings, people and asks near you.</p></div>
         <label>City<CityInput value={city} onChange={(v) => { setCity(v); setPlaced(null); }} onPick={(p) => { setCity(p.city); setPlaced(p); save({ home_city: p.city, latitude: p.latitude, longitude: p.longitude, timezone: p.timezone, city: p.city, country_code: p.country_code, shabbos_mode_source: 'onboarding' }); }} onBlur={(e) => saveCity(e.target.value)} placeholder="Lakewood, Brooklyn, Jerusalem…"/></label>
         {placed && placed.timezone && <p className="rounded-xl bg-brand-tint p-3 text-sm text-brand-body">Shabbos and Yom Tov times will be computed for <b>{placed.city}</b> — time zone {placed.timezone}. You can change this any time in Settings.</p>}
         <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" disabled={placing} onClick={async () => { await saveCity(city); setStep((s) => s + 1); }} className="primary disabled:opacity-60">{placing ? 'Checking…' : 'Continue'}<ArrowRight size={16}/></button></div>
       </>}
 
       {step === 2 && <>
-        <div><span className="eyebrow dark">{type === 'community_member' ? 'NEAR YOU' : 'YOUR LISTING'}</span>
+        <div><span className="eyebrow">{type === 'community_member' ? 'NEAR YOU' : 'YOUR LISTING'}</span>
           <h1 className="title text-3xl">{type === 'community_member' ? 'Trusted by the community' : 'Put yourself in front of the klal'}</h1>
           <p className="helper">{type === 'community_member' ? 'The most-vouched listings on Klal right now. Vouches come from named members — never anonymous.' : 'Your listing is live the moment you post it — members can find it, vouch for it, and message you on WhatsApp.'}</p></div>
         {type === 'community_member'
@@ -110,7 +110,7 @@ export default function Welcome() {
       </>}
 
       {step === 3 && <>
-        <div><span className="eyebrow dark">GROW YOUR COMMUNITY</span><h1 className="title text-3xl">Invite three people you trust</h1><p className="helper">Klal works when your community is on it — vouches from people you know, asks answered by people you trust. Your invite link is yours; anyone who joins through it is connected to you.</p></div>
+        <div><span className="eyebrow">GROW YOUR COMMUNITY</span><h1 className="title text-3xl">Invite three people you trust</h1><p className="helper">Klal works when your community is on it — vouches from people you know, asks answered by people you trust. Your invite link is yours; anyone who joins through it is connected to you.</p></div>
         <InviteButton/>
         <div className="flex items-center justify-between"><button type="button" onClick={finish} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip for now</button><button type="button" onClick={finish} className="primary">Done<ArrowRight size={16}/></button></div>
       </>}

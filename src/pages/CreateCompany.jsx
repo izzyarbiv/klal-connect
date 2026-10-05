@@ -39,7 +39,7 @@ export default function CreateCompany(){
   };
 
   return <div className="page-shell max-w-2xl py-9">
-    <span className="eyebrow dark">NEW PAGE</span>
+    <span className="eyebrow">NEW PAGE</span>
     <h1 className="title text-3xl">Create a company page</h1>
     <p className="helper mb-7">A company page gives your business its own presence on Klal — separate from your personal profile, just like LinkedIn.</p>
     <form onSubmit={submit} className="space-y-5">

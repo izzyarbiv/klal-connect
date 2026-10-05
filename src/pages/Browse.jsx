@@ -144,7 +144,7 @@ export default function Browse() {
 
   return <div className="page-shell py-8">
     <div className="mb-7">
-      <span className="eyebrow dark">DISCOVER</span>
+      <span className="eyebrow">DISCOVER</span>
       <h1 className="title text-3xl">Community resources</h1>
       <p className="helper">Search curated Klal listings—not an unfiltered public business index.</p>
     </div>

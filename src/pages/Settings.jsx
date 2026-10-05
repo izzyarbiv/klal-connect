@@ -28,7 +28,7 @@ export default function Settings() {
 
   return <div className="page-shell max-w-2xl py-9">
     <Link to="/profile" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to your profile</Link>
-    <span className="eyebrow dark">YOUR ACCOUNT</span>
+    <span className="eyebrow">YOUR ACCOUNT</span>
     <h1 className="title text-3xl">Settings</h1>
     <p className="helper mb-4">Shabbos and Yom Tov times, notifications, your password, and the listings and company pages you manage. Signed in as {user.email}.</p>
 

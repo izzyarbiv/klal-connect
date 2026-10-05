@@ -27,7 +27,7 @@ export default function Jobs() {
   return <div className="page-shell space-y-8 py-9">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <span className="eyebrow dark">COMMUNITY</span>
+        <span className="eyebrow">COMMUNITY</span>
         <h1 className="title">Jobs</h1>
         <p className="helper">Roles posted by people and businesses in Klal.</p>
       </div>

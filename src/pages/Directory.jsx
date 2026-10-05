@@ -33,10 +33,10 @@ export default function Directory(){
     enabled:!!gemachCategory,
     queryFn:()=>api.entities.Provider.filter({...published,category:gemachCategory},'-created_date',3)});
   return <div className="page-shell space-y-12 py-10">
-    <div><span className="eyebrow dark">RESOURCES</span><h1 className="title">Find trusted community resources</h1><p className="helper">Search the directory, browse categories, or explore what's new and popular near you.</p><div className="mt-5"><SearchPanel defaultLocation={community}/></div></div>
+    <div><span className="eyebrow">RESOURCES</span><h1 className="title">Find trusted community resources</h1><p className="helper">Search the directory, browse categories, or explore what's new and popular near you.</p><div className="mt-5"><SearchPanel defaultLocation={community}/></div></div>
 
     <section>
-      <div className="section-head"><div><span className="eyebrow dark">EXPLORE</span><h2 className="title">Popular categories</h2></div><Link to="/browse" className="text-sm font-semibold text-brand-teal">View all</Link></div>
+      <div className="section-head"><div><span className="eyebrow">EXPLORE</span><h2 className="title">Popular categories</h2></div><Link to="/browse" className="text-sm font-semibold text-brand-teal">View all</Link></div>
       <CategoryGrid categories={categories} limit={12}/>
     </section>
 
@@ -53,7 +53,7 @@ export default function Directory(){
 
     {gemachs.length>0&&(
       <section>
-        <div className="section-head"><div><span className="eyebrow dark">GEMACHS & FREE RESOURCES</span><h2 className="title">Find a Gemach near you</h2><p className="helper">Borrow what you need, or support an organization that gives to the community.</p></div><Link to={`/browse${gemachCategory?`?category=${encodeURIComponent(gemachCategory)}`:''}`} className="text-sm font-semibold text-brand-teal">Browse all gemachs</Link></div>
+        <div className="section-head"><div><span className="eyebrow">GEMACHS & FREE RESOURCES</span><h2 className="title">Find a Gemach near you</h2><p className="helper">Borrow what you need, or support an organization that gives to the community.</p></div><Link to={`/browse${gemachCategory?`?category=${encodeURIComponent(gemachCategory)}`:''}`} className="text-sm font-semibold text-brand-teal">Browse all gemachs</Link></div>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]">{gemachs.map(p=><ResourceCard key={p.id} provider={p}/>)}</div>
       </section>
     )}

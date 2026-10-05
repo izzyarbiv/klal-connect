@@ -118,7 +118,7 @@ export default function ProfilePage({ userId }) {
   return <div className="page-shell max-w-3xl space-y-5 py-8">
     {isMe
       ? <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><span className="eyebrow dark">YOUR PROFILE</span><p className="text-sm text-brand-body">This is your profile exactly as members see it. Click a pencil to change a section.</p></div>
+        <div><span className="eyebrow">YOUR PROFILE</span><p className="text-sm text-brand-body">This is your profile exactly as members see it. Click a pencil to change a section.</p></div>
         <span className={`text-sm font-semibold text-brand-teal transition-opacity ${saved ? 'opacity-100' : 'opacity-0'}`} aria-live="polite">Saved</span>
       </div>
       : <Link to="/people" className="flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to people</Link>}

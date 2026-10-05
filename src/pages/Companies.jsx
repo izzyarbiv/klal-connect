@@ -28,7 +28,7 @@ export default function Companies(){
   return <div className="page-shell space-y-8 py-9">
     <div className="flex items-end justify-between gap-4">
       <div>
-        <span className="eyebrow dark">COMMUNITY</span>
+        <span className="eyebrow">COMMUNITY</span>
         <h1 className="title">Companies</h1>
         <p className="helper">Company pages from across Klal.</p>
       </div>

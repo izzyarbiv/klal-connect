@@ -54,7 +54,7 @@ export default function People(){
 
   return <div className="page-shell space-y-10 py-9">
     <div>
-      <span className="eyebrow dark">COMMUNITY</span>
+      <span className="eyebrow">COMMUNITY</span>
       <h1 className="title">People</h1>
       <p className="helper">Discover community members and connect.{!me.guest && ` You can send up to ${WEEKLY_CAP} connection requests per week.`}</p>
       {!me.guest && <p className="mt-2 text-sm font-semibold text-brand-teal">{used} / {WEEKLY_CAP} sent this week</p>}

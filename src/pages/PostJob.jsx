@@ -40,7 +40,7 @@ export default function PostJob() {
   }
 
   return <div className="page-shell max-w-2xl py-9">
-    <span className="eyebrow dark">HIRING</span>
+    <span className="eyebrow">HIRING</span>
     <h1 className="title text-3xl">Post a job</h1>
     <p className="helper mb-6">Goes live right away, and stays open until you mark it filled.</p>
     <form onSubmit={submit} className="panel space-y-5">

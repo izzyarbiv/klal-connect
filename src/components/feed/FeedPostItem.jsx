@@ -82,7 +82,7 @@ export default function FeedPostItem({ post, user, onDeleted }) {
           {current?<span className="text-base leading-none">{current.emoji}</span>:<ThumbsUp size={17}/>}{current?current.label:'Like'}
         </button>
       </div>
-      <button onClick={()=>setShowComments(s=>!s)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold hover:bg-brand-tint ${isAsk?'text-brand-navy':''}`}><MessageCircle size={17}/>{isAsk?(helpfulId?'Answers':'Answer'):'Comment'}</button>
+      <button onClick={()=>setShowComments(s=>!s)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold hover:bg-brand-tint ${isAsk?'text-brand-teal':''}`}><MessageCircle size={17}/>{isAsk?(helpfulId?'Answers':'Answer'):'Comment'}</button>
       {likeErr&&<span className="ml-auto text-xs font-semibold text-brand-error">{likeErr}</span>}
     </div>
     {showComments&&<FeedCommentList postId={post.id} user={user} authorId={post.created_by_id} isAsk={isAsk} helpfulId={helpfulId} onHelpful={setHelpfulId} onCount={n=>setCc(n)}/>}

@@ -35,7 +35,13 @@ function HeaderAccount() {
     const links = accountLinks(window.location.pathname + window.location.search);
     return <>
       <NavLink to={links.login} className="ml-2 hidden rounded-full px-4 py-2 text-sm font-medium text-brand-ink hover:bg-brand-surface md:inline-flex">Log in</NavLink>
-      <NavLink to={links.register} className="rounded-full bg-brand-teal px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 md:px-4 md:py-2">Sign up</NavLink>
+      {/* text-brand-canvas, not text-white. Teal is dark in light mode and
+          light in dark mode, so white text on it measured 5.1 in one theme and
+          2.79 in the other — failing WCAG AA on the most important button in
+          the app. Canvas is the page's own background colour, which is the
+          inverse of teal in each theme, so it reads 5.1 light and 7.05 dark
+          with one class and no variant. */}
+      <NavLink to={links.register} className="rounded-full bg-brand-teal px-3 py-1.5 text-sm font-semibold text-brand-canvas hover:opacity-90 md:px-4 md:py-2">Sign up</NavLink>
     </>;
   }
   return <>

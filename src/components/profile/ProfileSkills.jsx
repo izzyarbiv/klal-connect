@@ -86,7 +86,7 @@ export default function ProfileSkills({ user, me, editable, onSave, editing, set
               disabled={!canEndorse || endorseBusy === s}
               onClick={() => toggleEndorse(s)}
               title={canEndorse ? (mine ? 'Remove your endorsement' : 'Endorse this skill') : undefined}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ring-1 transition ${mine ? 'bg-brand-teal text-white ring-brand-teal' : 'bg-brand-tint text-brand-ink ring-transparent'} ${canEndorse ? 'cursor-pointer hover:ring-brand-teal' : 'cursor-default'}`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ring-1 transition ${mine ? 'bg-brand-teal text-brand-canvas ring-brand-teal' : 'bg-brand-tint text-brand-ink ring-transparent'} ${canEndorse ? 'cursor-pointer hover:ring-brand-teal' : 'cursor-default'}`}
             >
               {endorseBusy === s ? <Loader2 size={13} className="animate-spin"/> : <Award size={13} className={mine ? '' : 'text-brand-teal'}/>}
               {s}

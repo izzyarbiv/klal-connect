@@ -17,7 +17,7 @@ export default function WorkExperienceEditor({ value=[], onChange }){
       <div className="space-y-4">
         {items.map((job,i)=>(
           <div key={i} className="relative pl-9">
-            <div className="absolute left-0 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-brand-teal text-white ring-4 ring-brand-canvas"><Briefcase size={12}/></div>
+            <div className="absolute left-0 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-brand-teal text-brand-canvas ring-4 ring-brand-canvas"><Briefcase size={12}/></div>
             {open===i ? (
               <div className="panel space-y-3">
                 <div className="flex justify-between"><span className="font-semibold text-brand-ink">Edit experience</span><button type="button" onClick={()=>setOpen(null)} className="text-brand-muted"><X size={16}/></button></div>

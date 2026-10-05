@@ -49,7 +49,7 @@ export default function DirectoryCategory() {
   return <div className="page-shell space-y-8 py-10">
     <Link to="/directory" className="flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={16}/>All categories</Link>
     <div>
-      <span className="eyebrow dark">DIRECTORY</span>
+      <span className="eyebrow">DIRECTORY</span>
       <h1 className="title">{match ? `${match.name}${where}` : 'Loading…'}</h1>
       <p className="helper">{loadingProviders ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`}</p>
     </div>

@@ -30,7 +30,7 @@ export default function Feed(){
   useEffect(()=>{setPosts(null);setLoading(true);const mine=++run.current;(async()=>{if(await api.auth.isAuthenticated()){try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}}if(run.current===mine)load();})();},[postId]);
   const removed=id=>setPosts(ps=>ps?.filter(p=>p.id!==id));
   return <div className="page-shell py-4 md:py-7">
-    <div className="mb-3 md:mb-5"><span className="eyebrow dark">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper hidden sm:block">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>
+    <div className="mb-3 md:mb-5"><span className="eyebrow">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper hidden sm:block">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>
     {/* grid-cols-[minmax(0,1fr)] is load-bearing on a phone: a grid item's
         default min-width is auto, so the single column grew to fit the widest
         thing inside it — the filter chips — and dragged the whole page past

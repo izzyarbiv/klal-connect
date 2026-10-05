@@ -8,7 +8,7 @@ const UPDATED = '8 September 2026';
 
 export default function Privacy() {
   return <div className="page-shell max-w-3xl py-10">
-    <span className="eyebrow dark">KLAL CONNECT</span>
+    <span className="eyebrow">KLAL CONNECT</span>
     <h1 className="title text-3xl">Privacy policy</h1>
     <p className="helper">Last updated {UPDATED}. Klal Connect is a community directory and network at klalconnect.org. This page says what we keep, who can see it, and how to get it removed.</p>
 

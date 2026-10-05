@@ -53,7 +53,7 @@ export default function Messages(){
   if(!me) return null;
 
   return <div className="page-shell max-w-2xl py-9">
-    <span className="eyebrow dark">COMMUNITY</span>
+    <span className="eyebrow">COMMUNITY</span>
     <h1 className="title">Messages</h1>
     <p className="helper">Direct messages with members you are connected with.</p>
     <section className="mt-6 panel divide-y divide-brand-line">

@@ -115,7 +115,7 @@ export default function Home() {
 
     <section>
       <div className="section-head">
-        <div><span className="eyebrow dark">BROWSE</span><h2 className="title">Categories{community ? ` in ${community}` : ''}</h2></div>
+        <div><span className="eyebrow">BROWSE</span><h2 className="title">Categories{community ? ` in ${community}` : ''}</h2></div>
         {categories.length > tiles.length && <Link to="/directory" className="text-sm font-semibold text-brand-teal">All {categories.length} categories</Link>}
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -175,7 +175,7 @@ function LocalSection({ community, where, local, browseHere }) {
   return <section>
     <div className="section-head">
       <div>
-        <span className="eyebrow dark">NEAR YOU</span>
+        <span className="eyebrow">NEAR YOU</span>
         <h2 className="title">Help that serves {where}</h2>
         {local.length > 0 && <p className="helper">{local.length} {local.length === 1 ? 'listing' : 'listings'} available{community ? ` in ${community}` : ''} — including organizations that help nationwide.</p>}
       </div>

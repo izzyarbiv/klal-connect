@@ -64,7 +64,11 @@
     --brand-teal: 176 72% 28%;
     --brand-ink: 197 42% 17%;
     --brand-body: 197 13% 40%;
-    --brand-muted: 197 10% 56%;
+    /* 45%, not 56%. At 56% this was rgb(132,148,154), which is 3.14:1 on white
+       — under the 4.5:1 AA needs for text this size, and it is the colour of
+       most of the secondary text in the app. Quiet is the point; illegible is
+       not. */
+    --brand-muted: 197 10% 45%;
     --brand-line: 195 22% 92%;
     --brand-tint: 172 38% 96%;
     /* Deeper than before so gold is legible on white — it is an accent now,
@@ -114,7 +118,11 @@
     --brand-surface: 190 30% 13%;
     --brand-navy: 193 54% 26%;
     --brand-navy-hover: 194 49% 33%;
-    --brand-teal: 176 49% 45%;
+    /* 48%, not 45%: teal is mostly text in dark mode, and at 45% it measured
+       4.44 against the tinted background — just under the 4.5 WCAG AA needs.
+       48% reads 5.01 there and better everywhere else. Light mode is a
+       different token and is left alone (white on it is already 5.1). */
+    --brand-teal: 176 49% 48%;
     --brand-ink: 156 26% 93%;
     --brand-body: 156 12% 74%;
     --brand-muted: 160 7% 58%;
@@ -145,8 +153,16 @@
      a dark full-bleed panel of slogan pushed the search box — the one thing
      almost every visitor arrives to use — below the fold on a phone. The page
      now opens flat on the ivory canvas with the search first. */
-  .eyebrow { @apply text-[11px] font-bold tracking-[0.18em] text-brand-gold; }
-  .eyebrow.dark { @apply text-brand-teal; }
+  /* Teal, and no modifier.
+     The gold version was for the navy hero band. That band is gone, and every
+     eyebrow in the app now sits on the light canvas — there were no plain
+     `.eyebrow` usages left at all, only `.eyebrow.dark`.
+     That modifier had to go for a worse reason than tidiness: `darkMode` is
+     ["class"] and this file declares the entire dark palette under `.dark`, so
+     a span carrying class="eyebrow dark" matched it and re-declared the dark
+     palette on itself. Every section label in the app was rendering dark-mode
+     teal on a near-white page — 2.42:1, well under AA — in light mode. */
+  .eyebrow { @apply text-[11px] font-bold tracking-[0.18em] text-brand-teal; }
   .title { @apply mt-2 font-heading text-2xl font-bold tracking-tight text-brand-ink; }
   .section-title { @apply font-heading text-xl font-bold text-brand-ink; }
   .section-head { @apply mb-5 flex items-end justify-between gap-4; }
