@@ -70,9 +70,28 @@ for (const path of paths) {
   const landed = await ev('location.pathname');
   const rooted = await ev(`(() => { const r = document.querySelector('#root'); return !!r && r.children.length > 0; })()`);
   const moved = landed !== path;
-  const bad = notFound || moved || !rooted;
+  // A URL in the sitemap is one we are asking to have indexed, so it must not
+  // come back noindex. /companies was listed unconditionally while being served
+  // noindex whenever it had nothing on it — asking a crawler to fetch a page and
+  // then telling it to ignore what it found.
+  //
+  // Read over HTTP rather than from the DOM. The service worker's
+  // navigateFallback serves index.html for navigations once it has registered,
+  // and that shell carries no robots tag — so a DOM read quietly inspected a
+  // cached shell instead of the server's answer and reported every page clean.
+  // A crawler sees the HTTP response, so that is what has to be checked.
+  const served = await fetch(BASE + path, { headers: { 'User-Agent': 'kc-hydration-check' } })
+    .then((r) => r.text())
+    .catch(() => '');
+  const robots = (served.match(/name="robots"[^>]*content="([^"]*)"/i) || [])[1] || '';
+  const noindexed = /noindex/i.test(robots);
+  const bad = notFound || moved || !rooted || noindexed;
   if (bad) fails++;
-  const why = notFound ? '404 AFTER HYDRATION' : moved ? `MOVED TO ${landed}` : !rooted ? 'EMPTY ROOT' : 'ok';
+  const why = notFound ? '404 AFTER HYDRATION'
+    : moved ? `MOVED TO ${landed}`
+      : !rooted ? 'EMPTY ROOT'
+        : noindexed ? `NOINDEX BUT IN SITEMAP (${robots})`
+          : 'ok';
   console.log(`  ${bad ? 'FAIL' : 'ok  '} ${path.padEnd(38)} ${why}`);
 }
 

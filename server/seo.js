@@ -408,12 +408,21 @@ export async function sitemap(origin) {
     store.list('Category').catch(() => []),
   ]);
   const published = providers.filter(isPublished);
+  const publishedCompanies = companies.filter(isPublished);
   const urls = [
     { loc: `${origin}/`, changefreq: 'daily', priority: '1.0' },
     { loc: `${origin}/directory`, changefreq: 'daily', priority: '0.9' },
-    { loc: `${origin}/companies`, changefreq: 'weekly', priority: '0.6' },
     { loc: `${origin}/privacy`, changefreq: 'yearly', priority: '0.2' },
   ];
+
+  // /companies is served noindex while it has nothing on it — "kept out of the
+  // index until it has content", as the handler says. Listing it here anyway
+  // asked a crawler to fetch a page we then tell it to ignore, which is the
+  // same contradiction the category rule below exists to avoid. This was the
+  // one page that did not follow it.
+  if (publishedCompanies.length) {
+    urls.push({ loc: `${origin}/companies`, changefreq: 'weekly', priority: '0.6' });
+  }
 
   // Only categories that actually have listings — an empty page is not worth
   // a crawl, and telling a search engine otherwise costs trust.
