@@ -188,7 +188,10 @@ export default function Browse() {
 
     {results.length > 0 && (view === 'map'
       ? <DirectoryMap providers={results} />
-      : <div className="grid gap-4 lg:grid-cols-2">{results.map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>)}
+      // grid-cols-[minmax(0,1fr)] is load-bearing on a phone, for the same
+      // reason it is in Feed: a grid item's default min-width is auto, so the
+      // column grew to fit the widest listing card and pushed the page sideways.
+      : <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{results.map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>)}
 
     {/* Nothing matched. Say so plainly, then give three ways forward: where it
         does exist, asking the community, and adding it. */}
@@ -228,7 +231,7 @@ export default function Browse() {
       {elsewhere.length > 0 && <section>
         <h2 className="section-title mb-3">You might also look at…</h2>
         <p className="helper mb-3 mt-0">These match your search but are listed in another community.</p>
-        <div className="grid gap-4 lg:grid-cols-2">{elsewhere.slice(0, 6).map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{elsewhere.slice(0, 6).map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>
       </section>}
     </div>}
 

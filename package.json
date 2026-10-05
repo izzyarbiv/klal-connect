@@ -26,6 +26,7 @@
     "test:ask-loop": "node scripts/ask-loop-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
     "test:messages-scale": "node scripts/messages-scale-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
     "test:a11y": "node scripts/a11y-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
+    "test:overflow": "node scripts/overflow-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
     "clear-demo": "node server/clear-demo.js",
     "import-blob": "node --env-file-if-exists=.env.local server/import-blob.js"
   },

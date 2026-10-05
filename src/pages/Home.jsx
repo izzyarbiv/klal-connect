@@ -190,7 +190,7 @@ function LocalSection({ community, where, local, browseHere }) {
     </div>}
 
     {shown.length > 0
-      ? <div className="grid gap-4 lg:grid-cols-2">{shown.map((p) => <ResourceCard key={p.id} provider={p} />)}</div>
+      ? <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{shown.map((p) => <ResourceCard key={p.id} provider={p} />)}</div>
       : <div className="empty">
         <MapPin />
         <p>Nothing is listed for {where} yet. It is a curated directory, so a gap means nobody has added it — not that it does not exist.</p>

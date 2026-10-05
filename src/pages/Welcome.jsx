@@ -104,7 +104,7 @@ export default function Welcome() {
           ? (nearby === null ? <div className="loading min-h-24">Loading…</div>
             : nearby.length === 0
               ? <div className="empty min-h-32"><Handshake className="text-brand-teal"/><p>The directory is just getting started{city ? ` in ${city}` : ''}. Know a business the community trusts? Add it and be its first vouch.</p><Link to="/add" className="primary"><Plus size={16}/>Add a listing</Link></div>
-              : <div className="grid gap-3">{nearby.map((p) => <ResourceCard key={p.id} provider={p}/>)}</div>)
+              : <div className="grid grid-cols-[minmax(0,1fr)] gap-3">{nearby.map((p) => <ResourceCard key={p.id} provider={p}/>)}</div>)
           : <div className="grid gap-3 sm:grid-cols-2"><Link to="/add" className="panel flex items-start gap-3 hover:bg-brand-tint/40"><Plus className="mt-0.5 shrink-0 text-brand-teal"/><span><span className="block font-semibold text-brand-ink">Create your listing</span><span className="block text-sm text-brand-body">Takes five minutes. Add a WhatsApp number and badges.</span></span></Link><Link to="/directory" className="panel flex items-start gap-3 hover:bg-brand-tint/40"><Compass className="mt-0.5 shrink-0 text-brand-teal"/><span><span className="block font-semibold text-brand-ink">Already listed?</span><span className="block text-sm text-brand-body">Find your business in the directory and claim it.</span></span></Link></div>}
         <div className="flex justify-end"><button type="button" onClick={() => next()} className="primary">Continue<ArrowRight size={16}/></button></div>
       </>}

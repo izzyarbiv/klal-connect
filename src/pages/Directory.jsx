@@ -54,7 +54,7 @@ export default function Directory(){
     {gemachs.length>0&&(
       <section>
         <div className="section-head"><div><span className="eyebrow dark">GEMACHS & FREE RESOURCES</span><h2 className="title">Find a Gemach near you</h2><p className="helper">Borrow what you need, or support an organization that gives to the community.</p></div><Link to={`/browse${gemachCategory?`?category=${encodeURIComponent(gemachCategory)}`:''}`} className="text-sm font-semibold text-brand-teal">Browse all gemachs</Link></div>
-        <div className="grid gap-4 md:grid-cols-3">{gemachs.map(p=><ResourceCard key={p.id} provider={p}/>)}</div>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]">{gemachs.map(p=><ResourceCard key={p.id} provider={p}/>)}</div>
       </section>
     )}
 
@@ -69,5 +69,5 @@ function ProviderSection({ title, items }){
   // A heading with nothing under it reads as broken. Nothing is flagged
   // featured yet, so that rail simply does not appear until something is.
   if(!items || items.length===0) return null;
-  return <section><div className="section-head"><h2 className="title">{title}</h2><Link to="/browse" className="text-sm font-semibold text-brand-teal">See more</Link></div><div className="grid gap-4 md:grid-cols-3">{items.map(p=><ResourceCard key={p.id} provider={p}/>)}</div></section>;
+  return <section><div className="section-head"><h2 className="title">{title}</h2><Link to="/browse" className="text-sm font-semibold text-brand-teal">See more</Link></div><div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]">{items.map(p=><ResourceCard key={p.id} provider={p}/>)}</div></section>;
 }

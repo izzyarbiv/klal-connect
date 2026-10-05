@@ -54,7 +54,7 @@ export default function DirectoryCategory() {
       <p className="helper">{loadingProviders ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`}</p>
     </div>
     {rows.length > 0
-      ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{rows.map((p) => <ResourceCard key={p.id} provider={p}/>)}</div>
+      ? <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(2,minmax(0,1fr))] lg:grid-cols-[repeat(3,minmax(0,1fr))]">{rows.map((p) => <ResourceCard key={p.id} provider={p}/>)}</div>
       : !loadingProviders && <div className="empty"><SlidersHorizontal/><p>No listings here yet.</p><Link to="/add" className="primary">Add the first listing</Link></div>}
   </div>;
 }

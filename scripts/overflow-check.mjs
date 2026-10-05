@@ -1,0 +1,190 @@
+// Nothing is wider than the phone it is being read on.
+//
+// usage: node scripts/overflow-check.mjs [baseUrl]
+//
+// A box that runs past the edge of the screen means pinching out to read it and
+// pinching back to carry on — which is how someone looking up a phone number
+// gives up. This measures, at phone width, whether the page scrolls sideways at
+// all and which elements stick out, so the answer is a list of components rather
+// than a guess.
+//
+// Tables, code blocks and the odd deliberate carousel are allowed to be wider
+// than the screen inside their own scroller; those show up as scrollable
+// ancestors and are reported separately from real overflow.
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
+
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const PORT = 9244;
+const BASE = process.argv[2] || 'https://klalconnect.org';
+// 390 is an iPhone 14/15, 360 the common Android width, 320 the narrowest
+// phone still in use. 320 is included because it is where min-content bugs
+// actually show: the bottom bar fitted 390 and 360 and ran off 320.
+const WIDTHS = [390, 360, 320];
+const ROUTES = ['', 'directory', 'browse', 'feed', 'people', 'companies'];
+// Signed-in pages are where the dense rows are — the saved list's four icon
+// buttons beside a title, the listing form, settings. A guest sees GuestPrompt
+// instead of all of them, so a guest-only sweep reported those pages clean
+// while two of them overflowed. Checked on a local stack only, since it signs
+// in and saves a listing.
+const AUTH_ROUTES = ['saved', 'settings', 'profile', 'messages', 'add'];
+
+const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
+  `--remote-debugging-port=${PORT}`, `--user-data-dir=/tmp/kc-of-${Date.now()}`, 'about:blank'], { stdio: 'ignore' });
+process.on('exit', () => { try { chrome.kill('SIGKILL'); } catch {} });
+
+async function target() {
+  for (let i = 0; i < 40; i++) {
+    try {
+      const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
+      const page = list.find((t) => t.type === 'page');
+      if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
+    } catch { /* not up */ }
+    await sleep(250);
+  }
+  throw new Error('no debug target');
+}
+
+const ws = new WebSocket(await target());
+await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+let id = 0;
+const pend = new Map();
+ws.onmessage = (m) => {
+  const x = JSON.parse(m.data);
+  if (pend.has(x.id)) {
+    const { res, rej } = pend.get(x.id);
+    pend.delete(x.id);
+    x.error ? rej(new Error(x.error.message)) : res(x.result);
+  }
+};
+const send = (method, params = {}) => new Promise((res, rej) => {
+  const i = ++id; pend.set(i, { res, rej });
+  ws.send(JSON.stringify({ id: i, method, params }));
+});
+const ev = async (e) => (await send('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true })).result?.value;
+
+await send('Page.enable');
+await send('Runtime.enable');
+
+// No backslashes in this expression on purpose.
+const MEASURE = `(() => {
+  const vw = document.documentElement.clientWidth;
+  const pageScrolls = document.documentElement.scrollWidth > vw + 1;
+  const out = [];
+  const seen = new Set();
+  for (const el of document.querySelectorAll('body *')) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    const overhang = Math.round(r.right - vw);
+    const startsOff = Math.round(r.left);
+    if (overhang < 2 && startsOff > -2) continue;
+    // Containers with nothing in them to read. An empty overlay wrapper — the
+    // toast viewport is one, and is vendored — can sit a little wide without
+    // anything becoming unreadable or the page scrolling. What matters is
+    // content pushed off screen, so this keeps the signal on real defects.
+    if (!(el.innerText || '').trim() && !el.querySelector('img, svg')) continue;
+    // Inside something that scrolls sideways on purpose? Then it is contained.
+    let contained = false;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const s = getComputedStyle(p);
+      if (s.overflowX === 'auto' || s.overflowX === 'scroll') { contained = true; break; }
+    }
+    const cls = (el.getAttribute('class') || '').split(' ').filter(Boolean).slice(0, 4).join('.');
+    const key = el.tagName + '.' + cls + ':' + contained;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      cls,
+      width: Math.round(r.width),
+      overhang,
+      left: startsOff,
+      contained,
+      text: (el.innerText || '').trim().slice(0, 40).replace(/\\s+/g, ' '),
+    });
+  }
+  return { vw, pageScrolls, out };
+})()`;
+
+let fails = 0;
+console.log(`\noverflow check against ${BASE}\n`);
+
+for (const width of WIDTHS) {
+  console.log(`  ${width}px wide`);
+  await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 2, mobile: true });
+  for (const route of ROUTES) {
+    await send('Page.navigate', { url: `${BASE}/${route}` });
+    await sleep(4000);
+    const { vw, pageScrolls, out } = (await ev(MEASURE)) || { out: [] };
+    const real = (out || []).filter((o) => !o.contained);
+    const bad = pageScrolls || real.length > 0;
+    if (bad) fails++;
+    const label = `/${route}`.padEnd(12);
+    console.log(`    ${bad ? 'FAIL' : 'ok  '} ${label} ${pageScrolls ? 'page scrolls sideways' : 'no sideways scroll'}${real.length ? ` · ${real.length} element(s) past the edge` : ''}`);
+    for (const o of real.slice(0, 6)) {
+      console.log(`           ${o.tag}${o.cls ? '.' + o.cls : ''}  w=${o.width} overhang=${o.overhang}px${o.text ? `  "${o.text}"` : ''}`);
+    }
+  }
+  console.log('');
+}
+// --- signed in -----------------------------------------------------------
+const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(BASE);
+if (!LOCAL) {
+  console.log(`  info  signed-in pages not measured — ${BASE} is not a local stack.`);
+  console.log('        Run against http://localhost:5200 to cover saved, settings, profile,');
+  console.log('        messages and the listing form, where the dense rows are.');
+} else {
+  async function api(method, path, { body, token } = {}) {
+    const res = await fetch(`${BASE}/api${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null; try { data = await res.json(); } catch { /* empty */ }
+    return { status: res.status, data };
+  }
+
+  const email = `overflow${Date.now()}@example.com`;
+  const reg = await api('POST', '/auth/register', { body: { email, password: 'password123' } });
+  const ver = await api('POST', '/auth/verify-otp', { body: { email, otpCode: reg.data?.dev_code } });
+  const token = ver.data?.access_token;
+
+  if (!token) {
+    console.log('  FAIL  could not sign in to measure the signed-in pages');
+    fails += 1;
+  } else {
+    await api('PUT', '/auth/me', { token, body: { full_name: 'Avi Overflow' } });
+    // A saved listing, so the saved list renders its rows: a long title beside
+    // four icon buttons is the densest row in the app and the one that broke.
+    const listings = (await api('GET', '/entities/Provider?limit=1', { token })).data || [];
+    if (listings[0]) await api('POST', '/functions/toggleCommunityActivity', { token, body: { providerId: listings[0].id, activity: 'save' } });
+
+    await send('Page.navigate', { url: `${BASE}/` });
+    await sleep(2000);
+    await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(token)})`);
+
+    const routes = [...AUTH_ROUTES, ...(listings[0] ? [`provider/${listings[0].id}`] : [])];
+    for (const width of WIDTHS) {
+      console.log(`  ${width}px wide, signed in`);
+      await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 2, mobile: true });
+      for (const route of routes) {
+        await send('Page.navigate', { url: `${BASE}/${route}` });
+        await sleep(4000);
+        const { vw, pageScrolls, out } = (await ev(MEASURE)) || { out: [] };
+        const real = (out || []).filter((o) => !o.contained);
+        const bad = pageScrolls || real.length > 0;
+        if (bad) fails++;
+        console.log(`    ${bad ? 'FAIL' : 'ok  '} ${`/${route}`.slice(0, 24).padEnd(26)} ${pageScrolls ? 'page scrolls sideways' : 'no sideways scroll'}${real.length ? ` · ${real.length} past the edge` : ''}`);
+        for (const o of real.slice(0, 5)) {
+          console.log(`           ${o.tag}${o.cls ? '.' + o.cls : ''}  w=${o.width} overhang=${o.overhang}px${o.text ? `  "${o.text}"` : ''}`);
+        }
+      }
+      console.log('');
+    }
+  }
+}
+await send('Emulation.clearDeviceMetricsOverride');
+
+console.log(fails ? `${fails} page/width combination(s) overflow the screen` : 'nothing overflows the screen');
+ws.close();
+process.exit(fails ? 1 : 0);
