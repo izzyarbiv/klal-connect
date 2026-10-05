@@ -135,6 +135,30 @@ if (chips?.length) {
   ok(prefilled === city, 'the directory search opens on the remembered community', JSON.stringify(prefilled));
 }
 
+// --- the phone's bottom bar is what we intend ---------------------------
+// Messaging earns a thumb target because it is a place you return to and reply
+// from; notifications moved to the header next to settings. Asserted so the
+// slot cannot quietly go back to being an alerts sheet.
+{
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await go(`${BASE}/`);
+  const bar = await ev(`(() => {
+    const nav = [...document.querySelectorAll('nav')].filter((n) => getComputedStyle(n).position === 'fixed').pop();
+    if (!nav) return null;
+    const items = [...nav.querySelectorAll('a, button')].map((el) => ({
+      label: (el.innerText || '').trim(),
+      href: el.getAttribute('href') || '',
+    }));
+    return items;
+  })()`);
+  ok(Array.isArray(bar) && bar.length > 0, 'the phone has a bottom bar', `${bar?.length} items`);
+  const last = bar?.[bar.length - 1];
+  ok(last?.href === '/messages', 'the bottom-right slot is Messages', JSON.stringify(last));
+  ok(!(bar || []).some((i) => /alert/i.test(i.label)), 'the alerts sheet is no longer in the bottom bar');
+  await send('Emulation.clearDeviceMetricsOverride');
+  await sleep(400);
+}
+
 // --- a page does not inherit another page's share card -------------------
 // useMetaTags restored only the title, so og:title, og:description and
 // og:image went on describing the last listing viewed. Navigating here has to

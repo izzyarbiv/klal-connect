@@ -1,9 +1,9 @@
 import React, { Suspense } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut, Settings } from 'lucide-react';
+import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut, Settings, MessageSquare } from 'lucide-react';
 import Brand from '@/components/Brand';
 import ThemeToggle from '@/components/ThemeToggle';
-import MobileNotificationBell from '@/components/MobileNotificationBell';
+import NotificationBell from '@/components/NotificationBell';
 import ShabbosMode from '@/components/ShabbosMode';
 import TravelWarningBanner from '@/components/TravelWarningBanner';
 import { useDetectLocation } from '@/hooks/useDetectLocation';
@@ -18,10 +18,16 @@ const Home = HomeIcon;
 // reachable at /jobs, and belongs back here once there is something in it.
 const links = [['Home','/',Home],['Resources','/directory',LayoutGrid],['Feed','/feed',Newspaper],['People','/people',Users],['Saved','/saved',Bookmark],['Profile','/profile',UserRound]];
 // The phone bar is not the desktop nav with smaller text: eight 47px targets
-// with 10px labels is a worse way to reach six places than five bigger ones.
-// Saved moves into the desktop nav and the profile page rather than competing
+// with 10px labels is a worse way to reach six places than six bigger ones.
+// Saved stays in the desktop nav and on the profile page rather than competing
 // for a thumb.
-const mobileLinks = links.filter(([name]) => name !== 'Saved');
+//
+// The sixth slot is Messages, where the notifications sheet used to be — and
+// the count is unchanged, because that sheet was itself the sixth target.
+// Messaging is somewhere you return to and reply from, which earns a thumb;
+// notifications are a glance, so they moved to the header beside settings with
+// the rest of the account controls.
+const mobileLinks = [...links.filter(([name]) => name !== 'Saved'), ['Messages', '/messages', MessageSquare]];
 function HeaderAccount() {
   const { user, isGuest, authChecked, logout } = useAuth();
   if (!authChecked) return null;
@@ -47,6 +53,16 @@ function StaffLink() {
   return <NavLink to="/admin" className={({ isActive }) => `p-2 hover:text-brand-teal ${isActive ? 'text-brand-teal' : 'text-brand-muted'}`} aria-label="Admin" title="Admin"><ShieldCheck size={19}/></NavLink>;
 }
 
+// Notifications, on every screen size, beside the settings gear. They used to
+// be a tab in the phone's bottom bar; that slot went to Messages, and a glance
+// at what happened belongs with the account controls rather than competing for
+// a thumb. Hidden for guests, who have no notifications of their own.
+function HeaderBell() {
+  const { user, isGuest, authChecked } = useAuth();
+  if (!authChecked || !user || isGuest) return null;
+  return <NotificationBell/>;
+}
+
 // The settings gear sits outside the desktop-only nav: on a phone the bottom
 // bar has no room for it, and this is the one place it is always reachable.
 function SettingsGear() {
@@ -61,7 +77,7 @@ export default function AppLayout() {
     <AccountRequiredModal/>
     <ShabbosMode/>
     <TravelWarningBanner/>
-    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}</nav><HeaderAccount/><StaffLink/><SettingsGear/><ThemeToggle/></div></div></header>
+    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}</nav><HeaderAccount/><StaffLink/><HeaderBell/><SettingsGear/><ThemeToggle/></div></div></header>
     {/* A page that throws should not take the header and the tab bar with it:
         the person needs a way to get somewhere else. The outer boundary in
         App.jsx still catches anything that breaks the layout itself. */}
@@ -69,6 +85,10 @@ export default function AppLayout() {
         loading on a slow connection should swap the page, not unmount the
         header and the bottom nav down to a bare "Loading…". */}
     <main><ErrorBoundary><Suspense fallback={<div className="loading">Loading…</div>}><Outlet/></Suspense></ErrorBoundary></main>
-    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{mobileLinks.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex flex-col items-center gap-1 text-[11px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={20}/><span>{n}</span></NavLink>)}<MobileNotificationBell/></nav>
+    {/* repeat(6,minmax(0,1fr)), not grid-cols-6: `1fr` is minmax(auto,1fr), so
+        each column refused to go narrower than its own label — "Resources"
+        wants about 58px, six of those is 348px, and the bar ran off a 320px
+        screen. The labels truncate instead of setting the width. */}
+    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-[repeat(6,minmax(0,1fr))] border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{mobileLinks.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex min-w-0 flex-col items-center gap-1 text-[11px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={20} className="shrink-0"/><span className="max-w-full truncate">{n}</span></NavLink>)}</nav>
   </div>;
 }
