@@ -411,6 +411,28 @@ ok(!born.sponsored, 'a listing cannot be born sponsored', JSON.stringify(born.sp
 ok(!born.sponsored_until, 'a listing cannot be born with a sponsorship window', JSON.stringify(born.sponsored_until));
 ok(!born.last_confirmed_at, 'a listing cannot be born already confirmed', JSON.stringify(born.last_confirmed_at));
 
+// ---- a listing that turns private takes its vouches with it --------------
+// The dangerous case is not a listing that was always sensitive — vouching on
+// one of those is already refused. It is a listing that becomes sensitive
+// later: sensitivity is read from the listing's own words, so an owner editing
+// their description (or the term list growing, which has happened) can make a
+// listing private long after people vouched for it publicly.
+const laterListing = await call('POST', '/functions/createListing', { token: userB, body: { name: 'Later Private Co', category: 'Home Services', short_description: 'General repairs and installations.' } });
+const laterId = laterListing.data?.provider?.id;
+const laterVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: laterId, activity: 'vouch' } });
+ok(laterVouch.status === 200 && laterVouch.data?.active === true, 'an ordinary listing can still be vouched for', String(laterVouch.status));
+
+const vouchVisibleTo = async (token) => {
+  const r = await call('GET', '/entities/Vouch', token ? { token } : {});
+  return Array.isArray(r.data) && r.data.some((v) => v.provider_id === laterId);
+};
+ok(await vouchVisibleTo(userA), 'the vouch is readable while the listing is ordinary');
+
+// The owner edits their own description. Nothing else changes.
+await call('PUT', `/entities/Provider/${laterId}`, { token: userB, body: { description: 'We also provide trauma counseling for families.' } });
+ok(!(await vouchVisibleTo(userA)), 'the vouch stops being readable once the listing reads as sensitive');
+ok(!(await vouchVisibleTo(null)), 'and is not readable anonymously either');
+
 // ---- sensitive listings: no public record of who needed help -------------
 // The client does not render "I've used this" or a vouch button on a crisis
 // line, an addiction service, a fertility organization or a mikvah. That is

@@ -15,6 +15,7 @@ import {
 } from './auth.js';
 import { functions, publicFunctions, safeExternalUrl } from './functions.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
+import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
@@ -247,6 +248,26 @@ async function visibleRows(entity, rows, user) {
   if (PERSONAL.has(entity)) return rows.filter((row) => !!user && row.created_by_id === user.id);
   if (user?.role === 'admin') return rows;
   if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
+
+  // A vouch names the member who gave it and a community note is signed, so on
+  // a listing where that must not be public neither row may be readable —
+  // hiding the section in the UI is not the rule, any more than hiding the
+  // button was. Both entities are in PUBLIC_READ, so without this they were
+  // served to anyone who asked for them directly.
+  //
+  // The case this really exists for is a listing that becomes sensitive after
+  // the fact. Sensitivity is read from the listing's own words, so an owner
+  // editing their description — or the term list growing, which has already
+  // happened once — can turn a listing private long after people vouched for it
+  // in public. Those vouches must go private with it, not sit in the API
+  // describing who needed the service.
+  if ((entity === 'Vouch' || entity === 'CommunityNote') && rows.length) {
+    const ids = [...new Set(rows.map((row) => row.provider_id).filter(Boolean))];
+    const listings = await Promise.all(ids.map((id) => store.get('Provider', id).catch(() => null)));
+    const privateIds = new Set(ids.filter((id, i) => isSensitiveListing(listings[i])));
+    if (privateIds.size) rows = rows.filter((row) => !privateIds.has(row.provider_id));
+  }
+
   if (!user && !PUBLIC_READ.has(entity)) return [];
   const scope = OWNER_SCOPED[entity];
   let visible = scope ? rows.filter((row) => scope(row, user)) : rows;
