@@ -60,8 +60,27 @@ function Unverified(){
 }
 
 function NoLocation(){ return <div className="bg-brand-gold-bg/60 px-4 py-2 text-center text-sm text-brand-gold-ink"><MapPin size={14} className="mr-1 inline"/>Set your location in <Link to="/settings#location" className="font-bold underline">Settings</Link> for accurate Shabbos &amp; Yom Tov times.</div>; }
-function CountdownBanner({status, stale}){ return <div className="bg-brand-navy px-4 py-2 text-center text-sm font-semibold text-white">Shabbos begins in {countdown(status.nextChange)} — {status.cityLabel}{stale&&<span className="ml-2 font-normal text-white/60">(offline — last known times)</span>}</div>; }
-function ReadOnlyBanner({status}){ return <div className="sticky top-16 z-30 bg-brand-gold-bg/80 px-4 py-2 text-center text-sm font-semibold text-brand-gold-ink">Shabbos / Yom Tov (read-only) — {status.cityLabel} · Havdalah {fmt(status.endsAt,status.tzid)}</div>; }
+// Both banners carry the parsha alongside the times. These are the two places
+// most people actually see their zmanim — the lock screen only appears once
+// Shabbos is in — and "when does it start" and "which parsha is it" are the
+// same question asked on the same Friday afternoon. status.parsha comes from
+// @hebcal/core already rendered ("Parashat Noach"), so it needs no label.
+//
+// flex-wrap rather than one line of text: four facts and a city name do not fit
+// across a phone, and a banner that overflows is worse than one that wraps.
+function CountdownBanner({status, stale}){ return <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 bg-brand-navy px-4 py-2 text-center text-sm text-white">
+  <span className="font-semibold">Shabbos begins in {countdown(status.nextChange)}</span>
+  {status.startsAt&&<span className="text-white/75">· Candle lighting {fmt(status.startsAt,status.tzid)}</span>}
+  {status.parsha&&<span className="font-semibold">· {status.parsha}</span>}
+  <span className="text-white/75">· {status.cityLabel}</span>
+  {stale&&<span className="text-white/60">(offline — last known times)</span>}
+</div>; }
+function ReadOnlyBanner({status}){ return <div className="sticky top-16 z-30 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 bg-brand-gold-bg/80 px-4 py-2 text-center text-sm text-brand-gold-ink">
+  <span className="font-semibold">Shabbos / Yom Tov (read-only)</span>
+  {status.parsha&&<span className="font-semibold">· {status.parsha}</span>}
+  <span>· Havdalah {fmt(status.endsAt,status.tzid)}</span>
+  <span className="opacity-75">· {status.cityLabel}</span>
+</div>; }
 function LockScreen({status, onBrowse}){ const greeting=status.windowKind==='yomtov'?'Gut Yom Tov':status.windowKind==='both'?'Gut Yom Tov & Gut Shabbos':status.windowKind==='shabbos'?'Gut Shabbos':(status.parsha?'Gut Shabbos':'Gut Yom Tov'); return <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-brand-navy px-6 text-center text-white"><p className="text-xs font-bold tracking-[0.18em] text-brand-gold">{status.isInIsrael?'ISRAEL':'DIASPORA'}</p><h1 className="mt-3 font-heading text-4xl font-bold tracking-tight">{greeting}</h1><p className="mt-2 text-brand-gold">{status.cityLabel}</p><div className="mt-8 grid gap-3 text-sm"><p>Candle lighting · <b>{fmt(status.startsAt,status.tzid)}</b></p><p>Havdalah · <b>{fmt(status.endsAt,status.tzid)}</b></p>{status.parsha&&<p>Parsha · <b>{status.parsha}</b></p>}</div><p className="mt-8 text-sm text-white/70">Havdalah in {countdown(status.endsAt)}</p><p className="mt-2 text-xs text-white/50">The app unlocks automatically after Havdalah.</p>
   <button onClick={onBrowse} className="mt-8 text-sm text-white/60 underline underline-offset-4 hover:text-white">Need a phone number urgently? Open the directory</button>
 </div>; }
