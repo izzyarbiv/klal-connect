@@ -109,15 +109,31 @@ ok(!(tiles || []).some((t) => /Coming soon/.test(t)), 'no tile promises "coming 
 const chips = await ev(`(()=>{const l=[...document.querySelectorAll('span')].find(s=>s.textContent.trim()==='Community');return l?[...l.parentElement.querySelectorAll('button')].map(b=>b.textContent.trim()):[]})()`);
 ok(Array.isArray(chips) && chips.length > 0, 'community chips are present', JSON.stringify(chips));
 
+// Named explicitly, not left to "no page errors" to catch as a React warning:
+// the launch community and the chosen community were deduped against the listed
+// cities but not against each other, so picking Boca Raton while it had no
+// listings rendered the same chip twice.
+const dupeChips = await ev(`(() => {
+  const label = [...document.querySelectorAll('span')].find((s) => s.textContent.trim() === 'Community');
+  if (!label) return [];
+  const names = [...label.parentElement.querySelectorAll('button')].map((b) => b.textContent.replace(/[0-9]+$/, '').trim());
+  return names.filter((n, i) => n && names.indexOf(n) !== i);
+})()`);
+ok((dupeChips || []).length === 0, 'no community is offered twice', JSON.stringify(dupeChips));
+
 let picked = '';
 if (chips?.length) {
   picked = await ev(`(()=>{const l=[...document.querySelectorAll('span')].find(s=>s.textContent.trim()==='Community');const b=l.parentElement.querySelectorAll('button')[0];b.click();return b.textContent.trim()})()`);
   await sleep(1200);
   // The label may carry a trailing count; the city is the leading text.
   const city = String(picked || '').replace(/\d+$/, '').trim();
-  const search = await ev('location.search');
+  // Read through URLSearchParams rather than matching the raw string: a space
+  // is encoded as "+", which decodeURIComponent does not turn back into a
+  // space, so this passed only while the first chip happened to be a
+  // single-word city and failed the moment it was "Boca Raton".
+  const inUrl = await ev(`new URLSearchParams(location.search).get('community') || ''`);
   const stored = await ev(`localStorage.getItem('kc_community')`);
-  ok(decodeURIComponent(search || '').includes(`community=${city}`), 'choosing a community lands in the URL', search);
+  ok(inUrl === city, 'choosing a community lands in the URL', JSON.stringify(inUrl));
   ok(stored === city, 'choosing a community is remembered', JSON.stringify(stored));
 
   // Come back with no query string at all: the choice must survive.

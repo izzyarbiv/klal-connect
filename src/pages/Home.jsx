@@ -56,7 +56,12 @@ export default function Home() {
   const communities = useMemo(() => {
     const found = communitiesFrom(providers);
     const names = new Set(found.map((c) => c.city));
-    const extra = [LAUNCH_COMMUNITY, community].filter((c) => c && !names.has(c)).map((city) => ({ city, count: 0 }));
+    // Deduped against each other, not only against the listed cities: when the
+    // chosen community *is* the launch community and neither has listings yet,
+    // both candidates passed the filter and React was handed two chips with the
+    // same key — which duplicates or drops one. Likely at launch, where Boca
+    // Raton may have nothing in it yet.
+    const extra = [...new Set([LAUNCH_COMMUNITY, community])].filter((c) => c && !names.has(c)).map((city) => ({ city, count: 0 }));
     return [...found, ...extra].slice(0, 8);
   }, [providers, community]);
 
