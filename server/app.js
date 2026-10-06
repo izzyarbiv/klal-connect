@@ -500,6 +500,17 @@ app.post('/api/entities/:entity/update-many', requireAuth, async (req, res, next
   const { entity } = req.params;
   const { query = {}, update = {} } = req.body || {};
   if (!canWrite(entity, req.user)) return res.status(403).json({ error: 'Not permitted' });
+
+  // Bulk updates exist for exactly one thing: marking your own notifications
+  // read. Scoping everything else by created_by_id walked straight past the
+  // single-row rules, because created_by_id is not always who may write the row.
+  // After a claim is approved the original author is still created_by_id on the
+  // listing while owner_id is the business — so the author could bulk-patch a
+  // listing that is no longer theirs, through a route that never asked canWrite
+  // about that specific row, while the PUT route correctly refused them.
+  if (req.user.role !== 'admin' && entity !== 'Notification') {
+    return res.status(403).json({ error: 'Not permitted' });
+  }
   // Non-admins may only bulk-update their own rows (used to mark notifications read).
   const scoped = req.user.role === 'admin'
     ? query

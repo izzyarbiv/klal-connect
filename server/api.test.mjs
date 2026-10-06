@@ -557,6 +557,18 @@ ok(reResolve.status === 409, 'a resolved claim cannot be resolved again', String
 const afterReResolve = (await call('GET', `/entities/Provider/${ownId}`, { token: admin })).data || {};
 ok(afterReResolve.owner_id === idA && afterReResolve.claimed === true, 'and the listing is left as it was', JSON.stringify({ owner: afterReResolve.owner_id === idA, claimed: afterReResolve.claimed }));
 
+// The bypass the audit agents found: the single-row route refused the original
+// author on a claimed listing, and update-many let them straight through,
+// because it scoped by created_by_id — which is no longer who may write the row.
+const bulkRetake = await call('POST', '/entities/Provider/update-many', { token: userB, body: { query: { id: ownId }, update: { description: 'Taken back through the bulk route' } } });
+const afterBulk = (await call('GET', `/entities/Provider/${ownId}`, { token: admin })).data || {};
+ok(bulkRetake.status === 403, 'the bulk route cannot be used to edit a listing', String(bulkRetake.status));
+ok(afterBulk.description !== 'Taken back through the bulk route', 'and the listing is untouched by the attempt', String(afterBulk.description || '').slice(0, 40));
+
+// The one thing bulk updates are actually for still works.
+const myNotifs = await call('POST', '/entities/Notification/update-many', { token: userB, body: { query: { recipient_id: idB, read: false }, update: { read: true } } });
+ok(myNotifs.status === 200, 'marking your own notifications read still works', String(myNotifs.status));
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');
