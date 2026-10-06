@@ -537,6 +537,26 @@ const vagueClaim = await call('POST', '/functions/createClaim', { token: userC, 
 const vagueResolve = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: vagueClaim.data?.claim?.id, approve: true } });
 ok(vagueResolve.status >= 400, 'a claim with no listing attached cannot be approved', String(vagueResolve.status));
 
+// Resolving a claim is a position of trust, so it carries the usual guards.
+// Found by the audit agents, all three reproducible before this.
+const selfClaim = await call('POST', '/functions/createClaim', { token: admin, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I run it', verification_details: 'Taking this one for myself, thanks.' } });
+const selfApprove = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: selfClaim.data?.claim?.id, approve: true } });
+ok(selfApprove.status === 403, 'staff cannot approve their own claim', String(selfApprove.status));
+
+// The listing is already userA's; a second claimant does not quietly inherit it.
+const secondClaim = await call('POST', '/functions/createClaim', { token: userC, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I bought the shop', verification_details: 'New owner as of this month, happy to show papers.' } });
+const secondApprove = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: secondClaim.data?.claim?.id, approve: true } });
+ok(secondApprove.status === 409, 'an already-claimed listing is not handed to the next claimant', String(secondApprove.status));
+const stillOwned = (await call('GET', `/entities/Provider/${ownId}`, { token: admin })).data || {};
+ok(stillOwned.owner_id === idA, 'and the current owner keeps it', String(stillOwned.owner_id === idA));
+
+// A claim is resolved once. Rejecting an approved one used to leave the listing
+// transferred while the request read "rejected".
+const reResolve = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: claimId, approve: false } });
+ok(reResolve.status === 409, 'a resolved claim cannot be resolved again', String(reResolve.status));
+const afterReResolve = (await call('GET', `/entities/Provider/${ownId}`, { token: admin })).data || {};
+ok(afterReResolve.owner_id === idA && afterReResolve.claimed === true, 'and the listing is left as it was', JSON.stringify({ owner: afterReResolve.owner_id === idA, claimed: afterReResolve.claimed }));
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');

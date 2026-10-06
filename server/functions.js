@@ -310,6 +310,19 @@ export const functions = {
     const claim = await store.get('ClaimRequest', need(claim_id, 'Missing claim.'));
     if (!claim) fail('Claim not found.', 404);
 
+    // Staff, but not on your own claim. Being a moderator is not a way to take
+    // ownership of any business in the directory by filing a claim and waving it
+    // through yourself.
+    if (claim.created_by_id === user.id) fail('Someone else has to review your own claim.', 403);
+
+    // Resolved once. Without this, approving twice re-ran the handover and
+    // rejecting an approved claim left the listing transferred while the request
+    // read "rejected" — the record and the listing disagreeing about what
+    // happened.
+    if (claim.status && claim.status !== 'pending') {
+      fail(`That claim was already ${claim.status}.`, 409);
+    }
+
     const resolution = { status: approve ? 'approved' : 'rejected', resolved_at: new Date().toISOString(), resolved_by: user.id };
 
     if (!approve) {
@@ -328,6 +341,14 @@ export const functions = {
     if (!claim.provider_id) fail('This claim names no listing. Attach one before approving it.', 400);
     const provider = await store.get('Provider', claim.provider_id);
     if (!provider) fail('That listing no longer exists.', 404);
+
+    // A listing that already belongs to someone is not handed to the next
+    // claimant who asks. Approving a second claim used to transfer it silently,
+    // so whoever claimed last owned it. Moving a listing between owners should
+    // be a deliberate act, not a side effect of clearing a queue.
+    if (provider.owner_id && provider.owner_id !== claim.created_by_id) {
+      fail('That listing is already claimed. Release it from the current owner before approving another claim.', 409);
+    }
 
     const updated = await store.update('Provider', provider.id, { owner_id: claim.created_by_id, claimed: true });
     const resolved = await store.update('ClaimRequest', claim.id, resolution);
