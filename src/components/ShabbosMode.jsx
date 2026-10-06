@@ -75,7 +75,7 @@ function CountdownBanner({status, stale}){ return <div className="flex flex-wrap
   <span className="text-white/75">· {status.cityLabel}</span>
   {stale&&<span className="text-white/60">(offline — last known times)</span>}
 </div>; }
-function ReadOnlyBanner({status}){ return <div className="sticky top-16 z-30 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 bg-brand-gold-bg/80 px-4 py-2 text-center text-sm text-brand-gold-ink">
+function ReadOnlyBanner({status}){ return <div className="sticky top-[calc(4rem+env(safe-area-inset-top))] z-30 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 bg-brand-gold-bg/80 px-4 py-2 text-center text-sm text-brand-gold-ink">
   <span className="font-semibold">Shabbos / Yom Tov (read-only)</span>
   {status.parsha&&<span className="font-semibold">· {status.parsha}</span>}
   <span>· Havdalah {fmt(status.endsAt,status.tzid)}</span>

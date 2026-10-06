@@ -79,11 +79,17 @@ function SettingsGear() {
 
 export default function AppLayout() {
   useDetectLocation();
-  return <div className="min-h-screen bg-brand-canvas text-brand-ink pb-20 md:pb-0">
+  // pb clears the phone's bottom bar, which is taller than 5rem once the home
+  // indicator's inset is added — content was sitting behind it on a notched
+  // iPhone.
+  return <div className="min-h-screen bg-brand-canvas text-brand-ink pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
     <AccountRequiredModal/>
+    {/* The header carries the status-bar inset itself, so these two banners sit
+        below it rather than above: installed to the home screen, anything at the
+        very top of the document is behind the Dynamic Island. */}
+    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}</nav><HeaderAccount/><StaffLink/><HeaderBell/><SettingsGear/><ThemeToggle/></div></div></header>
     <ShabbosMode/>
     <TravelWarningBanner/>
-    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}</nav><HeaderAccount/><StaffLink/><HeaderBell/><SettingsGear/><ThemeToggle/></div></div></header>
     {/* A page that throws should not take the header and the tab bar with it:
         the person needs a way to get somewhere else. The outer boundary in
         App.jsx still catches anything that breaks the layout itself. */}
