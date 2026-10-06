@@ -23,7 +23,7 @@ export default function AddListing() {
   const [tab, setTab] = useState(params.has('claim') ? 'claim' : 'add');
   const fromPost = params.get('from_post') || '';
   const [editing, setEditing] = useState(null);
-  const [editError, setEditError] = useState('');
+  const [editError, setEditError] = useState(null);
 
   useEffect(() => {
     if (!editId || !user || isGuest) return;
@@ -32,16 +32,16 @@ export default function AddListing() {
       try {
         const row = await api.entities.Provider.get(editId);
         if (!alive) return;
-        if (!row) { setEditError('That listing could not be found.'); return; }
+        if (!row) { setEditError({ title: 'That listing is not there', body: 'It may have been taken down, or the link may be wrong.' }); return; }
         // The same rule the server enforces, so the refusal is explained here
         // rather than arriving as a 403 after the form is filled in.
         if (!canEditListing(row, user)) {
-          setEditError('A listing is editable by whoever added it, or by the business once it has claimed it. You can suggest a correction from the listing page, and the team will take it from there.');
+          setEditError({ title: 'This one is not yours to edit', body: 'A listing is editable by whoever added it, or by the business once it has claimed it. You can suggest a correction from the listing page, and the team will take it from there.' });
           return;
         }
         setEditing(row);
       } catch {
-        if (alive) setEditError('That listing could not be loaded.');
+        if (alive) setEditError({ title: 'That listing would not load', body: 'Something went wrong on our side. Try again in a moment.' });
       }
     })();
     return () => { alive = false; };
@@ -56,12 +56,15 @@ export default function AddListing() {
   }
 
   if (editId) {
+    // The header said "YOUR LISTING / Edit this listing" above a refusal
+    // explaining that it is not yours and there is no form, and the only way
+    // out was the whole directory rather than the listing in question.
     return <div className="page-shell max-w-4xl py-9">
-      <span className="eyebrow">YOUR LISTING</span>
-      <h1 className="title text-3xl">Edit this listing</h1>
-      <p className="helper mb-6">Changes go live as soon as you save. Verification, featured placement and the community counters are not yours to set — those stay with the Klal team.</p>
+      <span className="eyebrow">{editError ? 'LISTING' : 'YOUR LISTING'}</span>
+      <h1 className="title text-3xl">{editError ? editError.title : 'Edit this listing'}</h1>
+      {!editError && <p className="helper mb-6">Changes go live as soon as you save. Verification, featured placement and the community counters are not yours to set — those stay with the Klal team.</p>}
       {editError
-        ? <div className="empty"><p>{editError}</p><Link to="/directory" className="primary">Back to the directory</Link></div>
+        ? <div className="empty"><p>{editError.body}</p><div className="flex flex-wrap justify-center gap-2"><a href={`/provider/${encodeURIComponent(editId)}`} className="primary">Open the listing</a><Link to="/directory" className="secondary">Browse the directory</Link></div></div>
         : !editing
           ? <div className="loading">Loading the listing…</div>
           : <section className="panel"><ListingForm provider={editing}/></section>}

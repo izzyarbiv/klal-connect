@@ -19,7 +19,7 @@ import { VERIFIED_MEANING } from '@/lib/trust';
 
 export default function ProviderDetail(){
   const { slug } = useParams();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const [provider,setProvider]=useState(),[notes,setNotes]=useState([]),[vouchTick,setVouchTick]=useState(0),[missing,setMissing]=useState(false);
 
   useEffect(()=>{
@@ -52,7 +52,10 @@ export default function ProviderDetail(){
   if(missing)return <div className="page-shell py-10"><div className="empty"><p>That listing could not be found — it may have been removed or is awaiting review.</p><Link to="/browse" className="primary">Browse the directory</Link></div></div>;
   if(!provider)return <div className="loading">Loading resource…</div>;
   const sensitive=isSensitiveListing(provider);
-  const canEdit=canEditListing(provider,user);
+  // isGuest, like AddListing. A demo instance adopts the shared guest session
+  // for every signed-out visitor, so without this the page offered "Edit this
+  // listing" to anonymous readers on anything a previous visitor had added.
+  const canEdit=!isGuest&&canEditListing(provider,user);
   return <div className="page-shell py-7">
     <Link to="/browse" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to browse</Link>
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">

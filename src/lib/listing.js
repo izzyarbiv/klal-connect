@@ -41,6 +41,21 @@ export function normalizeListingPatch(patch, row, { badgeById, badgeApplies }) {
     const declared = Array.isArray(out.badges) ? out.badges : (row?.badges || []);
     out.badges = [...new Set(declared.filter((id) => badgeById[id] && badgeApplies(badgeById[id], category)))];
   }
+  // A verified badge the listing has stopped declaring has to come down.
+  // The page draws a badge that is declared OR confirmed, and verified_badges
+  // is an admin field the owner's patch cannot touch — so un-ticking a badge
+  // in the edit form saved and changed nothing on the page, while the form
+  // said "Your changes are live." That is the one direction that must work: a
+  // caterer who stops being cholov Yisroel, or stops closing for Shabbos, is
+  // the only one who knows, and had no way to say so. Confirmed is a subset of
+  // declared, so the server keeps it one.
+  if ('badges' in out || 'category' in out) {
+    const declared = new Set('badges' in out ? out.badges : (row?.badges || []));
+    const confirmed = 'verified_badges' in out ? out.verified_badges : row?.verified_badges;
+    if (Array.isArray(confirmed) && confirmed.length) {
+      out.verified_badges = confirmed.filter((id) => declared.has(id) && badgeById[id] && badgeApplies(badgeById[id], category));
+    }
+  }
   if ('whatsapp' in out) {
     out.whatsapp = out.whatsapp ? String(out.whatsapp).replace(/\D/g, '').replace(/^1?(\d{10})$/, '1$1') : '';
   }

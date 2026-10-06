@@ -61,8 +61,16 @@ export default function ManageListings({user}){
         <div className="space-y-4">
           {items.map(p=>(
             <div key={p.id} className="space-y-2 rounded-lg border border-brand-line p-4">
-              <div className="flex items-center justify-between"><p className="font-semibold text-brand-ink">{p.name}</p><span className="text-xs font-semibold text-brand-muted">{p.status}</span></div>
-              {(() => { const c = listingCompleteness(p); return <CompletenessRing percent={c.percent} next={c.next} label="Listing" onAction={() => { setSelected(p.id); setChanges((t) => t || `${c.next.action}: `); document.getElementById('listing-change-request')?.scrollIntoView({ behavior: 'smooth' }); }}/>; })()}
+              <div className="flex items-center justify-between gap-3"><p className="min-w-0 font-semibold text-brand-ink">{p.name}</p><span className="shrink-0 text-xs font-semibold text-brand-muted">{p.status}</span></div>
+              {/* The page titled "Manage my listings" had no link to the edit
+                  form at all — the only one in the app was on the listing page
+                  itself, which is not where someone goes to manage a listing.
+                  This is the gap a tester hit as "editing doesn't exist yet". */}
+              <div className="flex flex-wrap gap-2">
+                <a href={`/add?edit=${encodeURIComponent(p.id)}`} className="primary text-sm">Edit all details</a>
+                <a href={`/provider/${p.slug||p.id}`} className="secondary text-sm">View listing</a>
+              </div>
+              {(() => { const c = listingCompleteness(p); return <CompletenessRing percent={c.percent} next={c.next} label="Listing" onAction={() => { location.href = `/add?edit=${encodeURIComponent(p.id)}`; }}/>; })()}
               <HeadlineEdit label="Tagline" value={taglineFor[p.id]!=null?taglineFor[p.id]:(p.tagline||'')} onChange={v=>setTaglineFor({...taglineFor,[p.id]:v})} helper="Appears under your listing name across the app."/>
               <button onClick={()=>saveTagline(p.id)} disabled={savingId===p.id} className="primary text-sm">{savingId===p.id?'Saving…':'Save tagline'}{savedId===p.id?' ✓':''}</button>
               <label className="block text-sm font-medium text-brand-ink">Payment link
@@ -75,8 +83,8 @@ export default function ManageListings({user}){
           ))}
         </div>
         <form id="listing-change-request" onSubmit={submit} className="space-y-3 border-t border-brand-line pt-4">
-          <h3 className="font-semibold text-brand-ink">Request a larger change</h3>
-          <p className="helper">Significant changes are sent to the administrative team before publication.</p>
+          <h3 className="font-semibold text-brand-ink">Ask us for something you cannot change yourself</h3>
+          <p className="helper">Your own details are yours to edit above — this is for the rest: taking a listing down, merging a duplicate, correcting who owns it, or asking us to confirm your details.</p>
           <select required className="field" value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Choose your listing</option>{items.map(p=><option key={p.id} value={p.id}>{p.name} — {p.status}</option>)}</select>
           <textarea required className="field min-h-24" value={changes} onChange={e=>setChanges(e.target.value)} placeholder="Describe the information you would like updated."/>
           <button className="primary">Request listing update</button>

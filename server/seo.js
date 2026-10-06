@@ -127,15 +127,20 @@ function providerBody(provider, notes, vouches) {
 
 const isPublished = (row) => row.status === 'published' || row.status === undefined;
 
+// Oldest first on a tie. The slug is server-owned now, but rows written
+// before that could share one, and the default order is newest-first — which
+// is the wrong way round: it hands the URL to whoever took it last.
+const firstBySlug = (rows) => (rows || []).slice().sort((x, y) => Date.parse(x.created_date || 0) - Date.parse(y.created_date || 0))[0];
+
 async function findProvider(slugOrId) {
-  const bySlug = await store.filter('Provider', { slug: slugOrId });
-  if (bySlug[0]) return bySlug[0];
+  const bySlug = firstBySlug(await store.filter('Provider', { slug: slugOrId }));
+  if (bySlug) return bySlug;
   return store.get('Provider', slugOrId);
 }
 
 async function findCompany(slugOrId) {
-  const bySlug = await store.filter('Company', { slug: slugOrId });
-  if (bySlug[0]) return bySlug[0];
+  const bySlug = firstBySlug(await store.filter('Company', { slug: slugOrId }));
+  if (bySlug) return bySlug;
   return store.get('Company', slugOrId);
 }
 

@@ -18,6 +18,7 @@ import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { listingEditor, normalizeListingPatch } from '../src/lib/listing.js';
+import { verificationAfterEdit } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
@@ -302,7 +303,10 @@ function canWrite(entity, user, row) {
   // owner_id was previously read for self-vouch checks and notification
   // recipients and never consulted here, so a business that claimed its listing
   // still could not change a word of it.
-  if (entity === 'Provider' && row) return listingEditor(row) === user.id;
+  // The shared guest account creates rows on behalf of every signed-out
+  // visitor in a demo instance, so "the member who created it" is not a person
+  // there. Anyone could edit any listing a previous visitor had added.
+  if (entity === 'Provider' && row) return !isGuest(user) && listingEditor(row) === user.id;
   if (row && row.created_by_id !== user.id) {
     // Notifications are written by the server for a recipient, who may mark
     // them read; that is the one cross-author write we allow.
@@ -381,6 +385,10 @@ const PROTECTED_FIELDS = new Set([
   // owner_id is who may edit the row. A listing's own editor could PUT it to
   // anyone, which hands the page away outside the claim queue entirely.
   'owner_id',
+  // The public URL. /provider/:slug resolves by filtering on this field, so a
+  // member could set another business's slug on their own listing and serve it
+  // at the victim's canonical URL, with their title, OG tags and JSON-LD.
+  'slug',
   'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
   // Prominence and confirmation, which a listing must never grant itself.
   // `featured` was missing here and Provider is client-writable, so an owner
@@ -488,8 +496,22 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
     try { patch = { ...patch, [field]: safeExternalUrl(patch[field]) }; }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
-  if (entity === 'Provider') patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo });
+  let reverified = null;
+  if (entity === 'Provider') {
+    patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo });
+    // Staff edit a listing in order to correct it, so their edit is not what
+    // invalidates the check they themselves made.
+    if (req.user.role !== 'admin' && !isModerator(req.user)) {
+      reverified = verificationAfterEdit(patch, existing);
+      if (reverified) patch = { ...patch, ...reverified.fields };
+    }
+  }
   const updated = await store.update(entity, id, patch);
+  // A verified listing that changed identity is a thing a moderator has to be
+  // able to find, since the mark they granted has just come off.
+  if (reverified) {
+    await store.create('ActivityEvent', { type: 'listing_identity_change', entity: 'Provider', target_id: id, fields: reverified.changed.join(','), was_verified: !!existing.verified }, req.user);
+  }
   // Every status change by staff leaves a trace: who, what, from, to.
   if (MODERATED.has(entity) || MODERATED_BY_STAFF.has(entity)) {
     if (patch.status !== undefined && patch.status !== existing.status && (req.user.role === 'admin' || isModerator(req.user))) {

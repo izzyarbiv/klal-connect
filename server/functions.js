@@ -54,7 +54,7 @@ const validReaction = (value) => (value === undefined || value === null || value
 // What a member may say about their own listing. Verification, status and
 // the counters are the server's and an admin's to set.
 function listingInput(payload) {
-  const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, owner_id, ...given } = payload || {};
+  const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, owner_id, slug, ...given } = payload || {};
   // Prominence and confirmation are an admin's to grant, and this is a function
   // route: stripProtected never runs here, so it has to refuse them itself —
   // from the same list the generic route uses, not a second copy of it.

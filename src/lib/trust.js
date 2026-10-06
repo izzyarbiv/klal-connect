@@ -71,3 +71,37 @@ export const isStaleConfirmation = (provider, now = Date.now()) => {
   const t = confirmedAt(provider);
   return t !== null && now - t > 365 * DAY;
 };
+
+// Fields that say which business this is. Not every field — a listing can fix
+// its hours or add a photo without that meaning anything about who it is.
+const IDENTITY_FIELDS = ['name', 'category', 'city', 'address', 'phone'];
+
+/**
+ * What a verified listing loses when an edit changes who it is.
+ *
+ * Verification is a statement Klal made about one specific business: we
+ * reached these people, at these details, and they agreed to be listed. The
+ * edit form covers name, category, address, city and phone, while `verified`,
+ * `verified_at`, `slug` and the coordinates sit outside it and survive the
+ * merge — so a verified caterer could be turned into an auto body shop in
+ * another city while still asserting we had confirmed it. The mark has to come
+ * down when the thing it was about changes, and it is staff's to put back.
+ *
+ * Returns the extra fields to write alongside the patch, or null for an edit
+ * that changes nothing about identity.
+ */
+export function verificationAfterEdit(patch, row) {
+  if (!patch || !row) return null;
+  const changed = IDENTITY_FIELDS.filter((f) => f in patch && String(patch[f] ?? '') !== String(row[f] ?? ''));
+  if (!changed.length) return null;
+  const out = {};
+  if (row.verified) Object.assign(out, { verified: false, verified_at: null, verified_by: null, verified_badges: [] });
+  if (row.last_confirmed_at) out.last_confirmed_at = null;
+  // A pin from the old address on the new one is worse than no pin: the
+  // prerendered JSON-LD then carries a Brooklyn address at Lakewood
+  // coordinates. Geocoding runs again from the new address.
+  if ((changed.includes('address') || changed.includes('city')) && (row.latitude || row.longitude)) {
+    Object.assign(out, { latitude: null, longitude: null });
+  }
+  return Object.keys(out).length ? { fields: out, changed } : null;
+}

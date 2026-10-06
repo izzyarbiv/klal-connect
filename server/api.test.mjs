@@ -668,6 +668,66 @@ ok(ghost.status === 404, 'a claim cannot point at a listing that does not exist'
 const takenToo = await call('POST', '/functions/createClaim', { token: truthTok, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'owner', verification_details: 'Trying for a listing that already has an owner.' } });
 ok(takenToo.status === 409, 'a listing that already belongs to someone is not claimable', String(takenToo.status));
 
+// Their own member, because userB is at the five-listings-a-day cap by now and
+// a 429 here would leave the rows below undefined and the assertions vacuous.
+const ownerEmail = `listingowner${Date.now()}@example.com`;
+const ownerReg = await call('POST', '/auth/register', { body: { email: ownerEmail, password: 'password123' } });
+const ownerTok = (await call('POST', '/auth/verify-otp', { body: { email: ownerEmail, otpCode: ownerReg.data?.dev_code } })).data?.access_token;
+
+// The slug is the public URL. /provider/:slug resolves by filtering on it, so
+// a member could put another business's slug on their own listing and answer
+// at the victim's canonical URL with their own title, OG tags and JSON-LD.
+const victim = await call('POST', '/functions/createListing', { token: admin, body: { name: 'Devorahs Kosher Catering', category: 'Food & Catering', short_description: 'Catering for simchas.', slug: 'devorahs-kosher-catering' } });
+ok(!victim.data?.provider?.slug, 'a new listing cannot choose its own public URL', String(victim.data?.provider?.slug));
+const squatter = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Not The Caterer', category: 'Business', short_description: 'Something else entirely.' } });
+const squatId = squatter.data?.provider?.id;
+const squat = await call('PUT', `/entities/Provider/${squatId}`, { token: ownerTok, body: { slug: 'devorahs-kosher-catering' } });
+ok(squat.status === 200 && !squat.data?.slug, 'nor take over another listing URL by editing', String(squat.data?.slug));
+
+// Verification is a statement about one specific business.
+const toVerify = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Verified Bakery', category: 'Food & Catering', short_description: 'Bread and challah.', city: 'Lakewood' } });
+const vId = toVerify.data?.provider?.id;
+await call('PUT', `/entities/Provider/${vId}`, { token: admin, body: { verified: true, verified_at: '2026-10-01T00:00:00Z', latitude: 40.0963, longitude: -74.2176, badges: ['pas_yisroel'], verified_badges: ['pas_yisroel'] } });
+ok(!!vId, 'the rows the verification assertions need exist', String(toVerify.status));
+const hoursOnly = await call('PUT', `/entities/Provider/${vId}`, { token: ownerTok, body: { hours: 'Sun-Thu 6am-7pm' } });
+ok(hoursOnly.data?.verified === true, 'fixing the hours does not cost a listing its verification', String(hoursOnly.data?.verified));
+const becameSomethingElse = await call('PUT', `/entities/Provider/${vId}`, { token: ownerTok, body: { name: "Shloimy's Auto Body", category: 'Home Services', city: 'Brooklyn', address: '1 Other St' } });
+ok(becameSomethingElse.data?.verified === false, 'but becoming a different business does', String(becameSomethingElse.data?.verified));
+ok(becameSomethingElse.data?.latitude == null, 'and the old pin does not stay on the new address', String(becameSomethingElse.data?.latitude));
+const trail2 = (await call('GET', '/entities/ActivityEvent?limit=500', { token: admin })).data || [];
+ok(trail2.some((e) => e.type === 'listing_identity_change' && e.target_id === vId),
+  'a verified listing changing identity is something staff can find');
+
+// A confirmed badge is the admin's word on a claim the listing made. When the
+// listing stops making the claim, the admin's confirmation of it has to go too
+// — the page draws a badge that is declared OR confirmed, so un-ticking it in
+// the form changed nothing while the form said the change was live.
+const kosher = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Badge Bakery', category: 'Food & Catering', short_description: 'Cakes.', badges: ['cholov_yisroel', 'pas_yisroel'] } });
+const kId = kosher.data?.provider?.id;
+await call('PUT', `/entities/Provider/${kId}`, { token: admin, body: { verified_badges: ['cholov_yisroel', 'pas_yisroel'] } });
+ok(!!kId, 'and the badge assertions have a row too', String(kosher.status));
+const untick = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, body: { badges: ['pas_yisroel'] } });
+ok(!(untick.data?.verified_badges || []).includes('cholov_yisroel'),
+  'a business can retract a confirmed badge it no longer deserves', JSON.stringify(untick.data?.verified_badges));
+ok((untick.data?.verified_badges || []).includes('pas_yisroel'), 'and keeps the one it still declares', JSON.stringify(untick.data?.verified_badges));
+const moved = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, body: { category: 'Legal' } });
+ok(!(moved.data?.verified_badges || []).length, 'a confirmed kashrus badge does not follow a listing into another trade', JSON.stringify(moved.data?.verified_badges));
+
+// A demo instance adopts one shared guest account for every signed-out
+// visitor, so rows it created belong to nobody in particular.
+const guestSession = await call('POST', '/auth/demo-session', { body: {} });
+const guestTok = guestSession.data?.access_token;
+if (guestTok) {
+  const guestListing = await call('POST', '/functions/createListing', { token: guestTok, body: { name: 'Guest Shop', category: 'Community', short_description: 'Added without an account.' } });
+  const gId = guestListing.data?.provider?.id;
+  if (gId) {
+    const guestEdit = await call('PUT', `/entities/Provider/${gId}`, { token: guestTok, body: { description: 'Anyone at all can write this.' } });
+    ok(guestEdit.status === 403, 'the shared guest account cannot edit a listing, including one it added', String(guestEdit.status));
+  } else {
+    ok(true, 'the shared guest account cannot add a listing at all', String(guestListing.status));
+  }
+}
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');
