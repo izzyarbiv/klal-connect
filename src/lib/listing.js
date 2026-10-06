@@ -65,9 +65,9 @@ export function normalizeListingPatch(patch, row, { badgeById, badgeApplies }) {
   for (const field of ['service_areas', 'languages']) {
     if (!(field in out)) continue;
     const given = out[field];
-    out[field] = (Array.isArray(given) ? given : String(given || '').split(','))
+    out[field] = [...new Set((Array.isArray(given) ? given : String(given || '').split(','))
       .map((v) => String(v).trim())
-      .filter(Boolean);
+      .filter(Boolean))];
   }
   return out;
 }

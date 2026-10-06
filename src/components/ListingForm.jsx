@@ -49,7 +49,13 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
         : (a??'')===(b??'');
       const patch=Object.fromEntries(Object.entries(fields).filter(([k,v])=>{
         if(k==='logo_url') return !!logo;
-        if(k==='service_areas'||k==='languages') return !same(v,Array.isArray(provider[k])?provider[k]:String(provider[k]||'').split(',').map(x=>x.trim()).filter(Boolean));
+        // These two are the lossy ones: an array joined with ", " into one text
+        // input and split on "," again. A stored area like "Brooklyn, NY" comes
+        // apart into "Brooklyn" and a bogus "NY" — on any save, including one
+        // that changed the hours. So the comparison is on the text this person
+        // was actually shown: untouched text sends nothing, and a split only
+        // happens to someone who typed in a field labelled "comma separated".
+        if(k==='service_areas'||k==='languages') return data[k]!==before[k];
         return !same(v,before[k]);
       }));
       if(!Object.keys(patch).length){ setDone(provider); setBusy(false); return; }

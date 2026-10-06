@@ -712,6 +712,9 @@ ok(!(untick.data?.verified_badges || []).includes('cholov_yisroel'),
 ok((untick.data?.verified_badges || []).includes('pas_yisroel'), 'and keeps the one it still declares', JSON.stringify(untick.data?.verified_badges));
 const moved = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, body: { category: 'Legal' } });
 ok(!(moved.data?.verified_badges || []).length, 'a confirmed kashrus badge does not follow a listing into another trade', JSON.stringify(moved.data?.verified_badges));
+const dupes = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, body: { service_areas: 'Boca Raton, Boca Raton, Delray Beach' } });
+ok(JSON.stringify(dupes.data?.service_areas) === JSON.stringify(['Boca Raton', 'Delray Beach']),
+  'an edit does not store the same area twice', JSON.stringify(dupes.data?.service_areas));
 
 // A demo instance adopts one shared guest account for every signed-out
 // visitor, so rows it created belong to nobody in particular.
