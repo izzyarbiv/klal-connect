@@ -210,6 +210,35 @@ ok(/Your listing is live/i.test(body), '    publishing succeeds', /Your listing 
 const found = await (await fetch(`${BASE}/api/entities/Provider?limit=200`)).json().catch(() => []);
 ok(Array.isArray(found) && found.some((p) => p.name === LISTING), '    the listing is in the directory', LISTING);
 
+// ---- editing it ---------------------------------------------------------
+// The wall this was reported from: a listing could be created and then never
+// changed. The tagline and payment link were editable from Settings, and a
+// free-text "request a larger change" went to an admin queue whose Approve
+// button changed nothing on the listing — so a correction could be asked for,
+// approved, and never applied.
+console.log('\n  editing the listing');
+const mine = (Array.isArray(found) ? found : []).find((x) => x.name === LISTING);
+ok(!!mine, '    the new listing can be found by id', mine ? mine.id : '(not found)');
+if (mine) {
+  await send('Page.navigate', { url: `${BASE}/add?edit=${encodeURIComponent(mine.id)}` });
+  await sleep(5500);
+  const prefilled = await ev(`(() => { const i = document.querySelector('input[name=name]'); return i ? i.value : ''; })()`);
+  ok(prefilled === LISTING, '    the edit form opens prefilled', JSON.stringify(prefilled));
+
+  const NEWDESC = 'Open Sunday to Thursday, emergency call-outs by arrangement.';
+  await ev(`(${SET})('textarea[name=description]', ${JSON.stringify(NEWDESC)})`);
+  await sleep(700);
+  const saved = await ev(`(() => { const b = [...document.querySelectorAll('button')].find((x) => /Save changes/i.test(x.textContent)); if (!b) return false; b.click(); return true; })()`);
+  ok(saved, '    there is a Save changes button');
+  await sleep(5000);
+  ok(/changes are live/i.test(await ev('document.body.innerText')), '    saving reports success');
+
+  // The page saying so is not the same as the row changing.
+  const after = await (await fetch(`${BASE}/api/entities/Provider/${mine.id}`)).json().catch(() => ({}));
+  ok(after && after.description === NEWDESC, '    and the change is really on the listing', String((after && after.description) || '').slice(0, 44));
+  ok(after && after.name === LISTING, '    while a partial edit leaves the rest alone', after && after.name);
+}
+
 // ---- coming back --------------------------------------------------------
 // Registering is only half of auth. If signing in is broken, every member who
 // already joined is locked out, and no check in this suite would have noticed.
@@ -244,6 +273,6 @@ ok(backIn === EMAIL, '    and the session is the same member', JSON.stringify(ba
 const real = errors.filter((e) => !/favicon|\[vite\]|manifest|sw\.js/i.test(e));
 ok(real.length === 0, '    no page errors', real.slice(0, 2).join(' | '));
 
-console.log(fails ? `\n${fails} critical-path check(s) failed` : '\ncritical paths: joining, onboarding, publishing a listing and signing back in all work');
+console.log(fails ? `\n${fails} critical-path check(s) failed` : '\ncritical paths: joining, onboarding, publishing, editing and signing back in all work');
 ws.close();
 process.exit(fails ? 1 : 0);
