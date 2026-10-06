@@ -457,6 +457,19 @@ ok(sensSave.status === 200 && sensSave.data?.active === true, 'saving a sensitiv
 const sensNote = await call('POST', '/functions/createReview', { token: userB, body: { provider_id: sensId, provider_name: 'Crisis Support Line', body: 'They helped me through a very hard time.' } });
 ok(sensNote.status >= 400, 'a signed public note is refused on a sensitive listing', String(sensNote.status));
 
+// A shadchan's page is private for the same reason a crisis line is: a named
+// vouch says the voucher used a shadchan, which is their business and nobody
+// else's. Worth its own assertion because this category was added on a
+// suggestion, and the brief draws the line at resources and contacts — no
+// profiles, no matching.
+const shidduchListing = await call('POST', '/functions/createListing', { token: userB, body: { name: 'R. Gold', category: 'Shidduchim', short_description: 'Introductions for singles in the community.' } });
+const shidduchId = shidduchListing.data?.provider?.id;
+ok(!!shidduchId, 'a shidduchim listing can be created', String(shidduchListing.status));
+const shidduchVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: shidduchId, activity: 'vouch' } });
+ok(shidduchVouch.status >= 400, 'a shidduchim listing refuses a public vouch', String(shidduchVouch.status));
+const shidduchSave = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: shidduchId, activity: 'save' } });
+ok(shidduchSave.status === 200, 'but can still be saved privately', String(shidduchSave.status));
+
 // And the rule is narrow rather than blanket: public trust still works where
 // it helps, which is most of the directory.
 const plainListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Reliable Plumbing Co', category: 'Home Services', short_description: 'Repairs and installations for kitchens and bathrooms.' } });

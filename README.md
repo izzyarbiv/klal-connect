@@ -77,7 +77,8 @@ Path alias `@/` → `src/`.
 | `npm run test:messages-scale` | Conversations still name people past 200 members · local only |
 | `npm run dev:api` | API only, with `--watch` reload |
 | `npm run dev:web` | Vite only |
-| `npm run seed` | Seed categories and sample listings |
+| `npm run seed` | Seed categories **and six sample listings** — a fresh dev database, never a live one |
+| `npm run ensure-categories` | Add only the categories the database is missing. Safe against production |
 | `npm run build` | Production build to `dist/` |
 | `npm start` | Run the API (serves the built frontend's data) |
 | `npm run lint` | ESLint |

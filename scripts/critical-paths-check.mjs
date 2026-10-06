@@ -137,6 +137,23 @@ const category = await ev(`(() => {
 })()`);
 ok(!!category, '    the category list loaded', category || '(empty)');
 
+// Category is a required field, so a list that does not name your thing is a
+// dead end — a shul and a shidduchim resource both had nowhere to go. "Other"
+// is the escape hatch, and it has to be last or it reads as a real choice.
+const catOptions = await ev(`[...document.querySelectorAll('select[name=category] option')].map((o) => o.value).filter(Boolean)`);
+ok((catOptions || []).includes('Other'), '    the category list offers "Other"', `${(catOptions || []).length} categories`);
+ok((catOptions || [])[catOptions.length - 1] === 'Other', '    and offers it last', (catOptions || []).slice(-3).join(' | '));
+
+// Choosing it should ask what the thing actually is, since that is all anyone
+// will have to search by.
+await ev(`(${SET})('select[name=category]', 'Other')`);
+await sleep(600);
+const otherHint = await ev(`(() => { const i = document.querySelector('input[name=subcategory]'); return i ? (i.placeholder || '') : ''; })()`);
+ok(/what it is/i.test(otherHint), '    and asks what it actually is', JSON.stringify(otherHint));
+// Put the real category back for the publish below.
+await ev(`(${SET})('select[name=category]', ${JSON.stringify(category)})`);
+await sleep(400);
+
 // Every required control the form declares, rather than a list kept in step by
 // hand. The first version filled four fields and missed two: the description
 // textarea, and the city input — whose placeholder is "Lakewood, Brooklyn,

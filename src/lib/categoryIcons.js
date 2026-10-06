@@ -27,6 +27,7 @@ const GUESSES = [
   [/school|yeshiv|cheder|tutor|educat|kollel|seminary/i, 'GraduationCap'],
   [/sefer|sefarim|book|judaica/i, 'BookOpen'],
   [/gemach|chesed|tzedak|charit/i, 'Gift'],
+  [/shidduch|shadchan|matchmak|dating/i, 'HandHeart'],
   [/food|cater|bakery|restaurant|grocer|pizza/i, 'Utensils'],
   [/simcha|wedding|hall|photograph/i, 'Camera'],
   [/music|band|singer|klezmer/i, 'Music'],

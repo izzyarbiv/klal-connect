@@ -30,7 +30,9 @@
     "test:contrast": "node scripts/contrast-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
     "clear-demo": "node server/clear-demo.js",
     "import-blob": "node --env-file-if-exists=.env.local server/import-blob.js",
-    "test:critical-paths": "node scripts/critical-paths-check.mjs ${KC_BASE_URL:-http://localhost:5200}"
+    "test:critical-paths": "node scripts/critical-paths-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
+    "test:safe-area": "node scripts/safe-area-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
+    "ensure-categories": "node --env-file-if-exists=.env.local server/ensure-categories.js"
   },
   "dependencies": {
     "@hebcal/core": "^6.9.2",

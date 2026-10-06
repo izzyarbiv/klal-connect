@@ -22,7 +22,13 @@
 // when a term is ambiguous it is included.
 
 // Categories where every listing is private by nature.
-const SENSITIVE_CATEGORIES = ['Mikvas'];
+//
+// Shidduchim is named here even though the word "shidduch" in the category
+// string already matches a term below, because that match is an accident of
+// spelling: rename the category to "Zivug" and the guarantee would vanish
+// without a single test failing. A privacy rule should not depend on what a
+// category happens to be called.
+const SENSITIVE_CATEGORIES = ['Mikvas', 'Shidduchim'];
 
 // Matched as substrings against the listing's own words. Stems are used on
 // purpose: "therap" covers therapy, therapist and therapeutic.

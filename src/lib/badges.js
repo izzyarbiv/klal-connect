@@ -23,9 +23,9 @@ export const BADGES = [
 
   // --- chesed and money ------------------------------------------------
   { id: 'gemach', label: 'Gemach', hint: 'Free loan of items or funds.', categories: ['Gemachim', 'Community'] },
-  { id: 'no_charge', label: 'No charge', hint: 'This resource is free to the community.', categories: ['Gemachim', 'Community', 'Education'] },
+  { id: 'no_charge', label: 'No charge', hint: 'This resource is free to the community.', categories: ['Gemachim', 'Community', 'Education', 'Shidduchim'] },
   { id: 'accepts_maaser', label: 'Accepts Maaser', hint: 'A tzedakah or chesed organization that can accept maaser money.', verify: true, categories: ['Gemachim', 'Community', 'Financial'] },
-  { id: 'sliding_scale', label: 'Sliding scale', hint: 'Fees adjust to what a family can pay.', categories: ['Health', 'Education', 'Legal', 'Financial', 'Community'] },
+  { id: 'sliding_scale', label: 'Sliding scale', hint: 'Fees adjust to what a family can pay.', categories: ['Health', 'Education', 'Legal', 'Financial', 'Community', 'Shidduchim'] },
 
   // --- how the work happens --------------------------------------------
   { id: 'emergency', label: '24/7 emergency', hint: 'Reachable outside normal hours for emergencies.', categories: ['Home Services', 'Health'] },
