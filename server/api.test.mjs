@@ -569,6 +569,53 @@ ok(afterBulk.description !== 'Taken back through the bulk route', 'and the listi
 const myNotifs = await call('POST', '/entities/Notification/update-many', { token: userB, body: { query: { recipient_id: idB, read: false }, update: { read: true } } });
 ok(myNotifs.status === 200, 'marking your own notifications read still works', String(myNotifs.status));
 
+// A moderator is staff on rows that are not theirs and an ordinary member on
+// rows that are. The PUT route decided which by created_by_id, which is the
+// wrong question for a listing: a moderator who claimed one could change its
+// status and nothing else, and one who had posted a listing since claimed away
+// could still rewrite it. Both found by the audit agents.
+const modEmail = `moderator${Date.now()}@example.com`;
+const modReg = await call('POST', '/auth/register', { body: { email: modEmail, password: 'password123' } });
+const modVer = await call('POST', '/auth/verify-otp', { body: { email: modEmail, otpCode: modReg.data?.dev_code } });
+const modTok = modVer.data?.access_token, modId = modVer.data?.user?.id;
+await call('POST', `/users/${modId}/role`, { token: admin, body: { role: 'moderator' } });
+
+// A listing the moderator posts, then someone else claims.
+const modListing = await call('POST', '/functions/createListing', { token: modTok, body: { name: 'Moderator Hardware', category: 'Home Services', short_description: 'Keys cut and locks fitted.' } });
+const modListingId = modListing.data?.provider?.id;
+const modClaim = await call('POST', '/functions/createClaim', { token: userC, body: { provider_id: modListingId, provider_name: 'Moderator Hardware', relationship: 'owner', verification_details: 'Our shop, our sign, our phone number.' } });
+await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: modClaim.data?.claim?.id, approve: true } });
+
+await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { description: 'Rewritten by the former author who happens to be staff' } });
+const modAfter = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
+ok(modAfter.description !== 'Rewritten by the former author who happens to be staff',
+  'a moderator who posted a listing since claimed away cannot rewrite it', String(modAfter.description || '(none)').slice(0, 40));
+
+// And the other direction: a moderator who owns a listing is its editor.
+const modOwn = await call('POST', '/functions/createListing', { token: modTok, body: { name: 'Moderator Bakery', category: 'Food & Catering', short_description: 'Bread and rolls.' } });
+const modOwnEdit = await call('PUT', `/entities/Provider/${modOwn.data?.provider?.id}`, { token: modTok, body: { description: 'Fresh daily from 6am.' } });
+ok(modOwnEdit.status === 200 && modOwnEdit.data?.description === 'Fresh daily from 6am.',
+  'a moderator can still edit a listing that is genuinely theirs', String(modOwnEdit.status));
+
+// Handing a business page from one person to another is the most consequential
+// thing staff can do here, and it left no trace at all.
+const trail = (await call('GET', '/entities/ActivityEvent?limit=500', { token: admin })).data || [];
+ok(Array.isArray(trail) && trail.some((e) => e.entity === 'ClaimRequest' && e.target_id === claimId && e.to === 'approved'),
+  'approving a claim is recorded', String(Array.isArray(trail) && trail.length));
+ok(Array.isArray(trail) && trail.some((e) => e.type === 'listing_handover' && e.target_id === ownId && e.to === idA),
+  'and so is the handover itself, with who it went to');
+
+// Claims were the last unbounded write.
+const spamEmail = `spamclaim${Date.now()}@example.com`;
+const spamReg = await call('POST', '/auth/register', { body: { email: spamEmail, password: 'password123' } });
+const spamVer = await call('POST', '/auth/verify-otp', { body: { email: spamEmail, otpCode: spamReg.data?.dev_code } });
+const spamTok = spamVer.data?.access_token;
+let lastClaim = null;
+for (let i = 0; i < 4; i++) {
+  lastClaim = await call('POST', '/functions/createClaim', { token: spamTok, body: { provider_name: `Some Business ${i}`, relationship: 'owner', verification_details: 'Filing a few of these to see what happens.' } });
+}
+ok(lastClaim && lastClaim.status === 429, 'claims are capped per day like listings are', String(lastClaim && lastClaim.status));
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');

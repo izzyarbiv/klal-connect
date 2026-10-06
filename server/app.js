@@ -463,7 +463,15 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   if (asRecipient) {
     patch = asRecipient;
   } else if (req.user.role !== 'admin') {
-    if (isModerator(req.user) && MODERATED_BY_STAFF.has(entity) && existing.created_by_id !== req.user.id) {
+    // Whose row this is, by the rule that applies to it. For a listing that is
+    // its editor, not its original author: a moderator who claimed a listing
+    // could only change its status, not a word of its content, while a
+    // moderator who had posted one since claimed away could still rewrite all
+    // of it. created_by_id is simply not the question for a Provider.
+    const ownsRow = entity === 'Provider'
+      ? listingEditor(existing) === req.user.id
+      : existing.created_by_id === req.user.id;
+    if (isModerator(req.user) && MODERATED_BY_STAFF.has(entity) && !ownsRow) {
       // A moderator's job on someone else's row is exactly its state: the
       // status, their notes, and the resolution stamp. Nothing else changes.
       patch = Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => MODERATOR_FIELDS.has(k)));

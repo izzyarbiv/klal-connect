@@ -293,6 +293,10 @@ export const functions = {
 
   async createClaim(payload, user) {
     await assertWritable(user);
+    // Claims were the one unbounded write left: no cap, while adding a listing
+    // has one. Filing claims is rare and a burst of them is noise in a queue
+    // that hands over ownership.
+    await assertUnderDailyLimit('ClaimRequest', user, 3, 'claims');
     need(payload.provider_name, 'Tell us which listing you are claiming.');
     need(payload.relationship, 'Describe your relationship to the listing.');
     need(payload.verification_details, 'Verification details are required.');
@@ -327,6 +331,7 @@ export const functions = {
 
     if (!approve) {
       const rejected = await store.update('ClaimRequest', claim.id, resolution);
+      await store.create('ActivityEvent', { type: 'moderation', entity: 'ClaimRequest', target_id: claim.id, from: 'pending', to: 'rejected', actor_role: user.role }, user);
       await notify(claim.created_by_id, {
         type: 'claim_rejected', actor_id: user.id, actor_name: user.full_name || 'The Klal team',
         target_type: 'provider', target_id: claim.provider_id || '',
@@ -352,6 +357,10 @@ export const functions = {
 
     const updated = await store.update('Provider', provider.id, { owner_id: claim.created_by_id, claimed: true });
     const resolved = await store.update('ClaimRequest', claim.id, resolution);
+    // Every other staff decision leaves a trace of who, what, from and to. This
+    // one hands a business page from one person to another and left none.
+    await store.create('ActivityEvent', { type: 'moderation', entity: 'ClaimRequest', target_id: claim.id, from: 'pending', to: 'approved', actor_role: user.role }, user);
+    await store.create('ActivityEvent', { type: 'listing_handover', entity: 'Provider', target_id: provider.id, from: provider.owner_id || provider.created_by_id || null, to: claim.created_by_id, actor_role: user.role }, user);
     await notify(claim.created_by_id, {
       type: 'claim_approved', actor_id: user.id, actor_name: user.full_name || 'The Klal team',
       target_type: 'provider', target_id: provider.id,
