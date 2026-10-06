@@ -61,15 +61,34 @@ Path alias `@/` → `src/`.
 | `npm run dev` | API + web together (concurrently) |
 | `npm run migrate` | Create/update the schema (run once per deploy) |
 | `npm run create-admin` | Create or promote an admin — `-- <email> '<password>'` |
-| `npm test` | Shabbos gate + geocoder adapter tests |
+| `npm test` | Shabbos state, geocoder adapters, translation, and the API access rules end to end (201 assertions) |
 | `npm run test:gate` | Browser check: the gate never shows an unlocked app |
 | `npm run test:offline` | Browser check: same, with the service worker offline |
+| `npm run test:critical-paths` | Browser: sign up, onboarding, publish a listing, sign back in · local only |
+| `npm run test:hydration` | Every sitemap URL hydrates, and none is served noindex |
+| `npm run test:search` | Aliases, nationwide listings, and an honest empty result |
+| `npm run test:privacy` | Sensitive listings carry no public "used this" or vouch |
+| `npm run test:contrast` | Text meets WCAG AA in light and dark |
+| `npm run test:overflow` | Nothing is wider than the screen at 390/360/320px |
+| `npm run test:a11y` | Every control a person can operate has a name |
+| `npm run test:home` | Homepage hierarchy, remembered community, share cards |
+| `npm run test:ask-loop` | An answer on an ask becomes a listing · local only |
+| `npm run test:insights` | The admin "What people want" panel · local only |
+| `npm run test:messages-scale` | Conversations still name people past 200 members · local only |
 | `npm run dev:api` | API only, with `--watch` reload |
 | `npm run dev:web` | Vite only |
 | `npm run seed` | Seed categories and sample listings |
 | `npm run build` | Production build to `dist/` |
 | `npm start` | Run the API (serves the built frontend's data) |
 | `npm run lint` | ESLint |
+
+The browser checks drive headless Chrome over CDP. Most default to
+`https://klalconnect.org` and accept a base URL (`KC_BASE_URL`, or argv) so they can
+run against a local stack instead. The ones marked **local only** register members or
+publish rows, and refuse to run anywhere but localhost so they can never put test data
+in the real directory. `test:gate` and `test:offline` need an account:
+`KC_TEST_EMAIL` and `KC_TEST_PASSWORD`, with `test:offline` pointed at
+`vite preview` (4173) because the service worker only exists in a real build.
 
 ## API
 
@@ -305,8 +324,10 @@ under `/api` is ever cached — see the invariants in `vite.config.js`.
 
 - **Email delivery** — verification and reset codes are console-only until Resend is
   configured (`KC_EMAIL_DELIVERY=real`, `RESEND_API_KEY`, `KC_MAIL_FROM`).
-- **Google sign-in** — not offered. Adding it needs OAuth credentials and a
-  `/api/auth/google` exchange; the sign-in pages are email and password only until then.
+- **Google sign-in** — built, waiting on one credential. The exchange exists
+  (`POST /api/auth/google`) and `GoogleButton` is on both the login and register
+  pages; it reads `googleClientId` from `/api/config` and renders nothing while that
+  is empty, so there is no dead button. Set `GOOGLE_CLIENT_ID` and it appears.
 - **Native app builds** — Capacitor wrappers for the App Store and Play Store are
   not set up. Apple's guideline 4.2 rejects thin web wrappers, so this needs
   native capabilities (push, geolocation) before it is worth submitting.
