@@ -173,6 +173,12 @@ export function mountSeo(app, shell) {
       const origin = siteOrigin(req);
       const provider = await findProvider(req.params.slug);
       if (!provider || !isPublished(provider)) {
+        // 404, not 200. A listing that does not exist must not answer "this page
+        // is fine" — that is a soft 404, which keeps dead URLs looking alive to
+        // crawlers and wastes crawl budget on them. send() keeps whatever status
+        // is already set, and the body still hydrates, so an owner opening their
+        // own unpublished row is unaffected.
+        res.status(404);
         return send(res, renderPage(shell, {
           title: `Listing not found · ${SITE_NAME}`,
           description: DEFAULT_DESCRIPTION,
@@ -203,6 +209,12 @@ export function mountSeo(app, shell) {
       const origin = siteOrigin(req);
       const company = await findCompany(req.params.slug);
       if (!company || !isPublished(company)) {
+        // 404, not 200. A company page that does not exist must not answer "this page
+        // is fine" — that is a soft 404, which keeps dead URLs looking alive to
+        // crawlers and wastes crawl budget on them. send() keeps whatever status
+        // is already set, and the body still hydrates, so an owner opening their
+        // own unpublished row is unaffected.
+        res.status(404);
         return send(res, renderPage(shell, { title: `Company not found · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, canonical: `${origin}${req.path}`, noindex: true }));
       }
       const canonical = `${origin}/company/${company.slug || company.id}`;
