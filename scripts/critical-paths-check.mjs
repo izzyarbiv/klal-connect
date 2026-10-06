@@ -117,6 +117,12 @@ const token = await ev(`localStorage.getItem('kc_access_token')`);
 ok(!!token, '    signing up leaves the member signed in', token ? `${String(token).slice(0, 10)}…` : '(no token)');
 ok(!/\/register$/.test(await ev('location.pathname')), '    and moves on from the register page', await ev('location.pathname'));
 
+// The first ninety seconds of every member's life here. If this is broken,
+// everyone who joins hits a wall before they have seen anything.
+const welcome = await ev('document.body.innerText');
+ok(/First, your name|WELCOME/i.test(welcome), '    onboarding opens on its first question',
+  /First, your name|WELCOME/i.test(welcome) ? '' : welcome.slice(0, 120).split('\n').join(' '));
+
 // ---- adding a listing ----------------------------------------------------
 console.log('\n  adding a listing');
 await send('Page.navigate', { url: `${BASE}/add` });
@@ -187,9 +193,40 @@ ok(/Your listing is live/i.test(body), '    publishing succeeds', /Your listing 
 const found = await (await fetch(`${BASE}/api/entities/Provider?limit=200`)).json().catch(() => []);
 ok(Array.isArray(found) && found.some((p) => p.name === LISTING), '    the listing is in the directory', LISTING);
 
+// ---- coming back --------------------------------------------------------
+// Registering is only half of auth. If signing in is broken, every member who
+// already joined is locked out, and no check in this suite would have noticed.
+console.log('\n  signing out and back in');
+await send('Page.navigate', { url: `${BASE}/` });
+await sleep(3500);
+const loggedOut = await ev(`(() => {
+  const b = [...document.querySelectorAll('button')].find((x) => /log out/i.test(x.getAttribute('aria-label') || x.textContent || ''));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+ok(loggedOut, '    there is a way to log out');
+await sleep(3500);
+
+await send('Page.navigate', { url: `${BASE}/login` });
+await sleep(4000);
+ok(await ev(`!!document.querySelector('input[type=email]')`), '    the login form is there');
+await ev(`(${SET})('input[type=email]', ${JSON.stringify(EMAIL)})`);
+await ev(`(${SET})('input[type=password]', ${JSON.stringify(PASSWORD)})`);
+await ev(`document.querySelector('form button[type=submit]').click()`);
+await sleep(5000);
+ok(!/\/login$/.test(await ev('location.pathname')), '    signing back in leaves the login page', await ev('location.pathname'));
+const backIn = await ev(`(async () => {
+  const r = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('kc_access_token') || '') } });
+  if (!r.ok) return '';
+  const u = await r.json();
+  return u.email || '';
+})()`);
+ok(backIn === EMAIL, '    and the session is the same member', JSON.stringify(backIn));
+
 const real = errors.filter((e) => !/favicon|\[vite\]|manifest|sw\.js/i.test(e));
 ok(real.length === 0, '    no page errors', real.slice(0, 2).join(' | '));
 
-console.log(fails ? `\n${fails} critical-path check(s) failed` : '\ncritical paths: joining and adding a listing both work');
+console.log(fails ? `\n${fails} critical-path check(s) failed` : '\ncritical paths: joining, onboarding, publishing a listing and signing back in all work');
 ws.close();
 process.exit(fails ? 1 : 0);
