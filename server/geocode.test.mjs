@@ -105,5 +105,29 @@ check('reverse names a known community', known.city === 'Jerusalem' && known.cou
 const unknown = await local.reverseGeocode(42.88, -78.87);
 check('reverse elsewhere still gives a time zone', unknown.timezone === 'America/New_York' && unknown.city === '', `${JSON.stringify(unknown.city)} / ${unknown.timezone}`);
 
+// A provider that is configured and then fails. This is the case that bit: the
+// curated list had already answered above, and a single provider error threw
+// that answer away — a search for "Lakewood" came back 503 while the list knew
+// exactly where Lakewood is. It only appears once a key is set, which is the
+// moment someone adds one.
+console.log('\nconfigured provider, upstream failing:');
+process.env.KC_GEOCODER = 'google';
+process.env.KC_GEOCODER_KEY = 'test-key';
+process.env.KC_GEOCODER_MIN_GAP_MS = '0';
+process.env.NODE_ENV = 'production';
+globalThis.fetch = async () => { throw new Error('upstream down'); };
+const failing = await import(`${GEO_URL}?v=failing`);
+
+const [stillKnown] = await failing.searchPlaces('Lakewood', 4);
+check('a known community still answers', stillKnown && stillKnown.city === 'Lakewood', stillKnown && stillKnown.city);
+
+// Rural Nebraska: nowhere the curated list knows, so this reaches the provider.
+const farPoint = await failing.reverseGeocode(41.0, -101.0).catch((err) => ({ error: err.message }));
+check('an unknown point still yields a time zone', !!farPoint.timezone, farPoint.timezone || farPoint.error);
+
+let refused = null;
+try { await failing.searchPlaces('Zzqqxlandiaville', 4); } catch (err) { refused = err.message; }
+check('a query nothing knows still fails rather than inventing one', !!refused, refused);
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall provider adapters parse correctly, and the curated list answers without one');
 process.exit(failures ? 1 : 0);

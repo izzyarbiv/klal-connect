@@ -324,7 +324,19 @@ export async function reverseGeocode(lat, lon) {
   // Coordinates are the caller's own; only the place name is cached.
   if (hit) return { ...hit, latitude, longitude, timezone: tzFor(latitude, longitude) };
 
-  const result = await call(() => activeProvider().reverse(latitude, longitude));
+  let result;
+  try {
+    result = await call(() => activeProvider().reverse(latitude, longitude));
+  } catch (err) {
+    // A provider that errors must not cost the caller their time zone. The
+    // no-provider branch above already settled this: an unnamed location with
+    // the right zone beats an error that leaves the app with no candle-lighting
+    // time at all. A provider that is configured but failing — a quota, a 429,
+    // an outage — is the same situation, and was not handled.
+    const timezone = tzFor(latitude, longitude);
+    if (timezone) return { latitude, longitude, city: '', country_code: '', timezone, label: '', source: 'coordinates' };
+    throw err;
+  }
   await geoCache.set(key, { city: result.city, country_code: result.country_code, label: result.label }, REVERSE_TTL);
   return result;
 }
@@ -348,7 +360,18 @@ export async function searchPlaces(query, limit = 8) {
   const hit = await geoCache.get(key);
   if (hit) return dedupePlaces([...local, ...hit], capped);
 
-  const results = await call(() => activeProvider().search(q, capped - local.length));
+  let results;
+  try {
+    results = await call(() => activeProvider().search(q, capped - local.length));
+  } catch (err) {
+    // The curated communities were already an answer, fetched above. A provider
+    // that errors must not take them down with it — that is how a search for
+    // "Lakewood" answered 503 while the list knew exactly where Lakewood is.
+    // It only bites once a provider is actually configured, which is the moment
+    // a key gets added.
+    if (local.length) return local;
+    throw err;
+  }
   await geoCache.set(key, results, SEARCH_TTL);
   return dedupePlaces([...local, ...results], capped);
 }

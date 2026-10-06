@@ -22,30 +22,46 @@ export default function CityInput({
   ...rest
 }) {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [options, setOptions] = useState([]);
   const [active, setActive] = useState(-1);
+  // One state rather than separate busy/failed flags, because the in-between
+  // moments are what went wrong: a stale failure message survived into the next
+  // lookup, and clearing it eagerly flashed "not on our list" during the
+  // debounce, before anything had been asked. The note is shown only once a
+  // lookup has settled for what is currently typed.
+  // 'idle' | 'loading' | 'none' | 'failed'
+  const [state, setState] = useState('idle');
+  const busy = state === 'loading';
   const box = useRef(null);
   const latest = useRef(0);
 
+  const typed = String(value || '').trim();
+
   // Debounced so a fast typist does not fire a request per keystroke.
   useEffect(() => {
-    const q = String(value || '').trim();
-    if (!open || q.length < 2) { setOptions([]); return; }
+    const q = typed;
+    if (!open || q.length < 2) { setOptions([]); setState('idle'); return; }
     const mine = ++latest.current;
+    setState('loading');
     const timer = setTimeout(async () => {
-      setBusy(true);
       try {
         const rows = await api.geo.search(q, 6);
-        if (latest.current === mine) setOptions(Array.isArray(rows) ? rows : []);
+        if (latest.current !== mine) return;
+        const list = Array.isArray(rows) ? rows : [];
+        setOptions(list);
+        setState(list.length ? 'idle' : 'none');
       } catch {
-        if (latest.current === mine) setOptions([]);
-      } finally {
-        if (latest.current === mine) setBusy(false);
+        // Swallowing this silently was the whole problem: in production the
+        // external geocoder is deliberately unusable (Nominatim 403s traffic it
+        // cannot attribute), so anyone outside the curated communities typed
+        // their town and got nothing at all — no list, no error, no reason.
+        if (latest.current !== mine) return;
+        setOptions([]);
+        setState('failed');
       }
     }, 220);
     return () => clearTimeout(timer);
-  }, [value, open]);
+  }, [typed, open]);
 
   // Clicking anywhere else closes the list.
   useEffect(() => {
@@ -88,6 +104,16 @@ export default function CityInput({
         {...rest}
       />
       {busy && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-brand-muted" />}
+      {/* Typing a town nobody listed is allowed — this says so, instead of
+          leaving an empty box that looks broken. Either way the city is saved as
+          typed; only the exact zmanim need a known place. */}
+      {open && (state === 'none' || state === 'failed') && (
+        <p className="mt-1 text-xs leading-5 text-brand-muted">
+          {state === 'failed'
+            ? 'We cannot reach the place lookup right now — type your town as you say it and carry on. Shabbos times can be set in Settings.'
+            : 'Not on our list yet — type it as you say it and carry on. Shabbos times can be set in Settings.'}
+        </p>
+      )}
       {open && options.length > 0 && (
         <ul className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-brand-line bg-brand-surface py-1 shadow-lg" role="listbox">
           {options.map((p, i) => (
