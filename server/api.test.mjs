@@ -478,6 +478,65 @@ const plainVouch = await call('POST', '/functions/toggleCommunityActivity', { to
 ok(plainVouch.status === 200 && plainVouch.data?.active === true, 'a plumber can still be vouched for', String(plainVouch.status));
 
 
+// ---- editing a listing, and what claiming changes ------------------------
+// There was no way to edit a listing at all. The API allowed it; nothing in the
+// UI used it, the "request a larger change" queue's Approve button changed
+// nothing, and approving a claim stamped the request while leaving the listing
+// with its original author. So these rules had never been exercised.
+const ownListing2 = await call('POST', '/functions/createListing', { token: userB, body: { name: 'Gold Shoe Repair', category: 'Home Services', short_description: 'Resoling and stretching.' } });
+const ownId = ownListing2.data?.provider?.id;
+ok(!!ownId, 'a member can add a listing to edit', String(ownListing2.status));
+
+// The person who added it may change it.
+const edited = await call('PUT', `/entities/Provider/${ownId}`, { token: userB, body: { description: 'Resoling, stretching and repairs while you wait.', phone: '(561) 555-0199' } });
+ok(edited.status === 200 && edited.data?.description?.startsWith('Resoling, stretching'), 'the person who added a listing can edit it', String(edited.status));
+ok(edited.data?.name === 'Gold Shoe Repair', 'and a partial edit leaves the rest of the row alone', edited.data?.name);
+
+// Nobody else may, claimed or not.
+const strangerEdit = await call('PUT', `/entities/Provider/${ownId}`, { token: userA, body: { description: 'Hijacked.' } });
+ok(strangerEdit.status === 403, 'another member cannot edit someone elses listing', String(strangerEdit.status));
+
+// Editing is not a way around the fields an admin owns.
+await call('PUT', `/entities/Provider/${ownId}`, { token: userB, body: { verified: true, featured: true, usage_count: 99 } });
+const afterSneak = (await call('GET', `/entities/Provider/${ownId}`, { token: userB })).data || {};
+ok(!afterSneak.verified && !afterSneak.featured && !afterSneak.usage_count, 'editing cannot grant verification, prominence or counters',
+  JSON.stringify({ verified: afterSneak.verified, featured: afterSneak.featured, usage_count: afterSneak.usage_count }));
+
+// A claim, and what approving it is supposed to do.
+const claim = await call('POST', '/functions/createClaim', { token: userA, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I own the shop', verification_details: 'Listed on our website and our storefront sign.' } });
+const claimId = claim.data?.claim?.id;
+ok(!!claimId, 'a business can file a claim', String(claim.status));
+
+const claimByMember = await call('POST', '/functions/resolveClaim', { token: userA, body: { claim_id: claimId, approve: true } });
+ok(claimByMember.status === 403, 'a member cannot approve their own claim', String(claimByMember.status));
+
+const resolved = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: claimId, approve: true } });
+ok(resolved.status === 200 && resolved.data?.provider?.claimed === true, 'approving a claim marks the listing claimed', String(resolved.status));
+ok(resolved.data?.provider?.owner_id === idA, 'and hands it to whoever claimed it', String(resolved.data?.provider?.owner_id === idA));
+
+// The handover is the whole point: the business edits, the original author no
+// longer does. They can still suggest a correction.
+const claimerEdit = await call('PUT', `/entities/Provider/${ownId}`, { token: userA, body: { hours: 'Sun-Thu 9-6, Fri 9-1' } });
+ok(claimerEdit.status === 200 && claimerEdit.data?.hours?.startsWith('Sun-Thu'), 'the business can edit once its claim is approved', String(claimerEdit.status));
+const formerEdit = await call('PUT', `/entities/Provider/${ownId}`, { token: userB, body: { description: 'Still mine?' } });
+ok(formerEdit.status === 403, 'and whoever added it no longer can', String(formerEdit.status));
+
+// The two self-service shortcuts followed whoever ADDED the listing, not its
+// editor, so after a handover they were exactly inverted: the business could not
+// set its own tagline while the original poster still could.
+const taglineByOwner = await call('POST', '/functions/updateListingTagline', { token: userA, body: { provider_id: ownId, tagline: 'Resoling since 1998' } });
+ok(taglineByOwner.status === 200, 'the business can set the tagline once it owns the listing', String(taglineByOwner.status));
+const taglineByFormer = await call('POST', '/functions/updateListingTagline', { token: userB, body: { provider_id: ownId, tagline: 'Not mine any more' } });
+ok(taglineByFormer.status === 403, 'and whoever added it cannot', String(taglineByFormer.status));
+const payByFormer = await call('POST', '/functions/updateListingPaymentLink', { token: userB, body: { provider_id: ownId, payment_link_url: 'https://venmo.com/u/not-mine' } });
+ok(payByFormer.status === 403, 'nor can they redirect its payment link', String(payByFormer.status));
+
+// A claim that names no listing cannot hand anything over, and must not report
+// success — that was the old behaviour for every claim.
+const vagueClaim = await call('POST', '/functions/createClaim', { token: userC, body: { provider_name: 'Some shop we have never listed', relationship: 'owner', verification_details: 'Trust me on this one please.' } });
+const vagueResolve = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: vagueClaim.data?.claim?.id, approve: true } });
+ok(vagueResolve.status >= 400, 'a claim with no listing attached cannot be approved', String(vagueResolve.status));
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');

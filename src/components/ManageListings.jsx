@@ -3,6 +3,7 @@ import { api } from '@/api/client';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import CompletenessRing from '@/components/CompletenessRing';
 import { listingCompleteness } from '@/lib/completeness';
+import { listingEditor } from '@/lib/listing';
 
 export default function ManageListings({user}){
   const [items,setItems]=useState([]);
@@ -15,7 +16,18 @@ export default function ManageListings({user}){
   const [savedId,setSavedId]=useState(null);
   const [payErrFor,setPayErrFor]=useState({});
 
-  useEffect(()=>{api.entities.Provider.filter({created_by_id:user.id}).then(setItems)},[user.id]);
+  // Both sides of a handover: a listing you claimed appears here, and one you
+  // added that someone else has since claimed drops off — it is theirs to edit
+  // now. Listing only by created_by_id showed the wrong set in both directions.
+  useEffect(()=>{(async()=>{
+    const [added,claimed]=await Promise.all([
+      api.entities.Provider.filter({created_by_id:user.id}).catch(()=>[]),
+      api.entities.Provider.filter({owner_id:user.id}).catch(()=>[]),
+    ]);
+    const mine=new Map();
+    for(const p of [...added,...claimed]) if(listingEditor(p)===user.id) mine.set(p.id,p);
+    setItems([...mine.values()]);
+  })()},[user.id]);
 
   const submit=async e=>{
     e.preventDefault();

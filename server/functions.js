@@ -10,6 +10,7 @@ import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
+import { canEditListing } from '../src/lib/listing.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
@@ -197,7 +198,11 @@ export const functions = {
     await assertWritable(user);
     const provider = await store.get('Provider', need(provider_id, 'Missing listing.'));
     if (!provider) fail('Listing not found.', 404);
-    if (provider.created_by_id !== user.id && user.role !== 'admin') {
+    // The listing's editor, not merely whoever added it: after a claim is
+    // approved these were exactly inverted — the business that now owned the
+    // listing could not change its tagline or payment link, while the original
+    // poster still could.
+    if (!canEditListing(provider, user)) {
       fail('You can only edit listings you manage.', 403);
     }
     const url = safeExternalUrl(payment_link_url);
@@ -209,7 +214,11 @@ export const functions = {
     await assertWritable(user);
     const provider = await store.get('Provider', need(provider_id, 'Missing listing.'));
     if (!provider) fail('Listing not found.', 404);
-    if (provider.created_by_id !== user.id && user.role !== 'admin') {
+    // The listing's editor, not merely whoever added it: after a claim is
+    // approved these were exactly inverted — the business that now owned the
+    // listing could not change its tagline or payment link, while the original
+    // poster still could.
+    if (!canEditListing(provider, user)) {
       fail('You can only edit listings you manage.', 403);
     }
     if (String(tagline || '').length > 120) fail('Taglines must be 120 characters or fewer.');
@@ -289,6 +298,45 @@ export const functions = {
     need(payload.verification_details, 'Verification details are required.');
     const claim = await store.create('ClaimRequest', { ...payload, status: 'pending' }, user);
     return { claim };
+  },
+
+  // Approving a claim used to stamp the request and nothing else: the listing
+  // kept its original author, owner_id was never set, and claimed stayed false.
+  // So the queue said "approved" while the business still could not edit its own
+  // page — and ClaimForm had already promised we would hand the listing over.
+  async resolveClaim({ claim_id, approve }, user) {
+    await assertWritable(user);
+    if (user.role !== 'admin' && user.role !== 'moderator') fail('Staff only.', 403);
+    const claim = await store.get('ClaimRequest', need(claim_id, 'Missing claim.'));
+    if (!claim) fail('Claim not found.', 404);
+
+    const resolution = { status: approve ? 'approved' : 'rejected', resolved_at: new Date().toISOString(), resolved_by: user.id };
+
+    if (!approve) {
+      const rejected = await store.update('ClaimRequest', claim.id, resolution);
+      await notify(claim.created_by_id, {
+        type: 'claim_rejected', actor_id: user.id, actor_name: user.full_name || 'The Klal team',
+        target_type: 'provider', target_id: claim.provider_id || '',
+        message: `Your claim for ${claim.provider_name || 'a listing'} was not approved`,
+      });
+      return { claim: rejected };
+    }
+
+    // A claim with no listing attached cannot hand anything over, and saying
+    // "approved" would be a lie. The person claiming typed a name instead of
+    // picking from the list, so the listing has to be chosen first.
+    if (!claim.provider_id) fail('This claim names no listing. Attach one before approving it.', 400);
+    const provider = await store.get('Provider', claim.provider_id);
+    if (!provider) fail('That listing no longer exists.', 404);
+
+    const updated = await store.update('Provider', provider.id, { owner_id: claim.created_by_id, claimed: true });
+    const resolved = await store.update('ClaimRequest', claim.id, resolution);
+    await notify(claim.created_by_id, {
+      type: 'claim_approved', actor_id: user.id, actor_name: user.full_name || 'The Klal team',
+      target_type: 'provider', target_id: provider.id,
+      message: `${provider.name} is yours to edit now`,
+    });
+    return { claim: resolved, provider: updated };
   },
 
   // ---- community feedback ---------------------------------------------------

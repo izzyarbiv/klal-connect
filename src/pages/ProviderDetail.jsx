@@ -12,11 +12,14 @@ import VouchList from '@/components/VouchList';
 import BadgeChips from '@/components/BadgeChips';
 import AdminBadgePanel from '@/components/AdminBadgePanel';
 import { isSensitiveListing } from '@/lib/sensitivity';
+import { useAuth } from '@/lib/AuthContext';
+import { canEditListing } from '@/lib/listing';
 import TrustMarks from '@/components/TrustMarks';
 import { VERIFIED_MEANING } from '@/lib/trust';
 
 export default function ProviderDetail(){
   const { slug } = useParams();
+  const { user } = useAuth();
   const [provider,setProvider]=useState(),[notes,setNotes]=useState([]),[vouchTick,setVouchTick]=useState(0),[missing,setMissing]=useState(false);
 
   useEffect(()=>{
@@ -49,6 +52,7 @@ export default function ProviderDetail(){
   if(missing)return <div className="page-shell py-10"><div className="empty"><p>That listing could not be found — it may have been removed or is awaiting review.</p><Link to="/browse" className="primary">Browse the directory</Link></div></div>;
   if(!provider)return <div className="loading">Loading resource…</div>;
   const sensitive=isSensitiveListing(provider);
+  const canEdit=canEditListing(provider,user);
   return <div className="page-shell py-7">
     <Link to="/browse" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to browse</Link>
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -77,7 +81,12 @@ export default function ProviderDetail(){
           <p className="text-xs leading-5 text-brand-muted">{provider.verified ? VERIFIED_MEANING : `Not yet verified. ${VERIFIED_MEANING}`}</p>
         </div></section>
         <ReportForm provider={provider}/>
-        <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>
+        {/* Whoever may edit it gets the link to do so: the person who added it,
+            or the business once it has claimed it. Everyone else gets "suggest a
+            correction" above, which reaches the team. */}
+        {canEdit
+          ? <Link to={`/add?edit=${provider.id}`} className="primary block text-center">Edit this listing</Link>
+          : <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>}
         <AdminBadgePanel provider={provider} onChange={setProvider}/>
       </aside>
     </div>

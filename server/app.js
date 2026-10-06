@@ -16,6 +16,7 @@ import {
 import { functions, publicFunctions, safeExternalUrl } from './functions.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
+import { listingEditor } from '../src/lib/listing.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
@@ -293,6 +294,14 @@ function canWrite(entity, user, row) {
   // notify() creates without an actor — fell through to `return true`, so any
   // member could rewrite or delete any notification by id, including
   // somebody else's.
+  // A listing's editor is whoever claimed it, or whoever added it while nobody
+  // has. Claiming hands the page to the business, which is the point of
+  // claiming: a community member who added it in good faith can still suggest a
+  // correction, but a business should not have a stranger editing its own page.
+  // owner_id was previously read for self-vouch checks and notification
+  // recipients and never consulted here, so a business that claimed its listing
+  // still could not change a word of it.
+  if (entity === 'Provider' && row) return listingEditor(row) === user.id;
   if (row && row.created_by_id !== user.id) {
     // Notifications are written by the server for a recipient, who may mark
     // them read; that is the one cross-author write we allow.
