@@ -32,7 +32,7 @@ export default function InviteButton({ compact = false, message }) {
   const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked */ } };
   const pad = compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm';
   return <div className="flex flex-wrap items-center gap-2">
-    <a href={waShareUrl(text)} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-2 rounded-xl font-bold text-white ${pad}`} style={{ background: WA_GREEN }}><MessageCircle size={16}/>Invite on WhatsApp</a>
+    <a href={waShareUrl(text)} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-2 rounded-xl font-bold text-[#0b2c38] ${pad}`} style={{ background: WA_GREEN }}><MessageCircle size={16}/>Invite on WhatsApp</a>
     <button type="button" onClick={copy} className={`inline-flex items-center gap-2 rounded-xl border border-brand-line bg-brand-surface font-semibold text-brand-ink hover:bg-brand-tint ${pad}`}>{copied ? <><Check size={16}/>Copied</> : <><Link2 size={16}/>Copy link</>}</button>
     {!compact && invite.joined_count > 0 && <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-teal"><UserPlus size={14}/>{invite.joined_count} joined from your link</span>}
   </div>;

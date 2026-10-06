@@ -125,6 +125,60 @@ for (const theme of ['light', 'dark']) {
   console.log('');
 }
 
+// --- signed in -----------------------------------------------------------
+// The guest walk above never reaches the pages with the most chrome on them —
+// the listing form, settings, the profile editor. A guest sees GuestPrompt
+// instead. That is how the add-listing tabs went unmeasured: "List or Claim Your
+// Business" was reported unreadable in dark mode while every check here passed.
+const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(BASE);
+const AUTH_ROUTES = ['add', 'settings', 'profile', 'saved', 'messages'];
+
+if (!LOCAL) {
+  console.log(`  info  signed-in pages not measured — ${BASE} is not a local stack.`);
+} else {
+  const api = async (method, path, o = {}) => {
+    const r = await fetch(`${BASE}/api${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(o.token ? { Authorization: 'Bearer ' + o.token } : {}) },
+      body: o.body ? JSON.stringify(o.body) : undefined,
+    });
+    let d = null; try { d = await r.json(); } catch { /* empty */ }
+    return { status: r.status, data: d };
+  };
+  const email = `contrast${Date.now()}@example.com`;
+  const reg = await api('POST', '/auth/register', { body: { email, password: 'password123' } });
+  const ver = await api('POST', '/auth/verify-otp', { body: { email, otpCode: reg.data?.dev_code } });
+  const token = ver.data?.access_token;
+  if (!token) {
+    console.log('  FAIL  could not sign in to measure the signed-in pages');
+    fails += 1;
+  } else {
+    await send('Page.navigate', { url: `${BASE}/` });
+    await sleep(2000);
+    await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(token)})`);
+    for (const theme of ['light', 'dark']) {
+      console.log(`  ${theme} mode, signed in`);
+      for (const route of AUTH_ROUTES) {
+        await send('Page.navigate', { url: `${BASE}/${route}` });
+        await sleep(4500);
+        await ev(`document.documentElement.classList.${theme === 'dark' ? 'add' : 'remove'}('dark')`);
+        await sleep(600);
+        const bad = (await ev(CONTRAST)) || [];
+        fails += bad.length;
+        console.log(`    ${bad.length ? 'FAIL' : 'ok  '} /${route.padEnd(10)} ${bad.length ? `${bad.length} below AA` : 'all text meets AA'}`);
+        const seen = new Set();
+        for (const b of bad) {
+          const key = b.cls + b.ratio;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          console.log(`           ${b.ratio}:1 (needs ${b.need})  ${b.cls || '(no class)'}  "${b.text}"`);
+        }
+      }
+      console.log('');
+    }
+  }
+}
+
 console.log(fails ? `${fails} text node(s) below WCAG AA` : 'contrast: all text meets WCAG AA in both themes');
 ws.close();
 process.exit(fails ? 1 : 0);
