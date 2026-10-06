@@ -158,6 +158,16 @@ if (!LOCAL) {
     // four icon buttons is the densest row in the app and the one that broke.
     const listings = (await api('GET', '/entities/Provider?limit=1', { token })).data || [];
     if (listings[0]) await api('POST', '/functions/toggleCommunityActivity', { token, body: { providerId: listings[0].id, activity: 'save' } });
+    // And a listing of their own, so "Manage my listings" renders its rows —
+    // a name, a status, two buttons and a completeness ring on one line at
+    // 320px, which is the shape that breaks.
+    await api('POST', '/functions/createListing', { token, body: { name: 'Overflow Check Plumbing and Heating Services', category: 'Home Services', short_description: 'A listing long enough to test the row.', description: 'Measured, not imagined.', city: 'Lakewood' } });
+    // The administrator's claim queue, which no sweep had ever opened. Its
+    // cards are definition lists of free text a claimant typed.
+    const staff = (await api('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;
+    if (staff && listings[0]) {
+      await api('POST', '/functions/createClaim', { token, body: { provider_id: listings[0].id, provider_name: listings[0].name, relationship: 'I am the owner of this business', verification_details: 'Our sign, our phone number and our website all say so.' } });
+    }
 
     await send('Page.navigate', { url: `${BASE}/` });
     await sleep(2000);
@@ -177,6 +187,30 @@ if (!LOCAL) {
         console.log(`    ${bad ? 'FAIL' : 'ok  '} ${`/${route}`.slice(0, 24).padEnd(26)} ${pageScrolls ? 'page scrolls sideways' : 'no sideways scroll'}${real.length ? ` · ${real.length} past the edge` : ''}`);
         for (const o of real.slice(0, 5)) {
           console.log(`           ${o.tag}${o.cls ? '.' + o.cls : ''}  w=${o.width} overhang=${o.overhang}px${o.text ? `  "${o.text}"` : ''}`);
+        }
+      }
+      console.log('');
+    }
+
+    if (staff) {
+      await send('Page.navigate', { url: `${BASE}/` });
+      await sleep(1500);
+      await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(staff)})`);
+      for (const width of WIDTHS) {
+        await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 2, mobile: true });
+        await send('Page.navigate', { url: `${BASE}/admin` });
+        await sleep(4000);
+        await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Claim requests'))?.click()`);
+        await sleep(900);
+        const text = (await ev('document.body.innerText')) || '';
+        const rendered = text.includes('Filed by') || text.includes('Queue is clear');
+        const { pageScrolls, out } = (await ev(MEASURE)) || { out: [] };
+        const real = (out || []).filter((x) => !x.contained);
+        const bad = pageScrolls || real.length > 0 || !rendered;
+        if (bad) fails++;
+        console.log(`    ${bad ? 'FAIL' : 'ok  '} ${`/admin at ${width}px`.padEnd(26)} ${!rendered ? 'the claim queue did not render' : pageScrolls ? 'page scrolls sideways' : 'no sideways scroll'}${real.length ? ` · ${real.length} past the edge` : ''}`);
+        for (const x of real.slice(0, 5)) {
+          console.log(`           ${x.tag}${x.cls ? '.' + x.cls : ''}  w=${x.width} overhang=${x.overhang}px${x.text ? `  "${x.text}"` : ''}`);
         }
       }
       console.log('');

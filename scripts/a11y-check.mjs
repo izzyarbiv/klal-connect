@@ -174,6 +174,11 @@ if (!LOCAL) {
     await sleep(2000);
     await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(token)})`);
 
+    // A listing of their own and the staff queues: the owner panel's buttons
+    // and the claim card's controls were never reached by this sweep.
+    await api('POST', '/functions/createListing', { token, body: { name: 'A11y Check Plumbing', category: 'Home Services', short_description: 'A listing to render the owner panel.', description: 'Measured, not imagined.', city: 'Lakewood' } });
+    const staffTok = (await api('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;
+    if (staffTok && listings[0]) await api('POST', '/functions/createClaim', { token, body: { provider_id: listings[0].id, provider_name: listings[0].name, relationship: 'owner', verification_details: 'Our sign and our phone number say so.' } });
     const routes = [...AUTH_ROUTES, ...(listings[0] ? [`provider/${listings[0].id}`] : [])];
     for (const route of routes) {
       await send('Page.navigate', { url: `${BASE}/${route}` });
@@ -188,6 +193,32 @@ if (!LOCAL) {
         const counts = unnamed.reduce((a, d) => ({ ...a, [d]: (a[d] || 0) + 1 }), {});
         for (const [d, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) {
           console.log(`          ${String(n).padStart(3)}×  ${d}`);
+        }
+      }
+    }
+
+    // The queues, as an administrator. Their controls — Approve / resolve,
+    // Reject, the queue switcher — had never been read by this sweep.
+    if (staffTok) {
+      await send('Page.navigate', { url: `${BASE}/` });
+      await sleep(1500);
+      await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(staffTok)})`);
+      await send('Page.navigate', { url: `${BASE}/admin` });
+      await sleep(4500);
+      await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Claim requests'))?.click()`);
+      await sleep(900);
+      const text = (await ev('document.body.innerText')) || '';
+      if (!text.includes('Filed by') && !text.includes('Queue is clear')) {
+        total += 1;
+        console.log('  FAIL  /admin                      the claim queue did not render, so nothing was read');
+      } else {
+        const unnamed = (await ev(FIND_UNNAMED)) || [];
+        total += unnamed.length;
+        if (!unnamed.length) console.log('  ok    /admin (claim queue)        every control has a name');
+        else {
+          console.log(`  FAIL  /admin (claim queue)        ${unnamed.length} unnamed control(s)`);
+          const counts = unnamed.reduce((acc, d) => ({ ...acc, [d]: (acc[d] || 0) + 1 }), {});
+          for (const [d, n] of Object.entries(counts).sort((x, y) => y[1] - x[1])) console.log(`          ${String(n).padStart(3)}×  ${d}`);
         }
       }
     }

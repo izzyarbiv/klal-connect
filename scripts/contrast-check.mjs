@@ -132,6 +132,19 @@ for (const theme of ['light', 'dark']) {
 // Business" was reported unreadable in dark mode while every check here passed.
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(BASE);
 const AUTH_ROUTES = ['add', 'settings', 'profile', 'saved', 'messages'];
+// Measured as an administrator, separately, because the queues are a page
+// somebody uses every day and no sweep had ever opened one. Every time a
+// signed-out-only sweep came back clean, a signed-in page turned out to be
+// broken — accessible names, then overflow, then dark-mode contrast. The
+// claim queue card is the newest markup in the app.
+const STAFF_ROUTES = ['admin'];
+// Text that must be on the page for the reading to mean anything.
+const MARKERS = {
+  settings: ['Manage my listings', 'Edit all details'],
+  // The card, not just the tab: /admin opens on "Pending listings", so the
+  // claim card had to be clicked into view to be measured at all.
+  admin: ['Claim requests', 'How to check', 'Filed by'],
+};
 
 if (!LOCAL) {
   console.log(`  info  signed-in pages not measured — ${BASE} is not a local stack.`);
@@ -145,6 +158,9 @@ if (!LOCAL) {
     let d = null; try { d = await r.json(); } catch { /* empty */ }
     return { status: r.status, data: d };
   };
+  // With a listing of their own, so "Manage my listings" renders its panel
+  // instead of "You do not have a submitted listing yet" — which is how the
+  // whole of that section stayed unmeasured.
   const email = `contrast${Date.now()}@example.com`;
   const reg = await api('POST', '/auth/register', { body: { email, password: 'password123' } });
   const ver = await api('POST', '/auth/verify-otp', { body: { email, otpCode: reg.data?.dev_code } });
@@ -156,6 +172,7 @@ if (!LOCAL) {
     await send('Page.navigate', { url: `${BASE}/` });
     await sleep(2000);
     await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(token)})`);
+    await api('POST', '/functions/createListing', { token, body: { name: 'Contrast Check Listing', category: 'Home Services', short_description: 'A listing to render the owner panel.', description: 'Measured, not imagined.', city: 'Lakewood', tagline: 'Measured in both themes' } });
     for (const theme of ['light', 'dark']) {
       console.log(`  ${theme} mode, signed in`);
       for (const route of AUTH_ROUTES) {
@@ -166,6 +183,69 @@ if (!LOCAL) {
         const bad = (await ev(CONTRAST)) || [];
         fails += bad.length;
         console.log(`    ${bad.length ? 'FAIL' : 'ok  '} /${route.padEnd(10)} ${bad.length ? `${bad.length} below AA` : 'all text meets AA'}`);
+        // A pass over a panel that did not render is the failure mode this
+        // whole section exists to prevent, so the markers are checked here.
+        if (MARKERS[route]) {
+          const text = (await ev('document.body.innerText')) || '';
+          const missing = MARKERS[route].filter((m) => !text.includes(m));
+          if (missing.length) { fails += 1; console.log(`           FAIL  nothing measured for: ${missing.join(', ')}`); }
+        }
+        const seen = new Set();
+        for (const b of bad) {
+          const key = b.cls + b.ratio;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          console.log(`           ${b.ratio}:1 (needs ${b.need})  ${b.cls || '(no class)'}  "${b.text}"`);
+        }
+      }
+      console.log('');
+    }
+  }
+}
+
+if (LOCAL) {
+  const api2 = async (method, path, o = {}) => {
+    const r = await fetch(`${BASE}/api${path}`, { method, headers: { 'Content-Type': 'application/json', ...(o.token ? { Authorization: 'Bearer ' + o.token } : {}) }, body: o.body ? JSON.stringify(o.body) : undefined });
+    let d = null; try { d = await r.json(); } catch { /* empty */ }
+    return { status: r.status, data: d };
+  };
+  const staff = (await api2('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;
+  if (!staff) {
+    console.log('  info  staff pages not measured — the demo administrator could not sign in.');
+  } else {
+    // A pending claim, so the queue has a card to measure rather than
+    // "Queue is clear."
+    const member = `queue${Date.now()}@example.com`;
+    const mreg = await api2('POST', '/auth/register', { body: { email: member, password: 'password123' } });
+    const mtok = (await api2('POST', '/auth/verify-otp', { body: { email: member, otpCode: mreg.data?.dev_code } })).data?.access_token;
+    const target = (await api2('GET', '/entities/Provider?status=published&limit=1')).data?.[0];
+    if (mtok && target) {
+      await api2('POST', '/functions/createClaim', { token: mtok, body: { provider_id: target.id, provider_name: target.name, relationship: 'I am the owner', verification_details: 'Our sign, our phone number, our website.' } });
+    }
+    await send('Page.navigate', { url: `${BASE}/` });
+    await sleep(1500);
+    await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(staff)})`);
+    for (const theme of ['light', 'dark']) {
+      console.log(`  ${theme} mode, as staff`);
+      for (const route of STAFF_ROUTES) {
+        await send('Page.navigate', { url: `${BASE}/${route}` });
+        await sleep(4500);
+        await ev(`document.documentElement.classList.${theme === 'dark' ? 'add' : 'remove'}('dark')`);
+        await sleep(600);
+        if (route === 'admin') {
+          await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Claim requests'))?.click()`);
+          await sleep(900);
+        }
+        const bad = (await ev(CONTRAST)) || [];
+        fails += bad.length;
+        console.log(`    ${bad.length ? 'FAIL' : 'ok  '} /${route.padEnd(10)} ${bad.length ? `${bad.length} below AA` : 'all text meets AA'}`);
+        // A pass over a panel that did not render is the failure mode this
+        // whole section exists to prevent, so the markers are checked here.
+        if (MARKERS[route]) {
+          const text = (await ev('document.body.innerText')) || '';
+          const missing = MARKERS[route].filter((m) => !text.includes(m));
+          if (missing.length) { fails += 1; console.log(`           FAIL  nothing measured for: ${missing.join(', ')}`); }
+        }
         const seen = new Set();
         for (const b of bad) {
           const key = b.cls + b.ratio;
