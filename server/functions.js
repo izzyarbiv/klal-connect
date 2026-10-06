@@ -300,7 +300,21 @@ export const functions = {
     need(payload.provider_name, 'Tell us which listing you are claiming.');
     need(payload.relationship, 'Describe your relationship to the listing.');
     need(payload.verification_details, 'Verification details are required.');
-    const claim = await store.create('ClaimRequest', { ...payload, status: 'pending' }, user);
+    const fields = { ...payload };
+    if (fields.provider_id) {
+      const provider = await store.get('Provider', fields.provider_id);
+      if (!provider) fail('We cannot find that listing. Choose it from the list, or leave it blank and name the business.', 404);
+      // The queue card showed the name the claimant typed while approval acted
+      // on provider_id, so staff could read one business and hand over another.
+      // The name on the record is the listing's own from here on.
+      fields.provider_name = provider.name || fields.provider_name;
+      if (provider.owner_id && provider.owner_id !== user.id) {
+        fail('That listing already belongs to someone. If that is wrong, write to us and we will look into it rather than hand it over twice.', 409);
+      }
+      const pending = await store.filter('ClaimRequest', { created_by_id: user.id, provider_id: fields.provider_id, status: 'pending' });
+      if (pending.length) fail('Your claim on that listing is already with us. We will come back to you on it.', 409);
+    }
+    const claim = await store.create('ClaimRequest', { ...fields, status: 'pending' }, user);
     return { claim };
   },
 

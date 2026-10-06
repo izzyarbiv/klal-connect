@@ -503,6 +503,12 @@ ok(!afterSneak.verified && !afterSneak.featured && !afterSneak.usage_count, 'edi
   JSON.stringify({ verified: afterSneak.verified, featured: afterSneak.featured, usage_count: afterSneak.usage_count }));
 
 // A claim, and what approving it is supposed to do.
+// Two claims filed while the listing is still unowned, held for the guards
+// further down. A claim arrives before the handover, not after it — and
+// createClaim now refuses one aimed at a listing that already has an owner,
+// so resolveClaim's own guards have to be reached this way to stay tested.
+const selfClaim = await call('POST', '/functions/createClaim', { token: admin, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I run it', verification_details: 'Taking this one for myself, thanks.' } });
+const secondClaim = await call('POST', '/functions/createClaim', { token: userC, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I bought the shop', verification_details: 'New owner as of this month, happy to show papers.' } });
 const claim = await call('POST', '/functions/createClaim', { token: userA, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I own the shop', verification_details: 'Listed on our website and our storefront sign.' } });
 const claimId = claim.data?.claim?.id;
 ok(!!claimId, 'a business can file a claim', String(claim.status));
@@ -539,12 +545,10 @@ ok(vagueResolve.status >= 400, 'a claim with no listing attached cannot be appro
 
 // Resolving a claim is a position of trust, so it carries the usual guards.
 // Found by the audit agents, all three reproducible before this.
-const selfClaim = await call('POST', '/functions/createClaim', { token: admin, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I run it', verification_details: 'Taking this one for myself, thanks.' } });
 const selfApprove = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: selfClaim.data?.claim?.id, approve: true } });
 ok(selfApprove.status === 403, 'staff cannot approve their own claim', String(selfApprove.status));
 
 // The listing is already userA's; a second claimant does not quietly inherit it.
-const secondClaim = await call('POST', '/functions/createClaim', { token: userC, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'I bought the shop', verification_details: 'New owner as of this month, happy to show papers.' } });
 const secondApprove = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: secondClaim.data?.claim?.id, approve: true } });
 ok(secondApprove.status === 409, 'an already-claimed listing is not handed to the next claimant', String(secondApprove.status));
 const stillOwned = (await call('GET', `/entities/Provider/${ownId}`, { token: admin })).data || {};
@@ -615,6 +619,54 @@ for (let i = 0; i < 4; i++) {
   lastClaim = await call('POST', '/functions/createClaim', { token: spamTok, body: { provider_name: `Some Business ${i}`, relationship: 'owner', verification_details: 'Filing a few of these to see what happens.' } });
 }
 ok(lastClaim && lastClaim.status === 429, 'claims are capped per day like listings are', String(lastClaim && lastClaim.status));
+
+// The edit route was a way around every rule the create route enforces: it
+// never ran the listing normalizer, so a listing could declare on the way back
+// through what it was refused on the way in.
+const bakeryId = modOwn.data?.provider?.id;
+const shapeEdit = await call('PUT', `/entities/Provider/${bakeryId}`, { token: modTok, body: {
+  badges: ['pas_yisroel', 'accepts_insurance', 'not-a-real-badge'],
+  whatsapp: '(561) 555-0142',
+  tagline: 'x'.repeat(200),
+  languages: 'English, Hebrew',
+  service_areas: 'Boca Raton, Delray Beach',
+} });
+const gotBadges = shapeEdit.data?.badges || [];
+ok(shapeEdit.status === 200 && gotBadges.includes('pas_yisroel'), 'an edit keeps a badge the category allows', JSON.stringify(gotBadges));
+ok(!gotBadges.includes('not-a-real-badge'), 'an edit cannot invent a badge that does not exist', JSON.stringify(gotBadges));
+ok(!gotBadges.includes('accepts_insurance'), 'nor claim one belonging to another trade', JSON.stringify(gotBadges));
+ok(shapeEdit.data?.whatsapp === '15615550142', 'an edit normalizes a WhatsApp number so the wa.me link works', String(shapeEdit.data?.whatsapp));
+ok((shapeEdit.data?.tagline || '').length === 120, 'an edit obeys the tagline cap', String((shapeEdit.data?.tagline || '').length));
+ok(Array.isArray(shapeEdit.data?.languages) && shapeEdit.data.languages.length === 2,
+  'an edit stores list fields as lists, so the listing page cannot 500 on them', JSON.stringify(shapeEdit.data?.languages));
+const sparseEdit = await call('PUT', `/entities/Provider/${bakeryId}`, { token: modTok, body: { phone: '561-555-0101' } });
+ok(sparseEdit.status === 200 && JSON.stringify(sparseEdit.data?.languages) === JSON.stringify(shapeEdit.data?.languages) && sparseEdit.data?.tagline === shapeEdit.data?.tagline,
+  'and a one-field edit leaves the fields it did not mention alone');
+// A category change re-tests what the badges were granted against.
+const recategorized = await call('PUT', `/entities/Provider/${bakeryId}`, { token: modTok, body: { category: 'Legal' } });
+ok(!(recategorized.data?.badges || []).includes('pas_yisroel'), 'a badge does not survive a move to a trade it means nothing in', JSON.stringify(recategorized.data?.badges));
+
+// owner_id is who may edit the row, so the row's own editor must not set it.
+const giveAway = await call('PUT', `/entities/Provider/${ownId}`, { token: userA, body: { owner_id: idB } });
+ok(giveAway.status === 200 && giveAway.data?.owner_id === idA,
+  'a listing cannot be handed to someone outside the claim queue', String(giveAway.data?.owner_id));
+
+// A claim asks staff to hand one business page to one person, so the record has
+// to say which listing — not whatever the claimant typed in the name field.
+const targetListing = await call('POST', '/functions/createListing', { token: admin, body: { name: 'Vfy Kosher Supermarket', category: 'Food & Catering', short_description: 'Groceries and a takeout counter.' } });
+const targetId = targetListing.data?.provider?.id;
+const truthEmail = `claimtruth${Date.now()}@example.com`;
+const truthReg = await call('POST', '/auth/register', { body: { email: truthEmail, password: 'password123' } });
+const truthTok = (await call('POST', '/auth/verify-otp', { body: { email: truthEmail, otpCode: truthReg.data?.dev_code } })).data?.access_token;
+const liar = await call('POST', '/functions/createClaim', { token: truthTok, body: { provider_id: targetId, provider_name: "Moshe's Little Shoe Repair", relationship: 'owner', verification_details: 'Let me tell you all about my shoe shop.' } });
+ok(liar.status === 200 && liar.data?.claim?.provider_name === 'Vfy Kosher Supermarket',
+  'a claim is recorded against the listing it names, not the name it types', String(liar.data?.claim?.provider_name));
+const twice = await call('POST', '/functions/createClaim', { token: truthTok, body: { provider_id: targetId, provider_name: 'Vfy Kosher Supermarket', relationship: 'owner', verification_details: 'Filing it a second time for good measure.' } });
+ok(twice.status === 409, 'the same member cannot pile claims on one listing', String(twice.status));
+const ghost = await call('POST', '/functions/createClaim', { token: truthTok, body: { provider_id: 'no-such-listing', provider_name: 'Ghost Shop', relationship: 'owner', verification_details: 'Claiming a listing that is not there.' } });
+ok(ghost.status === 404, 'a claim cannot point at a listing that does not exist', String(ghost.status));
+const takenToo = await call('POST', '/functions/createClaim', { token: truthTok, body: { provider_id: ownId, provider_name: 'Gold Shoe Repair', relationship: 'owner', verification_details: 'Trying for a listing that already has an owner.' } });
+ok(takenToo.status === 409, 'a listing that already belongs to someone is not claimable', String(takenToo.status));
 
 console.log = log;
 server.close();

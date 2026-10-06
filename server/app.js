@@ -15,8 +15,9 @@ import {
 } from './auth.js';
 import { functions, publicFunctions, safeExternalUrl } from './functions.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
+import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
-import { listingEditor } from '../src/lib/listing.js';
+import { listingEditor, normalizeListingPatch } from '../src/lib/listing.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
@@ -377,6 +378,9 @@ app.get('/api/entities/:entity/:id', async (req, res, next) => {
 // their listing, but not publish it, verify it, or inflate its counts.
 const PROTECTED_FIELDS = new Set([
   'status', 'verified', 'verified_at', 'verified_by', 'verified_badges', 'claimed', 'demo',
+  // owner_id is who may edit the row. A listing's own editor could PUT it to
+  // anyone, which hands the page away outside the claim queue entirely.
+  'owner_id',
   'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
   // Prominence and confirmation, which a listing must never grant itself.
   // `featured` was missing here and Provider is client-writable, so an owner
@@ -484,6 +488,7 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
     try { patch = { ...patch, [field]: safeExternalUrl(patch[field]) }; }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
+  if (entity === 'Provider') patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo });
   const updated = await store.update(entity, id, patch);
   // Every status change by staff leaves a trace: who, what, from, to.
   if (MODERATED.has(entity) || MODERATED_BY_STAFF.has(entity)) {
