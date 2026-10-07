@@ -11,29 +11,20 @@
 //      "another community" to the people they serve.
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { chromePath, debugTarget } from './lib/chrome.mjs';
 
 // CHROME_PATH so these can run somewhere other than a Mac. They were written
 // for one laptop, which is why the UI checks never ran in CI — and the UI is
 // exactly what the other checks cannot see.
-const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = chromePath();
 const PORT = 9238;
 const BASE = process.argv[2] || 'https://klalconnect.org';
 
 const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
-  `--remote-debugging-port=${PORT}`, `--user-data-dir=/tmp/kc-search-${Date.now()}`, 'about:blank'], { stdio: 'ignore' });
+  `--remote-debugging-port=${PORT}`, `--user-data-dir=/tmp/kc-search-${Date.now()}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 process.on('exit', () => { try { chrome.kill('SIGKILL'); } catch {} });
 
-async function target() {
-  for (let i = 0; i < 40; i++) {
-    try {
-      const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
-      const page = list.find((t) => t.type === 'page');
-      if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
-    } catch { /* not listening yet */ }
-    await sleep(250);
-  }
-  throw new Error('no debug target');
-}
+const target = () => debugTarget(PORT, chrome);
 
 const ws = new WebSocket(await target());
 await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });

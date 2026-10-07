@@ -3,11 +3,12 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { writeFileSync } from 'node:fs';
+import { chromePath } from './lib/chrome.mjs';
 
 // CHROME_PATH so these can run somewhere other than a Mac. They were written
 // for one laptop, which is why the UI checks never ran in CI — and the UI is
 // exactly what the other checks cannot see.
-const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = chromePath();
 const PORT = 9226, BASE = 'http://localhost:4173';
 // Credentials come from argv or the environment. Missing ones used to fail
 // silently: the sign-in did nothing, the gate correctly saw a signed-out
