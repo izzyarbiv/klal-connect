@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/api/client';
+import { DIRECTORY_CATEGORIES } from '@/lib/categories';
 import { Users, Building2, Search, Phone, MessageCircle, Bookmark, CheckCircle2 } from 'lucide-react';
 import ShabbosSimulator from '@/components/ShabbosSimulator';
 import ShabbosGlobalOverride from '@/components/ShabbosGlobalOverride';
@@ -69,10 +70,50 @@ function CategoryAdmin({ items, setItems }) {
     await api.entities.Category.delete(x.id);
     setItems(items.filter((i) => i.id !== x.id));
   };
+  // Categories added to the code do nothing for a directory that is already
+  // running: the seeder only touches a fresh database, and putting them in by
+  // hand here meant retyping the icon and the subcategories from memory. This
+  // adds the ones the app expects and the database has not got — by name, so
+  // it is safe to press twice and it never touches a category already there.
+  const missing = DIRECTORY_CATEGORIES.filter((c) => !items.some((i) => (i.name || '').trim().toLowerCase() === c.name.toLowerCase()));
+  const [addedCount, setAddedCount] = useState(0);
+  const [addErr, setAddErr] = useState('');
+  const addMissing = async () => {
+    if (!missing.length || busy) return;
+    setBusy(true); setAddErr('');
+    const made = [];
+    try {
+      for (const c of missing) {
+        made.push(await api.entities.Category.create({
+          name: c.name,
+          slug: c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+          icon: c.icon,
+          order: c.order,
+          subcategories: c.subcategories || [],
+          active: true,
+        }));
+      }
+      setAddedCount(made.length);
+    } catch (e) {
+      setAddErr(e.message || 'Could not add them all — press again to pick up where it stopped.');
+    } finally {
+      // Whatever was created is shown even if one failed partway, so pressing
+      // again adds only the rest.
+      if (made.length) setItems([...items, ...made]);
+      setBusy(false);
+    }
+  };
   const Preview = iconFor(chosen);
   return <div className="panel">
     <h2 className="section-title">Category management</h2>
     <p className="helper">The icon is guessed from the name — "Mikva" gets a water drop — and you can pick a different one.</p>
+    {missing.length > 0 && <div className="mt-4 rounded-lg bg-brand-gold-bg p-4">
+      <p className="text-sm font-semibold text-brand-gold-ink">{missing.length} categor{missing.length === 1 ? 'y' : 'ies'} the app expects {missing.length === 1 ? 'is' : 'are'} not here yet</p>
+      <p className="mt-1 text-sm text-brand-gold-ink">{missing.map((c) => c.name).join(', ')}</p>
+      <button onClick={addMissing} disabled={busy} className="primary mt-3 text-sm disabled:opacity-60">{busy ? 'Adding…' : `Add ${missing.length === 1 ? 'it' : 'all ' + missing.length}`}</button>
+    </div>}
+    {addedCount > 0 && missing.length === 0 && <p className="success mt-4 p-3">Added {addedCount}. The directory and the listing form offer them now.</p>}
+    {addErr && <p className="mt-3 text-sm font-semibold text-brand-error">{addErr}</p>}
     <div className="my-4 flex flex-wrap items-center gap-2">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand-teal"><Preview size={20}/></span>
       <input className="field mt-0 min-w-[10rem] flex-1" value={name} onChange={(e) => setName(e.target.value)} placeholder="New category" />

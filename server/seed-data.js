@@ -3,33 +3,7 @@
 import { store } from './db.js';
 import { stableId } from './db-shared.js';
 
-const CATEGORIES = [
-  { name: 'Home Services',   icon: 'Home',            order: 1,  subcategories: ['Plumbing', 'Electrical', 'Cleaning', 'Handyman'] },
-  { name: 'Business',        icon: 'BriefcaseBusiness', order: 2, subcategories: ['Accounting', 'Marketing', 'Bookkeeping'] },
-  { name: 'Health',          icon: 'HeartPulse',      order: 3,  subcategories: ['Pediatrics', 'Dentistry', 'Therapy'] },
-  { name: 'Legal',           icon: 'Scale',           order: 4,  subcategories: ['Immigration', 'Real Estate', 'Family Law'] },
-  { name: 'Technology',      icon: 'Laptop',          order: 5,  subcategories: ['IT Support', 'Web Development'] },
-  { name: 'Education',       icon: 'GraduationCap',   order: 6,  subcategories: ['Tutoring', 'Test Prep', 'Special Ed'] },
-  { name: 'Food & Catering', icon: 'Utensils',        order: 7,  subcategories: ['Catering', 'Bakery', 'Restaurants'] },
-  { name: 'Community',       icon: 'Users',           order: 8,  subcategories: ['Shuls', 'Schools', 'Youth'] },
-  { name: 'Financial',       icon: 'Landmark',        order: 9,  subcategories: ['Mortgage', 'Insurance', 'Tax'] },
-  { name: 'Gemachim',        icon: 'Gift',            order: 10, subcategories: ['Medical Equipment', 'Simcha', 'Baby'] },
-  { name: 'Simcha Services', icon: 'ShieldCheck',     order: 11, subcategories: ['Photography', 'Music', 'Flowers'] },
-  // Resources and contacts only — shadchanim and the shidduch organisations
-  // people already use. Deliberately not profiles or matching: who is dating is
-  // nobody else's business, which is also why @/lib/sensitivity treats anything
-  // in here as private (no public "used this", no named vouches).
-  { name: 'Shidduchim',      icon: 'HandHeart',       order: 12, subcategories: ['Shadchanim', 'Shidduch organizations', 'Dating coaches'] },
-  // Shuls are one of the six things the homepage offers to search for, and had
-  // no category of their own — only a subcategory of Community, which the
-  // listing form never offers.
-  { name: 'Shuls & Minyanim', icon: 'Landmark',       order: 13, subcategories: ['Shuls', 'Minyanim', 'Botei Medrash'] },
-  // Last on purpose, and the reason it exists: category is required on the
-  // listing form, so anything the list does not name could not be listed at
-  // all. A directory should never refuse a resource for want of a heading. The
-  // subcategory field is where it says what it actually is.
-  { name: 'Other',           icon: 'MoreHorizontal', order: 99, subcategories: [] },
-];
+import { DIRECTORY_CATEGORIES as CATEGORIES } from '../src/lib/categories.js';
 
 const slugify = (s) =>
   String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
