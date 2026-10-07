@@ -30,16 +30,19 @@ env:
   VERCEL_ORG_ID: team_9OEtj4nIlQcmhBCnyjfi88IK
   VERCEL_PROJECT_ID: prj_nyiApYO7JZcmwVY9NspRAc7jqHpz
 
+# ubuntu-24.04 rather than ubuntu-latest: that label migrates to Ubuntu 26 from
+# 19 October 2026, and an OS change under the deploy pipeline during a launch is
+# a risk with no upside. Worth unpinning once there is a quiet week.
 jobs:
   verify:
     # Nothing reaches production without these. The browser checks
     # (contrast, overflow, accessible names, critical paths, safe area) are
     # not here: they drive a Chrome at a hardcoded macOS path and need a dev
     # server, so they stay a local gate. These three need neither.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -55,16 +58,16 @@ jobs:
 
   deploy:
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # stamp-build.mjs falls back to `git rev-parse` when
           # VERCEL_GIT_COMMIT_SHA is absent, and a shallow clone is enough
           # for that, but the full history lets deploy:status name the
           # commits a deployment is behind.
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
