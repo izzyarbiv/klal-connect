@@ -12,13 +12,22 @@ const ToastProvider = React.forwardRef(({ ...props }, ref) => (
 ));
 ToastProvider.displayName = "ToastProvider";
 
-const ToastViewport = React.forwardRef(({ ...props }, ref) => (
-  <div
-    ref={ref}
-    className="fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]"
-    {...props}
-  />
-));
+// Renders nothing, and must not.
+//
+// In Radix, ToastProvider supplies context and ToastViewport is the one
+// container toasts portal into. This file is a stub of that API, and the stub
+// gave BOTH of them the viewport's styling — so Toaster mounted two identical
+// fixed, full-width, p-4 containers, one inside the other. ToastProvider is
+// the one that actually holds the toasts; this was an empty duplicate nested
+// inside it, and because a fixed element with no `left` keeps its static
+// position, it began 16px in from the outer padding and then took the full
+// viewport width. Every page was 16px wider than the screen and scrolled
+// sideways at 320px — with nothing visible to explain why, since the culprit
+// is an empty, transparent overlay.
+//
+// Kept as an export so Toaster's markup still matches the Radix shape it was
+// copied from, and so swapping the real library back in is a one-line change.
+const ToastViewport = () => null;
 ToastViewport.displayName = "ToastViewport";
 
 const toastVariants = cva(
