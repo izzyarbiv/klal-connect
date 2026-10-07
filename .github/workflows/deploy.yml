@@ -1,0 +1,110 @@
+# Pushing to main deploys klalconnect.org — once, and then never by hand again.
+#
+# It did not. Deploys were manual `vercel --prod`, nothing said so, and six
+# finished commits sat on GitHub unshipped for a day while every local check
+# passed and the site looked fine. This is the fix for the cause rather than
+# the symptom.
+#
+# Inert until one secret exists. Add VERCEL_TOKEN under
+# Settings -> Secrets and variables -> Actions, and every push to main ships
+# after the checks pass. Without it the checks still run and the deploy step
+# says what is missing instead of failing.
+#
+# Make a token at https://vercel.com/account/tokens (scope it to this project).
+name: Verify and deploy
+
+on:
+  push:
+    branches: [main]
+  # So a deploy can be triggered from the Actions tab without an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  # A newer push supersedes an older one rather than racing it to production.
+  group: deploy-main
+  cancel-in-progress: true
+
+env:
+  # Identifiers, not credentials — they name the project and are useless
+  # without the token. Kept here so one secret is all that is needed.
+  VERCEL_ORG_ID: team_9OEtj4nIlQcmhBCnyjfi88IK
+  VERCEL_PROJECT_ID: prj_nyiApYO7JZcmwVY9NspRAc7jqHpz
+
+jobs:
+  verify:
+    # Nothing reaches production without these. The browser checks
+    # (contrast, overflow, accessible names, critical paths, safe area) are
+    # not here: they drive a Chrome at a hardcoded macOS path and need a dev
+    # server, so they stay a local gate. These three need neither.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit and API checks
+        # api.test.mjs starts the app on an ephemeral port itself, so there is
+        # no server to boot and no database to reach.
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # stamp-build.mjs falls back to `git rev-parse` when
+          # VERCEL_GIT_COMMIT_SHA is absent, and a shallow clone is enough
+          # for that, but the full history lets deploy:status name the
+          # commits a deployment is behind.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Check for a deploy token
+        id: token
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Not deployed::Checks passed, but VERCEL_TOKEN is not set, so nothing was deployed. Add it under Settings -> Secrets and variables -> Actions and push again."
+          fi
+
+      - name: Deploy to production
+        if: steps.token.outputs.present == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Confirm what landed
+        if: steps.token.outputs.present == 'true'
+        run: |
+          # Exit 1 means production is behind, which is a real failure. Exit 2
+          # means it could not tell — most often Vercel's bot challenge
+          # answering a datacenter IP — and calling that a failed deploy would
+          # be a lie, so it is a warning.
+          set +e
+          npm run deploy:status
+          code=$?
+          set -e
+          if [ "$code" = "1" ]; then
+            echo "::error title=Production is behind::The deploy reported success but production is not running this commit."
+            exit 1
+          fi
+          if [ "$code" != "0" ]; then
+            echo "::warning title=Could not confirm::The deploy reported success but the live commit could not be read. See the output above."
+          fi
