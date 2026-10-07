@@ -67,7 +67,14 @@ jobs:
   deploy:
     needs: verify
     # A pull request is checked, never shipped. Only main reaches production.
-    if: github.event_name != 'pull_request'
+    #
+    # And only when the owner is the one shipping it. This repo is private on a
+    # free plan, where a collaborator cannot be given read-only access and main
+    # cannot be protected — so a second contributor necessarily has write
+    # access and can push straight to main. That is survivable; what is not is
+    # unreviewed code reaching the public site because someone pushed. Their
+    # push still runs every check, and says why it stopped there.
+    if: github.event_name != 'pull_request' && github.actor == 'izzyarbiv'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -121,3 +128,14 @@ jobs:
           if [ "$code" != "0" ]; then
             echo "::warning title=Could not confirm::The deploy reported success but the live commit could not be read. See the output above."
           fi
+
+  explain-no-deploy:
+    needs: verify
+    # So a contributor sees why their push passed but did not go live, instead
+    # of wondering whether it did.
+    if: github.event_name == 'push' && github.actor != 'izzyarbiv'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Say why this did not deploy
+        run: |
+          echo "::notice title=Checked, not deployed::Every check passed. This did not go to the live site because deploys are run by the repository owner. Ask Izzy to ship it — he can do it from the Actions tab with 'Run workflow'."
