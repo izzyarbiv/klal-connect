@@ -22,3 +22,4 @@ server/data/
 
 # Built index.html, baked in for the API at build time.
 server/shell.generated.js
+server/build.generated.js

@@ -32,6 +32,9 @@ import { healthReport } from './health.js';
 // Absent in dev and in tests, where Vite serves the shell itself.
 let SHELL = '';
 try { ({ SHELL } = await import('./shell.generated.js')); } catch { /* dev */ }
+// Which commit this server was built from. Absent when running from source.
+let BUILD = { commit: 'dev' };
+try { ({ BUILD } = await import('./build.generated.js')); } catch { /* dev */ }
 
 const app = express();
 // Vercel and most hosts terminate TLS in front of us; req.ip must come from
@@ -1079,7 +1082,9 @@ app.get('/robots.txt', (req, res) => {
 
 app.get('/api/health', async (_req, res, next) => {
   try {
-    res.json({ ok: true, users: (await users.all()).length, providers: await store.count('Provider') });
+    // build goes first: the commonest question asked of this endpoint is
+    // whether a deploy actually landed.
+    res.json({ ok: true, build: BUILD, users: (await users.all()).length, providers: await store.count('Provider') });
   } catch (err) { next(err); }
 });
 

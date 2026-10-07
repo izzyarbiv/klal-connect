@@ -8,7 +8,7 @@
     "dev:api": "node --env-file-if-exists=.env.local --watch server/index.js",
     "dev:web": "vite",
     "seed": "node --env-file-if-exists=.env.local server/seed.js",
-    "build": "vite build && node scripts/emit-shell.mjs && node scripts/check-csp.mjs",
+    "build": "vite build && node scripts/emit-shell.mjs && node scripts/stamp-build.mjs && node scripts/check-csp.mjs",
     "start": "node server/index.js",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
@@ -32,7 +32,9 @@
     "import-blob": "node --env-file-if-exists=.env.local server/import-blob.js",
     "test:critical-paths": "node scripts/critical-paths-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
     "test:safe-area": "node scripts/safe-area-check.mjs ${KC_BASE_URL:-http://localhost:5200}",
-    "ensure-categories": "node --env-file-if-exists=.env.local server/ensure-categories.js"
+    "ensure-categories": "node --env-file-if-exists=.env.local server/ensure-categories.js",
+    "deploy:status": "node scripts/deploy-status.mjs",
+    "ship": "npm run lint && npm test && npm run build && vercel --prod --yes && npm run deploy:status"
   },
   "dependencies": {
     "@hebcal/core": "^6.9.2",
