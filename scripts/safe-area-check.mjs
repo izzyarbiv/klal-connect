@@ -22,7 +22,10 @@ if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(BASE)) {
   console.error(`refusing to register a member against ${BASE} — this check is localhost only`);
   process.exit(2);
 }
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// CHROME_PATH so these can run somewhere other than a Mac. They were written
+// for one laptop, which is why the UI checks never ran in CI — and the UI is
+// exactly what the other checks cannot see.
+const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9258;
 const INSET = 47; // iPhone 14/15 Pro status bar + island
 

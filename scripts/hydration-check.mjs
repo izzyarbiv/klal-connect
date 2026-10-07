@@ -20,7 +20,10 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// CHROME_PATH so these can run somewhere other than a Mac. They were written
+// for one laptop, which is why the UI checks never ran in CI — and the UI is
+// exactly what the other checks cannot see.
+const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9232;
 const BASE = (process.argv[2] || 'https://klalconnect.org').replace(/\/$/, '');
 

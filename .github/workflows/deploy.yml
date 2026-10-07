@@ -64,8 +64,59 @@ jobs:
       - name: Build
         run: npm run build
 
+  browser:
+    # What the verify job cannot see.
+    #
+    # verify checks logic: does it compile, do the permission rules hold, does
+    # it build. It never opens the site, so it is blind to exactly the class of
+    # bug that actually got reported here — text unreadable in dark mode,
+    # boxes that do not fit a phone screen. Those checks existed but ran on one
+    # laptop, which meant the only thing protecting the live site from a layout
+    # or contrast regression was somebody remembering to run them.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Start the app
+        run: |
+          KC_DEMO_MODE=1 KC_STORE=memory KC_EMAIL_DELIVERY=dev node server/index.js > /tmp/api.log 2>&1 &
+          npx vite --port 5200 > /tmp/vite.log 2>&1 &
+          # Wait for both rather than sleeping a fixed amount, which is how a
+          # check ends up failing for being early and looking like a bug.
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4000/api/health > /dev/null && curl -sf http://localhost:5200/ > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/api/health > /dev/null || { echo "API did not start"; cat /tmp/api.log; exit 1; }
+          curl -sf http://localhost:5200/ > /dev/null || { echo "vite did not start"; cat /tmp/vite.log; exit 1; }
+
+      - name: Can a person still join, post a listing and edit it
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: npm run test:critical-paths
+
+      - name: Does anything overflow a phone screen
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: npm run test:overflow
+
+      - name: Is every text readable in both themes
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: npm run test:contrast
+
+      - name: Does every control have a name a screen reader can say
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: npm run test:a11y
+
   deploy:
-    needs: verify
+    needs: [verify, browser]
     # A pull request is checked, never shipped. Only main reaches production.
     #
     # And only when the owner is the one shipping it. This repo is private on a
@@ -130,7 +181,7 @@ jobs:
           fi
 
   explain-no-deploy:
-    needs: verify
+    needs: [verify, browser]
     # So a contributor sees why their push passed but did not go live, instead
     # of wondering whether it did.
     if: github.event_name == 'push' && github.actor != 'izzyarbiv'

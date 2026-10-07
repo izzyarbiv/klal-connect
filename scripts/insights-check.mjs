@@ -14,7 +14,10 @@ if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(BASE)) {
   process.exit(2);
 }
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// CHROME_PATH so these can run somewhere other than a Mac. They were written
+// for one laptop, which is why the UI checks never ran in CI — and the UI is
+// exactly what the other checks cannot see.
+const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 9240;
 
 // ---- seed a few searches that found nothing ------------------------------
