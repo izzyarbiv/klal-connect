@@ -100,6 +100,37 @@ jobs:
           echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
           /usr/bin/google-chrome --version
 
+      - name: Reproduce exactly how the checks launch Chrome
+        # Chrome starts and serves /json/version, yet the checks still say "no
+        # debug target" — which they decide from /json/list. So mirror their
+        # launch precisely, in node, and print what they would have seen.
+        run: |
+          node -e '
+            const { spawn } = require("node:child_process");
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            (async () => {
+              const PORT = 9441;
+              const chrome = spawn(process.env.CHROME_PATH, ["--headless=new","--disable-gpu","--no-sandbox","--no-first-run",
+                "--remote-debugging-port=" + PORT, "--user-data-dir=/tmp/kc-repro", "about:blank"], { stdio: ["ignore","pipe","pipe"] });
+              let err = "";
+              chrome.stderr.on("data", (d) => { err += d; });
+              chrome.on("exit", (c) => console.log("chrome exited with " + c));
+              for (let i = 0; i < 40; i++) {
+                try {
+                  const res = await fetch("http://127.0.0.1:" + PORT + "/json/list");
+                  const body = await res.text();
+                  console.log("attempt " + i + " status " + res.status + " body: " + body.slice(0, 400));
+                  const list = JSON.parse(body);
+                  console.log("target types seen: " + JSON.stringify(list.map((t) => t.type)));
+                  if (list.some((t) => t.type === "page")) { console.log("PAGE TARGET FOUND"); break; }
+                } catch (e) { if (i % 8 === 0) console.log("attempt " + i + ": " + e.message); }
+                await sleep(250);
+              }
+              if (err) console.log("--- chrome stderr ---\n" + err.slice(0, 1200));
+              chrome.kill("SIGKILL");
+            })();
+          '
+
       - name: Check the browser can actually start
         # The checks spawn Chrome with stdio ignored, so when it fails to boot
         # all they can say is "no debug target" — true but useless. This starts
