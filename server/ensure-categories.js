@@ -6,7 +6,9 @@
 // anyone wants pointed at a live directory.
 import { store, pool } from './db.js';
 import { seedCategories } from './seed-data.js';
+import { announceTarget } from './db-target.js';
 
+announceTarget('categories');
 const before = await store.count('Category');
 const added = await seedCategories();
 const after = await store.count('Category');
