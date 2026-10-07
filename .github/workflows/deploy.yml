@@ -16,6 +16,14 @@ name: Verify and deploy
 on:
   push:
     branches: [main]
+  # Checked on the way in, not after it is already on main. This repo is
+  # private on a free plan, so branch protection is unavailable and main cannot
+  # be locked — a contributor with read access forking and opening a pull
+  # request is what takes its place. That only works if the checks run on the
+  # request, which is this. Fork pull requests get no secrets, and the verify
+  # job needs none.
+  pull_request:
+    branches: [main]
   # So a deploy can be triggered from the Actions tab without an empty commit.
   workflow_dispatch:
 
@@ -58,6 +66,8 @@ jobs:
 
   deploy:
     needs: verify
+    # A pull request is checked, never shipped. Only main reaches production.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
