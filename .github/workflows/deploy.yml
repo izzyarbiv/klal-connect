@@ -100,6 +100,24 @@ jobs:
           echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
           /usr/bin/google-chrome --version
 
+      - name: Check the browser can actually start
+        # The checks spawn Chrome with stdio ignored, so when it fails to boot
+        # all they can say is "no debug target" — true but useless. This starts
+        # it the same way and prints why if it will not come up.
+        run: |
+          "$CHROME_PATH" --version
+          "$CHROME_PATH" --headless=new --disable-gpu --no-sandbox --no-first-run \
+            --remote-debugging-port=9333 --user-data-dir=/tmp/kc-smoke about:blank > /tmp/chrome.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:9333/json/version > /dev/null && break
+            sleep 1
+          done
+          if ! curl -sf http://127.0.0.1:9333/json/version; then
+            echo "--- chrome would not expose a debug port; its own output: ---"
+            cat /tmp/chrome.log || true
+            exit 1
+          fi
+
       - name: Start the app
         run: |
           KC_DEMO_MODE=1 KC_STORE=memory KC_EMAIL_DELIVERY=dev node server/index.js > /tmp/api.log 2>&1 &
