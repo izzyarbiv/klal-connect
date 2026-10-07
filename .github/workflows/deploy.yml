@@ -82,6 +82,24 @@ jobs:
           cache: npm
       - run: npm ci
 
+      - name: Make sure there is a browser
+        # Guessing /usr/bin/google-chrome failed with "no debug target", which
+        # is what these scripts say when Chrome never came up. Look for one,
+        # and install it if the runner image does not ship it — the image's
+        # contents change, and a check that silently needs a particular one is
+        # a check that breaks later for no visible reason.
+        run: |
+          set -euo pipefail
+          for c in /usr/bin/google-chrome /usr/bin/google-chrome-stable /usr/bin/chromium /usr/bin/chromium-browser /snap/bin/chromium; do
+            if [ -x "$c" ]; then echo "CHROME_PATH=$c" >> "$GITHUB_ENV"; echo "using $c"; exit 0; fi
+          done
+          echo "no browser on this runner — installing Google Chrome"
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ./google-chrome-stable_current_amd64.deb
+          echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+          /usr/bin/google-chrome --version
+
       - name: Start the app
         run: |
           KC_DEMO_MODE=1 KC_STORE=memory KC_EMAIL_DELIVERY=dev node server/index.js > /tmp/api.log 2>&1 &
@@ -96,23 +114,15 @@ jobs:
           curl -sf http://localhost:5200/ > /dev/null || { echo "vite did not start"; cat /tmp/vite.log; exit 1; }
 
       - name: Can a person still join, post a listing and edit it
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
         run: npm run test:critical-paths
 
       - name: Does anything overflow a phone screen
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
         run: npm run test:overflow
 
       - name: Is every text readable in both themes
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
         run: npm run test:contrast
 
       - name: Does every control have a name a screen reader can say
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
         run: npm run test:a11y
 
   deploy:
