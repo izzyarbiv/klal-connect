@@ -13,6 +13,7 @@
 //
 // It removes categories, so it refuses anything but a local host.
 import { spawn } from 'node:child_process';
+import { CONTRAST } from './lib/contrast-expression.mjs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const BASE = process.argv[2] || 'http://localhost:5200';
@@ -112,6 +113,20 @@ await sleep(1200);
 const banner = await ev(`document.body.innerText`);
 ok(/categor(y|ies) the app expects/.test(banner), 'it says some categories are missing');
 for (const name of removed) ok(banner.includes(name), `and names ${name}`);
+
+// This banner only exists while something is missing, which is to say almost
+// never — so no sweep would ever open the page with it on screen. It is gold
+// on gold, the pair most likely to fail, and dark mode is where that has
+// happened before. Measured here, where it stands.
+for (const theme of ['light', 'dark']) {
+  await ev(`document.documentElement.classList.${theme === 'dark' ? 'add' : 'remove'}('dark')`);
+  await sleep(500);
+  const bad = (await ev(CONTRAST)) || [];
+  ok(bad.length === 0, `the missing-categories banner meets AA in ${theme} mode`,
+    bad.slice(0, 2).map((b) => `${b.ratio}:1 needs ${b.need} — "${b.text}"`).join(' | '));
+}
+await ev(`document.documentElement.classList.remove('dark')`);
+await sleep(400);
 
 ok(await ev(`(()=>{const b=[...document.querySelectorAll('button')].find(x=>/^Add (it|all \\d+)$/.test(x.textContent.trim()));if(!b)return false;b.click();return true})()`),
   'the add button is there');
