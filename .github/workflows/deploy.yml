@@ -169,9 +169,14 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
-          npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
-          npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          # Strip whitespace: a token pasted into `gh secret set` can carry a
+          # stray space or newline, and Vercel rejects it outright ("Must not
+          # contain: ' '"). That failed the first real deploy after every check
+          # had passed.
+          TOKEN="$(printf '%s' "$VERCEL_TOKEN" | tr -d '[:space:]')"
+          npx --yes vercel@latest pull --yes --environment=production --token="$TOKEN"
+          npx --yes vercel@latest build --prod --token="$TOKEN"
+          npx --yes vercel@latest deploy --prebuilt --prod --token="$TOKEN"
 
       - name: Confirm what landed
         if: steps.token.outputs.present == 'true'
