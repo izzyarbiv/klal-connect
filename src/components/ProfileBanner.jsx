@@ -20,7 +20,19 @@ export default function ProfileBanner({ url, heightClass = 'h-32 sm:h-44', class
       aria-label={url ? 'Open cover photo' : undefined}
     >
       {url ? (
-        <Image src={url} fittingType="fill" className="h-full w-full" alt="" />
+        <>
+          <Image src={url} fittingType="fill" className="h-full w-full" alt="" />
+          {/* A hairline under a real photo. A white cover on a white light-mode
+              page had no edge at all and read as one big white block running
+              into the profile below it. brand-ink inverts with the theme, so
+              at low opacity this is a faint dark line in light mode and a
+              faint light one in dark — no variant needed. Only drawn over an
+              image: the navy fallback already has an edge of its own.
+              An inline colour, not bg-brand-ink/15: the brand colours are
+              declared without <alpha-value>, so that utility is never
+              generated and the line silently did not exist. */}
+          <div data-banner-edge className="pointer-events-none absolute inset-x-0 bottom-0 h-px" style={{ background: 'hsl(var(--brand-ink) / 0.18)' }} aria-hidden="true" />
+        </>
       ) : (
         <div className="h-full w-full bg-brand-navy" />
       )}
