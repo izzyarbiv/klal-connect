@@ -22,6 +22,7 @@ import { verificationAfterEdit } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
+import { ensureCoreCategories } from './ensure-core.js';
 import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { translateEnabled, LANGUAGES as TRANSLATE_LANGUAGES } from './translate.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
@@ -75,6 +76,10 @@ app.use(express.json({ limit: '2mb' }));
 if (isDemoMode) {
   app.use((req, res, next) => { ensureDemoData().then(() => next(), next); });
 }
+
+// Categories keep themselves current on every deployment, demo or not. After
+// the demo seed so a fresh instance has its admin first.
+app.use((req, res, next) => { ensureCoreCategories().then(() => next(), () => next()); });
 
 app.use(attachUser);
 

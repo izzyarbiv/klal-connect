@@ -135,7 +135,9 @@ jobs:
     # access and can push straight to main. That is survivable; what is not is
     # unreviewed code reaching the public site because someone pushed. Their
     # push still runs every check, and says why it stopped there.
-    if: github.event_name != 'pull_request' && github.actor == 'izzyarbiv'
+    # Publishers are listed here and in explain-no-deploy below. To add one run:
+    #   npm run add-publisher -- <github-username>
+    if: github.event_name != 'pull_request' && contains(fromJSON('["izzyarbiv"]'), github.actor)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -194,7 +196,7 @@ jobs:
     needs: [verify, browser]
     # So a contributor sees why their push passed but did not go live, instead
     # of wondering whether it did.
-    if: github.event_name == 'push' && github.actor != 'izzyarbiv'
+    if: github.event_name == 'push' && !contains(fromJSON('["izzyarbiv"]'), github.actor)
     runs-on: ubuntu-24.04
     steps:
       - name: Say why this did not deploy

@@ -35,7 +35,9 @@
     "ensure-categories": "node --env-file-if-exists=.env.local server/ensure-categories.js",
     "deploy:status": "node scripts/deploy-status.mjs",
     "ship": "node scripts/preflight-ship.mjs && npm run lint && npm test && npm run build && vercel --prod --yes && npm run deploy:status",
-    "test:categories": "node scripts/categories-check.mjs"
+    "test:categories": "node scripts/categories-check.mjs",
+    "prod:admin": "node scripts/prod-admin.mjs",
+    "add-publisher": "node scripts/add-publisher.mjs"
   },
   "dependencies": {
     "@hebcal/core": "^6.9.2",

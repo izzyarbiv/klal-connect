@@ -648,6 +648,15 @@ ok(!(recategorized.data?.badges || []).includes('pas_yisroel'), 'a badge does no
 
 // owner_id is who may edit the row, so the row's own editor must not set it.
 const giveAway = await call('PUT', `/entities/Provider/${ownId}`, { token: userA, body: { owner_id: idB } });
+// Categories keep themselves current: nobody presses a button when one is added.
+const cats = (await call('GET', '/entities/Category', { token: admin })).data || [];
+for (const name of ['Shidduchim', 'Shuls & Minyanim', 'Other']) {
+  ok(cats.some((c) => c.name === name), `the directory offers ${name} without anyone adding it`);
+}
+const offeredRow = ((await call('GET', '/entities/Setting', { token: admin })).data || []).find((s) => s.key === 'categories_offered');
+ok(!!offeredRow && JSON.parse(offeredRow.value).includes('other'), 'and records what it has offered, so a removal sticks');
+ok(new Set(cats.map((c) => c.name)).size === cats.length, 'and never creates a duplicate');
+
 ok(giveAway.status === 200 && giveAway.data?.owner_id === idA,
   'a listing cannot be handed to someone outside the claim queue', String(giveAway.data?.owner_id));
 
