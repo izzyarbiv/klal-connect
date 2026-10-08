@@ -137,7 +137,7 @@ jobs:
     # push still runs every check, and says why it stopped there.
     # Publishers are listed here and in explain-no-deploy below. To add one run:
     #   npm run add-publisher -- <github-username>
-    if: github.event_name != 'pull_request' && contains(fromJSON('["izzyarbiv"]'), github.actor)
+    if: github.event_name != 'pull_request' && contains(fromJSON('["izzyarbiv", "eliepstein0817"]'), github.actor)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -196,7 +196,7 @@ jobs:
     needs: [verify, browser]
     # So a contributor sees why their push passed but did not go live, instead
     # of wondering whether it did.
-    if: github.event_name == 'push' && !contains(fromJSON('["izzyarbiv"]'), github.actor)
+    if: github.event_name == 'push' && !contains(fromJSON('["izzyarbiv", "eliepstein0817"]'), github.actor)
     runs-on: ubuntu-24.04
     steps:
       - name: Say why this did not deploy
