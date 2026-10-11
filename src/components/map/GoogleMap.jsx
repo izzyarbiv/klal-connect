@@ -59,7 +59,7 @@ export default function GoogleMap({ located, center, config }) {
             title={p.name}
             onClick={() => setOpen(p.id)}
           >
-            <Pin background="#6a3fb5" borderColor="#4b2f80" glyphColor="#ffffff" />
+            <Pin background="#147b74" borderColor="#0e5a55" glyphColor="#ffffff" />
           </AdvancedMarker>
         ))}
         {selected && (

@@ -54,7 +54,7 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
       <div className="min-w-0 flex-1">
         <div className="mb-1 hidden sm:block"><p className="text-sm font-semibold text-brand-ink">{user?.full_name||'You'}</p><Headline text={user?.headline}/></div>
         <div className="mb-2 -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">{POST_TYPES.map(t=><button type="button" key={t.id} onClick={()=>setType(t.id)} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${type===t.id?'bg-brand-navy text-white':'bg-brand-tint text-brand-body hover:text-brand-ink'}`}>{t.label}</button>)}</div>
-        <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder={POST_TYPE_BY_ID[type]?.placeholder} autoFocus className="min-h-16 w-full resize-none rounded-lg border border-brand-line bg-brand-canvas px-4 py-3 text-sm outline-none focus:border-brand-teal sm:min-h-20"/>
+        <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder={POST_TYPE_BY_ID[type]?.placeholder} autoFocus className="min-h-16 w-full resize-none rounded-lg border border-brand-line bg-brand-canvas px-4 py-3 text-sm outline-none focus:border-[#0D6B66] sm:min-h-20"/>
       </div>
     </div>
     {imgs.length>0&&<div className="flex gap-2 sm:pl-14">{imgs.map(u=><img key={u} src={u} className="h-16 w-16 rounded-lg object-cover"/>)}</div>}
