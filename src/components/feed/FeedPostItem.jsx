@@ -62,7 +62,7 @@ export default function FeedPostItem({ post, user, onDeleted }) {
           {isAsk&&helpfulId&&<span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-bold text-brand-teal">Answered ✓</span>}
         </div>
         <Headline text={post.author_headline}/>
-        {post.business_name&&<p className="text-xs font-medium text-[#0D6B66]">{post.business_name}</p>}
+        {post.business_name&&<p className="text-xs font-medium text-brand-teal">{post.business_name}</p>}
       </div>
       <FeedPostMenu post={post} user={user} onReport={()=>setReporting(true)} onDeleted={onDeleted}/>
     </div>
