@@ -97,10 +97,10 @@ for (const p of sensitive) {
   // Asserted, not merely noted: without this, a listing that never rendered
   // would satisfy every "is not present" check below and report a pass.
   ok(ready, `    the page rendered, so "absent" means absent`);
-  ok(!/I've Used This|Used ✓/i.test(body), `    no public "used this" control`);
-  ok(!/vouch for this/i.test(body), `    no vouch control`);
-  ok(!/Vouched for by/i.test(body), `    no public list of who vouched`);
-  ok(!/Share a Positive Experience/i.test(body), `    no signed public note form`);
+  ok(!/I've used them|I've Used This|Used ✓|You're counted/i.test(body), `    no public "used this" control`);
+  ok(!/vouch for (them|this)|You're vouching/i.test(body), `    no vouch control`);
+  ok(!/Vouched for by|would send a friend/i.test(body), `    no public list of who vouched`);
+  ok(!/What did you appreciate|Share a Positive Experience/i.test(body), `    no signed public note form`);
   // The listing must still do its actual job.
   ok(/Save/i.test(body), `    saving is still offered`);
   ok(/Report an issue|Suggest a Correction/i.test(body), `    a private route to the team remains`);
@@ -109,7 +109,7 @@ for (const p of sensitive) {
 for (const p of ordinary) {
   const { body } = await visit(p);
   console.log(`  — ${(p.name || '').slice(0, 30)} (ordinary listing)`);
-  ok(/vouch for this/i.test(body), `    public vouching still works where it helps`);
+  ok(/I've used them|You're counted|You're vouching/i.test(body), `    public used-and-vouch still works where it helps`);
 }
 if (!ordinary.length) {
   console.log('  info  every listing in this directory is currently a help organization,');
