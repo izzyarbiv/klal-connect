@@ -4,7 +4,7 @@ import { Image } from '@/components/ui/image';
 import { MapPin, Briefcase } from 'lucide-react';
 import { topJob } from '@/lib/connections';
 import Headline from '@/components/Headline';
-import ProfileBanner from '@/components/ProfileBanner';
+import ProfileBanner, { PHOTO_EDGE } from '@/components/ProfileBanner';
 import ConnectButton from '@/components/ConnectButton';
 import MessageButton from '@/components/MessageButton';
 import { WorkStatusRing, WorkStatusBadge } from '@/components/WorkStatus';
@@ -23,7 +23,7 @@ export default function UserCard({ user, me, connections, onReload }) {
         <Link to={`/profile/${user.id}`} className="block">
           <WorkStatusRing user={user}>
           {user.avatar_url ? (
-            <div className="h-14 w-14 overflow-hidden rounded-full ring-4 ring-brand-surface">
+            <div className="h-14 w-14 overflow-hidden rounded-full" style={PHOTO_EDGE}>
               <Image src={user.avatar_url} fittingType="fill" className="h-14 w-14" />
             </div>
           ) : (

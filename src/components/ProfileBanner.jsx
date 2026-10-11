@@ -1,6 +1,14 @@
 import React from 'react';
 import { Image } from '@/components/ui/image';
 
+// The white ring that lifts the photo off the cover, plus a hairline outside
+// it. A white photo on a white cover had no edge at all: the ring is the same
+// white as both. Same colour and opacity as the line under the cover
+// (in ProfileBanner below), so the two read as one edge. Inline for the same reason as
+// that line: the brand colours have no <alpha-value>, so ring-brand-ink/15 is
+// never generated.
+export const PHOTO_EDGE = { boxShadow: '0 0 0 4px hsl(var(--brand-surface)), 0 0 0 5px hsl(var(--brand-ink) / 0.18)' };
+
 // The wide cover image at the top of a profile, the way LinkedIn has one.
 // Without an image it falls back to a flat brand-navy panel rather than a
 // grey box — deliberate, not decorative. A gradient here read as a generated
