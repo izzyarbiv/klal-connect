@@ -6,7 +6,7 @@ import { MapPin, Briefcase, Users, Pencil, Camera, Loader2, Settings, Phone, X }
 import ConnectButton from '@/components/ConnectButton';
 import MessageButton from '@/components/MessageButton';
 import ShareButton from '@/components/ShareButton';
-import ProfileBanner from '@/components/ProfileBanner';
+import ProfileBanner, { PHOTO_EDGE } from '@/components/ProfileBanner';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import { PROFILE_TYPES } from '@/lib/affiliations';
 import CityInput from '@/components/CityInput';
@@ -90,7 +90,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
         <div className="relative z-10 -mt-12 sm:-mt-14">
           <WorkStatusRing user={user}>
           {user.avatar_url
-            ? <button type="button" onClick={() => setPreview({ url: user.avatar_url, alt: `${user.full_name || 'Profile'} profile photo` })} className="h-24 w-24 cursor-zoom-in overflow-hidden rounded-full ring-4 ring-brand-surface sm:h-28 sm:w-28" aria-label="Open profile photo"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24 sm:h-28 sm:w-28"/></button>
+            ? <button type="button" onClick={() => setPreview({ url: user.avatar_url, alt: `${user.full_name || 'Profile'} profile photo` })} className="h-24 w-24 cursor-zoom-in overflow-hidden rounded-full sm:h-28 sm:w-28" style={PHOTO_EDGE} aria-label="Open profile photo"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24 sm:h-28 sm:w-28"/></button>
             : <div className="grid h-24 w-24 place-items-center rounded-full bg-brand-tint text-2xl font-bold text-brand-teal ring-4 ring-brand-surface sm:h-28 sm:w-28">{initialsOf(user)}</div>}
           </WorkStatusRing>
           {editable && <label className="absolute -bottom-1 -right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-navy text-white shadow ring-2 ring-brand-surface hover:bg-brand-navy-hover" title={user.avatar_url ? 'Change photo' : 'Add a photo'}>{busy ? <Loader2 size={15} className="animate-spin"/> : <Camera size={15}/>}<input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={upload('avatar_url')} disabled={busy}/></label>}
