@@ -2,6 +2,7 @@ import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
+import { googleDirectionsUrl } from '@/lib/googleMaps';
 
 // The map used when no Google Maps key is configured — local development, or
 // a deployment that has not set one up yet. OpenStreetMap's tile policy does
@@ -15,6 +16,7 @@ export default function LeafletMap({ located, center, config }) {
           <Popup>
             <strong>{p.name}</strong><br />{p.city}<br />
             <Link to={`/provider/${p.id}`}>View profile</Link>
+            {googleDirectionsUrl(p) && <> · <a href={googleDirectionsUrl(p)} target="_blank" rel="noreferrer">Directions</a></>}
           </Popup>
         </Marker>
       ))}

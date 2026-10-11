@@ -8,6 +8,7 @@ import ShareButton, { WhatsAppShare } from '@/components/ShareButton';
 import PayButton from '@/components/PayButton';
 import PublicListingCTA from '@/components/PublicListingCTA';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import GoogleMapsButtons from '@/components/GoogleMapsButtons';
 import Headline from '@/components/Headline';
 
 export default function CompanyPage(){
@@ -76,5 +77,6 @@ function CompanyView({company,isOwner,onEdit}){
       {company.phone && <span className="info"><Phone/>{company.phone}</span>}
       {company.size && <span className="info"><Building2/>{company.size}</span>}
     </div>
+    <GoogleMapsButtons place={company}/>
   </section>;
 }
