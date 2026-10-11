@@ -4,7 +4,7 @@
 // vouches is easier to trust than one with none. But the same mechanism, on
 // the wrong listing, publishes something nobody agreed to publish.
 //
-// Vouches name the member (see VouchList — it links to their profile) and
+// Vouches name the member (see CommunityTrust — it links to their profile) and
 // community notes are signed. On an abuse hotline, an addiction service, a
 // fertility organization, a therapist or a mikvah, that record says something
 // about the member's own life, to everyone, permanently. Nobody taps "I've
