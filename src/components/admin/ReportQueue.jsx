@@ -143,7 +143,7 @@ function ReportDetail({ report, prov, reporter, others, flagged, user, onBack, o
     </div>
     <div><p className="text-xs font-bold text-brand-muted">EXPLANATION</p><p className="mt-1 whitespace-pre-line text-sm leading-6 text-brand-body">{report.explanation}</p></div>
     <div className="grid gap-4 sm:grid-cols-2">
-      <div><p className="text-xs font-bold text-brand-muted">CONTACT OK</p><p className="mt-1 text-sm text-brand-body">{report.contact_ok ? 'Yes — reporter agreed to be contacted' : 'No'}</p></div>
+      <div><p className="text-xs font-bold text-brand-muted">CONTACT OK</p><p className="mt-1 text-sm text-brand-body">{report.contact_ok ? 'Yes — reporter agreed to be contacted' : 'No'}</p>{report.reporter_phone && <p className="mt-1 flex items-center gap-1 text-sm text-brand-body"><Phone size={13} />{report.reporter_phone}</p>}</div>
       <div><p className="text-xs font-bold text-brand-muted">REPORTER (admin only)</p><p className="mt-1 text-sm text-brand-body">{reporter?.email || '—'}</p></div>
     </div>
     {prov && <div className="rounded-lg bg-brand-tint p-4">
