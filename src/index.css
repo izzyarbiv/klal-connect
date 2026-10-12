@@ -80,7 +80,12 @@
     --brand-success: 145 64% 24%;
   }
 
+  /* Native dropdown lists, date pickers and scrollbars follow this. Without
+     it a menu opened in dark mode came up white, with pale text on it. */
+  :root { color-scheme: light; }
+
   .dark {
+    color-scheme: dark;
     --background: 190 32% 9%;
     --foreground: 156 26% 93%;
     --card: 190 30% 13%;

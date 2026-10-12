@@ -28,11 +28,14 @@ export default function Browse() {
   // The community chosen anywhere else on the site, unless this link names one.
   const [place, setPlace] = useState(params.get('location') || readStoredCommunity());
   const [category, setCategory] = useState(params.get('category') || '');
-  const [sort, setSort] = useState('nearest');
+  const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
+  // "Nearest" needs a location to measure from. Without one every distance is
+  // unknown, so it left the list in no order at all while claiming one.
+  const located = Boolean(lat && lng);
+  const [sort, setSort] = useState(located ? 'nearest' : 'used');
   const [verified, setVerified] = useState(false);
   const [view, setView] = useState('list');
   const [homeCity, setHomeCity] = useState('');
-  const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
 
   useEffect(() => {
     Promise.all([api.entities.Provider.filter({ status: 'published' }), api.entities.Category.list('order')])
@@ -157,7 +160,7 @@ export default function Browse() {
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0}>{c.name} ({countFor(c.name)})</option>)}
       </select>
       <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)}>
-        <option value="nearest">Nearest</option>
+        {located && <option value="nearest">Nearest</option>}
         <option value="used">Most Used</option>
         <option value="saved">Most Saved</option>
         <option value="recent">Recently Added</option>

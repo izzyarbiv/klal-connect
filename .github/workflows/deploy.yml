@@ -29,7 +29,9 @@ on:
 
 concurrency:
   # A newer push supersedes an older one rather than racing it to production.
-  group: deploy-main
+  # Per branch: with one shared group, opening any pull request cancelled the
+  # checks on every other one, so two open changes could never both go green.
+  group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
 env:

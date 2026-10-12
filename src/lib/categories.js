@@ -16,7 +16,9 @@ export const DIRECTORY_CATEGORIES = [
   { name: 'Technology',      icon: 'Laptop',          order: 5,  subcategories: ['IT Support', 'Web Development'] },
   { name: 'Education',       icon: 'GraduationCap',   order: 6,  subcategories: ['Tutoring', 'Test Prep', 'Special Ed'] },
   { name: 'Food & Catering', icon: 'Utensils',        order: 7,  subcategories: ['Catering', 'Bakery', 'Restaurants'] },
-  { name: 'Community',       icon: 'Users',           order: 8,  subcategories: ['Shuls', 'Schools', 'Youth'] },
+  // Not Shuls: they have their own category below, and offering both sent
+  // half the shuls one way and half the other.
+  { name: 'Community',       icon: 'Users',           order: 8,  subcategories: ['Schools', 'Youth'] },
   { name: 'Financial',       icon: 'Landmark',        order: 9,  subcategories: ['Mortgage', 'Insurance', 'Tax'] },
   { name: 'Gemachim',        icon: 'Gift',            order: 10, subcategories: ['Medical Equipment', 'Simcha', 'Baby'] },
   { name: 'Simcha Services', icon: 'ShieldCheck',     order: 11, subcategories: ['Photography', 'Music', 'Flowers'] },
