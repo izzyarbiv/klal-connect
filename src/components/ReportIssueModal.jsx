@@ -23,6 +23,7 @@ export default function ReportIssueModal({ provider }) {
   const [reason, setReason] = useState('');
   const [explanation, setExplanation] = useState('');
   const [contactOk, setContactOk] = useState(false);
+  const [contactPhone, setContactPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(false);
@@ -53,16 +54,16 @@ export default function ReportIssueModal({ provider }) {
     e.preventDefault();
     setErr('');
     if (!reason) { setErr('Please choose a reason.'); return; }
-    if (explanation.trim().length < 30) { setErr('Please add at least 30 characters of explanation.'); return; }
+    if (!explanation.trim()) { setErr('Please add a short explanation.'); return; }
     if (explanation.length > 1000) { setErr('Explanation must be 1000 characters or fewer.'); return; }
     setBusy(true);
-    const r = await api.functions.invoke('createReport', { resource_id: provider.id, reason_category: reason, explanation, contact_ok: contactOk });
+    const r = await api.functions.invoke('createReport', { resource_id: provider.id, reason_category: reason, explanation, contact_ok: contactOk, contact_phone: contactOk ? contactPhone.trim() : '' });
     setBusy(false);
     if (r.status >= 400) { setErr(r.data?.error || 'Could not submit'); return; }
     setDone(true);
   };
 
-  const close = () => { setOpen(false); setDone(false); setReason(''); setExplanation(''); setContactOk(false); setErr(''); };
+  const close = () => { setOpen(false); setDone(false); setReason(''); setExplanation(''); setContactOk(false); setContactPhone(''); setErr(''); };
 
   if (!open) return <button onClick={openOrLogin} className="mt-6 text-xs font-medium text-brand-muted hover:text-brand-ink hover:underline">Report an issue with this listing</button>;
 
@@ -90,13 +91,17 @@ export default function ReportIssueModal({ provider }) {
               </select>
             </label>
             <label>Explanation
-              <textarea className="field min-h-28" value={explanation} onChange={e => setExplanation(e.target.value)} placeholder="Please describe what happened and what you'd like us to look into." required minLength={30} maxLength={1000} />
-              <span className="mt-1 block text-xs text-brand-muted">{explanation.length}/1000 (minimum 30)</span>
+              <textarea className="field min-h-28" value={explanation} onChange={e => setExplanation(e.target.value)} placeholder="A few words is fine, e.g. &quot;Incorrect hours&quot;." required maxLength={1000} />
+              <span className="mt-1 block text-xs text-brand-muted">{explanation.length}/1000</span>
             </label>
             <label className="flex items-start gap-2 text-sm text-brand-body">
               <input type="checkbox" checked={contactOk} onChange={e => setContactOk(e.target.checked)} className="mt-1" />
               <span>You may contact me about this report</span>
             </label>
+            {contactOk && <label className="-mt-2">Phone number <span className="font-normal text-brand-muted">(optional)</span>
+              <input type="tel" className="field" value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Best number to reach you" autoComplete="tel" maxLength={30} />
+              <span className="mt-1 block text-xs text-brand-muted">Only our review team sees this. Leave blank to be reached by email.</span>
+            </label>}
             {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={close} className="secondary">Cancel</button>
