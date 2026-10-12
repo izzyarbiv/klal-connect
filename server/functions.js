@@ -404,13 +404,14 @@ export const functions = {
     return { note };
   },
 
-  async createReport({ resource_id, reason_category, explanation, contact_ok }, user) {
+  async createReport({ resource_id, reason_category, explanation, contact_ok, contact_phone }, user) {
     await assertWritable(user);
     need(resource_id, 'Missing listing.');
     need(reason_category, 'Please choose a reason.');
     const text = String(explanation || '').trim();
-    if (text.length < 30) fail('Please add at least 30 characters of explanation.');
+    if (!text) fail('Please add a short explanation.');
     if (text.length > 1000) fail('Explanation must be 1000 characters or fewer.');
+    const phone = contact_ok ? String(contact_phone || '').trim().slice(0, 30) : '';
 
     const provider = await store.get('Provider', resource_id);
     const report = await store.create(
@@ -423,6 +424,7 @@ export const functions = {
         contact_ok: !!contact_ok,
         status: 'open',
         reporter_email: contact_ok ? user.email : '',
+        reporter_phone: phone,
       },
       user
     );
