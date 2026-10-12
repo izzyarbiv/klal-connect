@@ -184,7 +184,7 @@ const CLIENT_WRITABLE = new Set([
 // this list ActivityEvent was simply not writable and every search, listing
 // view and tap-to-call was silently refused: the directory had no idea what
 // people were looking for.
-const CLIENT_EVENTS = new Set(['search', 'profile_view', 'call', 'text', 'share', 'share_whatsapp', 'whatsapp', 'payment_link_click']);
+const CLIENT_EVENTS = new Set(['search', 'profile_view', 'call', 'text', 'share', 'share_whatsapp', 'whatsapp', 'payment_link_click', 'directions']);
 
 // The only notifications a member's own browser may create. Everything else
 // is written server-side from /api/functions. Without this list, Notification

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import { Link } from 'react-router-dom';
 import { useIsDark } from '@/hooks/useIsDark';
+import DirectionsMenu from '@/components/DirectionsMenu';
 
 // Advanced markers need a map ID. DEMO_MAP_ID is Google's documented stand-in
 // for a project that has not created one; a real one (GOOGLE_MAPS_MAP_ID) also
@@ -71,6 +72,8 @@ export default function GoogleMap({ located, center, config }) {
           >
             <div className="text-sm text-brand-ink">
               {selected.city && <div>{selected.city}</div>}
+              <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-brand-muted">Directions</div>
+              <DirectionsMenu place={selected} trigger="links" className="mb-2" />
               <Link to={`/provider/${selected.id}`} className="font-medium text-brand-teal underline">View profile</Link>
             </div>
           </InfoWindow>
