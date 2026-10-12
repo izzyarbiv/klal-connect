@@ -15,6 +15,7 @@ import { stableId } from './db-shared.js';
 import { DIRECTORY_CATEGORIES } from '../src/lib/categories.js';
 
 const KEY = 'categories_offered';
+const SHULS_MOVED = 'community_shuls_removed';
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 let started = null;
@@ -57,5 +58,20 @@ async function run() {
   if (!marker) await store.create('Setting', { key: KEY, value: list });
   else if (marker.value !== list) await store.update('Setting', marker.id, { value: list });
   if (added.length) console.log(`[categories] added ${added.join(', ')}`);
+  await dropShulsFromCommunity();
   return added;
+}
+
+// Shuls used to be offered twice: as a Community subcategory and as their own
+// "Shuls & Minyanim" category. The list above changed, but a running directory
+// keeps the subcategories it was created with, so this takes "Shuls" out of
+// Community once. Recorded, so an admin who puts it back is not overruled.
+async function dropShulsFromCommunity() {
+  if ((await store.filter('Setting', { key: SHULS_MOVED })).length) return;
+  for (const c of await store.list('Category')) {
+    if (String(c.name || '').trim().toLowerCase() !== 'community' || !Array.isArray(c.subcategories)) continue;
+    const kept = c.subcategories.filter((s) => String(s).trim().toLowerCase() !== 'shuls');
+    if (kept.length !== c.subcategories.length) await store.update('Category', c.id, { subcategories: kept });
+  }
+  await store.create('Setting', { key: SHULS_MOVED, value: '1' });
 }
