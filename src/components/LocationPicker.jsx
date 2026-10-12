@@ -113,7 +113,7 @@ export default function LocationPicker({ user }) {
       {status.isRestricted && <p className="mt-1 font-semibold text-brand-teal">Currently Shabbos / Yom Tov</p>}
     </div>}
     <button onClick={useCurrent} className="secondary"><LocateFixed size={16} />Use my current location</button>
-    <div className="flex gap-2"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a city…" className="field flex-1" /><button onClick={search} className="secondary"><Search size={16} />Search</button></div>
+    <div className="flex gap-2"><input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search(); } }} placeholder="Search a city…" className="field flex-1" /><button onClick={search} className="secondary"><Search size={16} />Search</button></div>
     {results.length > 0 && <div className="max-h-48 overflow-y-auto rounded-xl border border-brand-line">{results.map((r) => <button key={`${r.latitude},${r.longitude}`} onClick={() => pick(r)} className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-brand-tint">{r.label}</button>)}</div>}
     <div className="grid gap-3 sm:grid-cols-2">
       <label>City<input className="field" value={city} onChange={(e) => setCity(e.target.value)} /></label>

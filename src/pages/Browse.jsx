@@ -150,9 +150,9 @@ export default function Browse() {
     </div>
 
     <div className="mb-6 grid gap-2 rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:grid-cols-12">
-      <input className="field md:col-span-3 rounded opacity-100 mx-1 px-3" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Plumber, therapist, gemach…" />
+      <input className="field md:col-span-3" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Plumber, therapist, gemach…" />
       <input className="field md:col-span-2" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="City or ZIP" />
-      <select className="field px-1 py-1 md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
+      <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
         <option value="">All categories ({providers.length})</option>
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0}>{c.name} ({countFor(c.name)})</option>)}
       </select>

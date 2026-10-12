@@ -95,6 +95,9 @@ export default function CityInput({
         onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(-1); }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
+        // Tabbing on to the next field left the list hanging open over it.
+        // Picking with the mouse does not blur (see the option's onMouseDown).
+        onBlur={() => setOpen(false)}
         placeholder={placeholder}
         autoComplete="off"
         autoFocus={autoFocus}
@@ -121,6 +124,9 @@ export default function CityInput({
               <button
                 type="button"
                 onMouseEnter={() => setActive(i)}
+                // Keeps focus in the input, so its onBlur does not close the
+                // list before this click lands (Safari never focuses buttons).
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choose(p)}
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${i === active ? 'bg-brand-tint text-brand-ink' : 'text-brand-body'}`}
               >
@@ -155,6 +161,18 @@ const ELSEWHERE = [
   ['IL-JM', 'Israel'], ['ON', 'Ontario'], ['QC', 'Quebec'], ['UK', 'United Kingdom'],
   ['VIC', 'Victoria (AU)'], ['NSW', 'New South Wales (AU)'], ['ZA', 'South Africa'], ['OTHER', 'Elsewhere'],
 ];
+
+// The State choice for a picked place. Places outside the US mostly carry no
+// region, and keeping whatever was chosen before left "Jerusalem, New Jersey".
+const BY_COUNTRY = { IL: 'IL-JM', GB: 'UK', ZA: 'ZA' };
+export function stateForPlace(p, current = '') {
+  const region = String(p?.region || '').toUpperCase();
+  if (region && [...US_STATES, ...ELSEWHERE].some(([code]) => code === region)) return region;
+  const country = String(p?.country_code || '').toUpperCase();
+  if (BY_COUNTRY[country]) return BY_COUNTRY[country];
+  if (country && country !== 'US') return 'OTHER';
+  return current;
+}
 
 // A select rather than a free-text box: "NY", "N.Y.", "New York" and "new
 // york" were four different states as far as any search was concerned.
