@@ -19,6 +19,7 @@ export default function CityInput({
   className = 'field',
   id,
   autoFocus,
+  onBlur,
   ...rest
 }) {
   const [open, setOpen] = useState(false);
@@ -97,7 +98,9 @@ export default function CityInput({
         onKeyDown={onKeyDown}
         // Tabbing on to the next field left the list hanging open over it.
         // Picking with the mouse does not blur (see the option's onMouseDown).
-        onBlur={() => setOpen(false)}
+        // A caller's own onBlur (onboarding saves the city) runs as well,
+        // rather than replacing this one and leaving the list open.
+        onBlur={(e) => { setOpen(false); onBlur?.(e); }}
         placeholder={placeholder}
         autoComplete="off"
         autoFocus={autoFocus}
@@ -131,7 +134,7 @@ export default function CityInput({
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${i === active ? 'bg-brand-tint text-brand-ink' : 'text-brand-body'}`}
               >
                 <MapPin size={14} className="shrink-0 text-brand-teal" />
-                <span className="min-w-0 flex-1 truncate">{p.label || p.city}</span>
+                <span className="min-w-0 flex-1 truncate">{placeText(p)}</span>
               </button>
             </li>
           ))}
@@ -139,6 +142,17 @@ export default function CityInput({
       )}
     </div>
   );
+}
+
+// "Jerusalem, IL" reads as Illinois to anyone in America, so a place outside
+// the US is shown with its country spelled out: "Jerusalem, Israel".
+const countryNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; } })();
+function placeText(p) {
+  const cc = String(p.country_code || '').toUpperCase();
+  if (!p.city || !cc || cc === 'US') return p.label || p.city;
+  let country = cc;
+  try { country = countryNames?.of(cc) || cc; } catch { /* unknown code */ }
+  return [p.city, p.region, country].filter(Boolean).join(', ');
 }
 
 // US states and the other places Klal has members, so a listing's region is
@@ -174,12 +188,17 @@ export function stateForPlace(p, current = '') {
   return current;
 }
 
+const KNOWN = new Set([...US_STATES, ...ELSEWHERE].map(([code]) => code));
+
 // A select rather than a free-text box: "NY", "N.Y.", "New York" and "new
 // york" were four different states as far as any search was concerned.
 export function StateSelect({ value, onChange, className = 'field', id, ...rest }) {
   return (
     <select id={id} className={className} value={value || ''} onChange={(e) => onChange(e.target.value)} {...rest}>
       <option value="">Choose…</option>
+      {/* A state saved before this was a list ("New York", "Fla.") would
+          otherwise show as "Choose…" while still being saved. */}
+      {value && !KNOWN.has(value) && <option value={value}>{value}</option>}
       <optgroup label="United States">
         {US_STATES.map(([code, name]) => <option key={code} value={code}>{name} ({code})</option>)}
       </optgroup>
