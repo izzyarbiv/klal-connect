@@ -9,6 +9,7 @@ import ReportIssueModal from '@/components/ReportIssueModal';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import Headline from '@/components/Headline';
 import CommunityTrust from '@/components/CommunityTrust';
+import OpenInMaps, { hasDirections } from '@/components/OpenInMaps';
 import BadgeChips from '@/components/BadgeChips';
 import AdminBadgePanel from '@/components/AdminBadgePanel';
 import { isSensitiveListing } from '@/lib/sensitivity';
@@ -70,7 +71,7 @@ export default function ProviderDetail(){
     <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
         <section className="panel"><div className="flex gap-4"><div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-brand-tint text-xl font-bold text-brand-teal">{provider.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><div><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">{provider.name}</h1>{provider.verified&&<CheckCircle2 className="text-brand-gold-ink"/>}</div><Headline text={provider.tagline} variant="header"/><p className="mt-1 font-semibold text-brand-teal">{provider.category} · {provider.subcategory}</p><p className="mt-3 text-brand-body">{provider.short_description}</p><div className="mt-3"><BadgeChips provider={provider}/></div></div></div>{provider.demo&&<p className="mt-4 rounded-xl bg-brand-gold-bg p-3 text-xs font-semibold text-brand-gold-ink">Demonstration content — this is a fictional listing for development.</p>}</section>
-        <section className="panel"><h2 className="section-title">About</h2><p className="mt-3 whitespace-pre-line leading-7 text-brand-body">{provider.description}</p><div className="mt-5 grid gap-3 text-sm sm:grid-cols-2"><p className="info"><MapPin/> {provider.address||provider.city+', '+provider.state}</p><p className="info"><Clock/> {provider.hours||'Contact for hours'}</p><p className="info"><Languages/> {(provider.languages||['English']).join(', ')}</p><p className="info"><MapPin/> Serves {(provider.service_areas||[provider.city]).join(', ')}</p></div></section>
+        <section className="panel"><h2 className="section-title">About</h2><p className="mt-3 whitespace-pre-line leading-7 text-brand-body">{provider.description}</p><div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">{hasDirections(provider)?<OpenInMaps provider={provider}/>:<p className="info"><MapPin/> {provider.city+', '+provider.state}</p>}<p className="info"><Clock/> {provider.hours||'Contact for hours'}</p><p className="info"><Languages/> {(provider.languages||['English']).join(', ')}</p><p className="info"><MapPin/> Serves {(provider.service_areas||[provider.city]).join(', ')}</p></div></section>
         {/* A community note is signed. On a sensitive listing that identifies
             its author as someone who needed the service, so neither the notes
             nor the form to add one appears — while Suggest a Correction still
