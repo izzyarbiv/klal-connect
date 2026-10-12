@@ -11,7 +11,9 @@ import { directionsLinks, addressLine, preferredFirst, mapsPreference, rememberM
 // trigger="links": a plain row of the three app names, for map popups, where
 // a menu would be clipped by the popup's own box.
 //
-// align="right" opens the menu leftward, for a trigger at the right edge.
+// align="right" opens the menu leftward, for a trigger at the right edge. Not
+// on a phone: there the trigger wraps to the left edge and a leftward menu
+// would open off the screen.
 //
 // onOpen is told which app was chosen, for the directions activity event.
 export default function DirectionsMenu({ place, trigger = 'button', align = 'left', onOpen, className = '' }) {
@@ -55,7 +57,7 @@ export default function DirectionsMenu({ place, trigger = 'button', align = 'lef
       : <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-navy-hover">
           <Navigation size={16}/>Get directions<ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`}/>
         </button>}
-    {open && <div role="menu" className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full z-20 mt-2 w-60 overflow-hidden rounded-xl bg-brand-surface py-1 text-sm shadow-lg ring-1 ring-brand-line`}>
+    {open && <div role="menu" className={`absolute ${align === 'right' ? 'left-0 sm:left-auto sm:right-0' : 'left-0'} top-full z-20 mt-2 w-60 overflow-hidden rounded-xl bg-brand-surface py-1 text-sm shadow-lg ring-1 ring-brand-line`}>
       <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-brand-muted">Directions in</p>
       {links.map((l, i) => <a key={l.id} role="menuitem" href={l.href} target="_blank" rel="noreferrer" onClick={() => pick(l.id)} className="flex items-center justify-between px-4 py-2.5 font-semibold text-brand-ink hover:bg-brand-tint">
         {l.label}{i === 0 && pref === l.id && <span className="text-xs font-medium text-brand-muted">Last used</span>}
