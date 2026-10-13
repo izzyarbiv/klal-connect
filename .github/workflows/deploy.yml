@@ -181,17 +181,16 @@ jobs:
           npx --yes vercel@latest build --prod --token="$TOKEN"
           npx --yes vercel@latest deploy --prebuilt --prod --no-wait --token="$TOKEN" 2>&1 | tee /tmp/vercel-deploy.log
 
-          INSPECT_URL="$(sed -nE 's/^[[:space:]]*Inspect[[:space:]]+(https:\/\/vercel\.com\/[^[:space:]]+).*/\1/p' /tmp/vercel-deploy.log | tail -n 1)"
-          if [ -z "$INSPECT_URL" ]; then
-            echo "::error title=Deployment URL missing::Vercel did not return an Inspect URL; see the deployment output above."
+          DEPLOYMENT_HOST="$(grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' /tmp/vercel-deploy.log | tail -n 1 | sed 's#^https://##')"
+          if [ -z "$DEPLOYMENT_HOST" ]; then
+            echo "::error title=Deployment URL missing::Vercel did not return a deployment URL; see the deployment output above."
             exit 1
           fi
 
-          export INSPECT_URL
+          export DEPLOYMENT_HOST
           node --input-type=module <<'NODE'
-          const inspectUrl = new URL(process.env.INSPECT_URL);
-          const deploymentId = inspectUrl.pathname.split('/').filter(Boolean).at(-1);
-          const apiUrl = new URL(`/v13/deployments/${encodeURIComponent(deploymentId)}`, 'https://api.vercel.com');
+          const deploymentHost = process.env.DEPLOYMENT_HOST;
+          const apiUrl = new URL(`/v13/deployments/${encodeURIComponent(deploymentHost)}`, 'https://api.vercel.com');
           apiUrl.searchParams.set('teamId', process.env.VERCEL_ORG_ID);
 
           const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -212,7 +211,7 @@ jobs:
               lastState = state;
             }
             if (state === 'READY') {
-              console.log(`Vercel deployment is ready: ${body.url || inspectUrl.href}`);
+              console.log(`Vercel deployment is ready: https://${deploymentHost}`);
               process.exit(0);
             }
             if (state === 'ERROR' || state === 'CANCELED') {
@@ -222,7 +221,7 @@ jobs:
             await delay(15_000);
           }
 
-          console.error(`Vercel deployment did not become ready within 15 minutes; last state: ${lastState || 'unknown'}. Inspect: ${inspectUrl.href}`);
+          console.error(`Vercel deployment did not become ready within 15 minutes; last state: ${lastState || 'unknown'}. Inspect https://${deploymentHost} in Vercel.`);
           process.exit(1);
           NODE
 
