@@ -141,6 +141,7 @@ jobs:
     #   npm run add-publisher -- <github-username>
     if: github.event_name != 'pull_request' && contains(fromJSON('["izzyarbiv", "eliepstein0817"]'), github.actor)
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
         with:
@@ -178,7 +179,52 @@ jobs:
           TOKEN="$(printf '%s' "$VERCEL_TOKEN" | tr -d '[:space:]')"
           npx --yes vercel@latest pull --yes --environment=production --token="$TOKEN"
           npx --yes vercel@latest build --prod --token="$TOKEN"
-          npx --yes vercel@latest deploy --prebuilt --prod --token="$TOKEN"
+          npx --yes vercel@latest deploy --prebuilt --prod --no-wait --token="$TOKEN" 2>&1 | tee /tmp/vercel-deploy.log
+
+          INSPECT_URL="$(sed -nE 's/^[[:space:]]*Inspect[[:space:]]+(https:\/\/vercel\.com\/[^[:space:]]+).*/\1/p' /tmp/vercel-deploy.log | tail -n 1)"
+          if [ -z "$INSPECT_URL" ]; then
+            echo "::error title=Deployment URL missing::Vercel did not return an Inspect URL; see the deployment output above."
+            exit 1
+          fi
+
+          export INSPECT_URL
+          node --input-type=module <<'NODE'
+          const inspectUrl = new URL(process.env.INSPECT_URL);
+          const deploymentId = inspectUrl.pathname.split('/').filter(Boolean).at(-1);
+          const apiUrl = new URL(`/v13/deployments/${encodeURIComponent(deploymentId)}`, 'https://api.vercel.com');
+          apiUrl.searchParams.set('teamId', process.env.VERCEL_ORG_ID);
+
+          const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          let lastState = '';
+          for (let attempt = 0; attempt < 60; attempt += 1) {
+            const response = await fetch(apiUrl, {
+              headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+            });
+            const body = await response.json();
+            if (!response.ok) {
+              console.error(`Could not inspect Vercel deployment (HTTP ${response.status}): ${body.error?.message || 'unknown API error'}`);
+              process.exit(1);
+            }
+
+            const state = body.readyState || body.state || 'UNKNOWN';
+            if (state !== lastState) {
+              console.log(`Vercel deployment state: ${state}`);
+              lastState = state;
+            }
+            if (state === 'READY') {
+              console.log(`Vercel deployment is ready: ${body.url || inspectUrl.href}`);
+              process.exit(0);
+            }
+            if (state === 'ERROR' || state === 'CANCELED') {
+              console.error(`Vercel deployment ${state.toLowerCase()}: ${body.errorCode || 'unknown error'} ${body.errorMessage || ''}`.trim());
+              process.exit(1);
+            }
+            await delay(15_000);
+          }
+
+          console.error(`Vercel deployment did not become ready within 15 minutes; last state: ${lastState || 'unknown'}. Inspect: ${inspectUrl.href}`);
+          process.exit(1);
+          NODE
 
       - name: Confirm what landed
         if: steps.token.outputs.present == 'true'
@@ -187,17 +233,25 @@ jobs:
           # means it could not tell — most often Vercel's bot challenge
           # answering a datacenter IP — and calling that a failed deploy would
           # be a lie, so it is a warning.
-          set +e
-          npm run deploy:status
-          code=$?
-          set -e
-          if [ "$code" = "1" ]; then
-            echo "::error title=Production is behind::The deploy reported success but production is not running this commit."
-            exit 1
-          fi
-          if [ "$code" != "0" ]; then
-            echo "::warning title=Could not confirm::The deploy reported success but the live commit could not be read. See the output above."
-          fi
+          for attempt in $(seq 1 12); do
+            set +e
+            npm run deploy:status
+            code=$?
+            set -e
+            if [ "$code" = "0" ]; then
+              exit 0
+            fi
+            if [ "$code" = "2" ]; then
+              echo "::warning title=Could not confirm::Vercel's production endpoint could not be checked. See the output above."
+              exit 0
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              echo "Production alias has not updated yet; checking again in 10 seconds ($attempt/12)."
+              sleep 10
+            fi
+          done
+          echo "::error title=Production is behind::The deployment is ready, but production is not running this commit."
+          exit 1
 
   explain-no-deploy:
     needs: [verify, browser]
