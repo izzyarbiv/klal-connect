@@ -72,7 +72,10 @@ await go(`${BASE}/`);
 
 // --- the page rendered at all -------------------------------------------
 const h1 = await ev(`document.querySelector('h1')?.textContent?.trim() || ''`);
-ok(h1 === 'Your community. Wherever you are.', 'headline is the new one', JSON.stringify(h1));
+// Pinned to the shape, not the words: the headline should name what people
+// come here to find, and it has changed once already without this check
+// needing to know the exact sentence.
+ok(/plumber|gemach|shul/i.test(h1) && h1.length > 20, 'headline says what the site is for', JSON.stringify(h1));
 ok(!(await ev(`!!document.querySelector('#root')?.children?.length === false`)), 'root is not empty');
 
 // --- search is above the fold -------------------------------------------

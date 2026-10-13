@@ -37,7 +37,8 @@
     "ship": "node scripts/preflight-ship.mjs && npm run lint && npm test && npm run build && vercel --prod --yes && npm run deploy:status",
     "test:categories": "node scripts/categories-check.mjs",
     "prod:admin": "node scripts/prod-admin.mjs",
-    "add-publisher": "node scripts/add-publisher.mjs"
+    "add-publisher": "node scripts/add-publisher.mjs",
+    "set-deploy-token": "node scripts/set-deploy-token.mjs --deploy"
   },
   "dependencies": {
     "@hebcal/core": "^6.9.2",

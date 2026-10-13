@@ -167,7 +167,10 @@
      a span carrying class="eyebrow dark" matched it and re-declared the dark
      palette on itself. Every section label in the app was rendering dark-mode
      teal on a near-white page — 2.42:1, well under AA — in light mode. */
-  .eyebrow { @apply text-[11px] font-bold tracking-[0.18em] text-brand-teal; }
+  /* Muted and only lightly spaced. Twenty-five of these in bright teal with
+     wide tracking on every section read as a template stamping itself; a
+     section label is supposed to be quieter than the heading under it. */
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-muted; }
   .title { @apply mt-2 font-heading text-2xl font-bold tracking-tight text-brand-ink; }
   .section-title { @apply font-heading text-xl font-bold text-brand-ink; }
   .section-head { @apply mb-5 flex items-end justify-between gap-4; }

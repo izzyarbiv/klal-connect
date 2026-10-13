@@ -78,12 +78,20 @@ async function visit(provider) {
     // one of the things this script asserts, so it cannot mask a real failure.
     ready = await ev(`(() => {
       const t = document.body.innerText || '';
-      return t.includes('Back to browse') && t.includes(${needle});
+      // And the action sidebar itself: "Back to browse" is drawn by the page
+      // shell a beat before ProviderActions has rendered its buttons. Share is
+      // on every listing, sensitive or not. includes(), not a regex: this runs
+      // inside a template string, where \\b is a backspace, not a word boundary.
+      return t.includes('Back to browse') && t.includes(${needle}) && t.includes('Share');
     })()`);
     if (ready) break;
     await sleep(400);
   }
   if (!ready) console.log(`  info  ${provider.name} never rendered; treating the checks below as unreliable`);
+  // One more paint after the markers appear: reading the text in the very
+  // tick the readiness poll succeeded gave, about one run in four, a shorter
+  // page and a false failure.
+  if (ready) await sleep(600);
   return { body: await ev('document.body.innerText'), ready };
 }
 
