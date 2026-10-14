@@ -100,7 +100,10 @@ function tzFor(latitude, longitude) {
 
 const firstOf = (...values) => values.find((v) => v !== undefined && v !== null && v !== '') || '';
 
-function place(latitude, longitude, { city, country_code, label } = {}) {
+// `precise` marks a result that is the address itself (a building or a
+// business), not the town it is in. Only those are worth pinning a listing
+// to; everything else lands on the middle of a city.
+function place(latitude, longitude, { city, country_code, label, precise } = {}) {
   const lat = Number(latitude);
   const lon = Number(longitude);
   return {
@@ -110,6 +113,7 @@ function place(latitude, longitude, { city, country_code, label } = {}) {
     country_code: (country_code || '').toUpperCase(),
     timezone: tzFor(lat, lon),
     label: label || city || '',
+    precise: Boolean(precise),
   };
 }
 
@@ -122,6 +126,8 @@ function googleStatus(d) {
   console.warn('[geocode] Google rejected response', { status, detail: d?.error_message || '' });
   throw new GeoError(LOCATION_UNAVAILABLE, 503);
 }
+
+const GOOGLE_PRECISE = new Set(['street_address', 'premise', 'subpremise', 'establishment', 'point_of_interest']);
 
 function googleComponents(result) {
   const pick = (type) => (result.address_components || []).find((c) => c.types.includes(type));
@@ -159,6 +165,7 @@ const providers = {
           city: firstOf(a.city, a.town, a.village, a.hamlet, a.county, (r.display_name || '').split(',')[0]),
           country_code: a.country_code,
           label: r.display_name,
+          precise: Boolean(a.house_number) || Number(r.place_rank) >= 28,
         });
       });
     },
@@ -177,14 +184,17 @@ const providers = {
       });
     },
     async search(q, limit) {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?types=place,locality,postcode&limit=${limit}&access_token=${API_KEY}`;
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?types=address,poi,place,locality,postcode&limit=${limit}&access_token=${API_KEY}`;
       const d = await getJSON(url);
       return (d.features || []).map((f) => {
         const country = (f.context || []).find((c) => String(c.id).startsWith('country'));
         return place(f.center[1], f.center[0], {
-          city: f.text,
+          // An address's own text is the street, so the city comes from the
+          // context instead.
+          city: (f.context || []).find((c) => String(c.id).startsWith('place'))?.text || f.text,
           country_code: country?.short_code,
           label: f.place_name,
+          precise: (f.place_type || []).some((t) => t === 'address' || t === 'poi'),
         });
       });
     },
@@ -201,7 +211,12 @@ const providers = {
       const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(q)}&limit=${limit}&format=json&apiKey=${API_KEY}`;
       const d = await getJSON(url);
       return (d.results || []).map((r) =>
-        place(r.lat, r.lon, { city: firstOf(r.city, r.county), country_code: r.country_code, label: r.formatted })
+        place(r.lat, r.lon, {
+          city: firstOf(r.city, r.county),
+          country_code: r.country_code,
+          label: r.formatted,
+          precise: Boolean(r.housenumber) || ['building', 'amenity'].includes(r.result_type),
+        })
       );
     },
   },
@@ -230,6 +245,10 @@ const providers = {
           city: c.city || (r.formatted_address || '').split(',')[0],
           country_code: c.country_code,
           label: r.formatted_address,
+          // ROOFTOP is the building; RANGE_INTERPOLATED is a spot on the right
+          // block. GEOMETRIC_CENTER and APPROXIMATE are a street or an area.
+          precise: ['ROOFTOP', 'RANGE_INTERPOLATED'].includes(r.geometry?.location_type)
+            || (r.types || []).some((t) => GOOGLE_PRECISE.has(t)),
         });
       });
     },
@@ -255,6 +274,7 @@ const providers = {
           city: firstOf(a.city, a.town, a.village, a.county, (r.display_name || '').split(',')[0]),
           country_code: a.country_code,
           label: r.display_name,
+          precise: Boolean(a.house_number),
         });
       });
     },
@@ -287,7 +307,12 @@ const fromPlace = (p) => ({
   timezone: tzFor(p.latitude, p.longitude),
   label: placeLabel(p),
   source: 'klal',
+  precise: false,
 });
+
+// "1880 Ocean Ave, Brooklyn" — a house number then a word. Such a query must
+// reach the provider even when the curated list already named the town.
+const looksLikeAddress = (q) => /^\s*\d+[a-z]?(-\d+)?\s+[a-z]/i.test(q);
 
 // ---- public API -------------------------------------------------------------
 
@@ -351,18 +376,21 @@ export async function searchPlaces(query, limit = 8) {
   // listed — and if there is no usable provider, the known places are still
   // an answer rather than a 503.
   const local = findPlaces(q, capped).map(fromPlace);
-  if (local.length >= capped || !providerUsable()) {
+  if ((local.length >= capped && !looksLikeAddress(q)) || !providerUsable()) {
     if (local.length) return local;
     throw new GeoError(LOCATION_UNAVAILABLE, 503);
   }
 
-  const key = `search:${PROVIDER}:${capped}:${q.toLowerCase()}`;
+  // v2: results now carry `precise`; older cached rows do not.
+  const key = `search2:${PROVIDER}:${capped}:${q.toLowerCase()}`;
   const hit = await geoCache.get(key);
-  if (hit) return dedupePlaces([...local, ...hit], capped);
+  if (hit) return mergePlaces(local, hit, capped);
 
   let results;
   try {
-    results = await call(() => activeProvider().search(q, capped - local.length));
+    // An address search asks for the full list: the curated towns must not
+    // crowd out the one result that is the building itself.
+    results = await call(() => activeProvider().search(q, looksLikeAddress(q) ? capped : capped - local.length));
   } catch (err) {
     // The curated communities were already an answer, fetched above. A provider
     // that errors must not take them down with it — that is how a search for
@@ -373,15 +401,28 @@ export async function searchPlaces(query, limit = 8) {
     throw err;
   }
   await geoCache.set(key, results, SEARCH_TTL);
-  return dedupePlaces([...local, ...results], capped);
+  return mergePlaces(local, results, capped);
+}
+
+// Exact addresses first, then the curated towns, then the provider's other
+// answers. Exact addresses go first because a search for "1880 Ocean Ave,
+// Brooklyn" also names Brooklyn, and the town used to win and hide the
+// building: the pin landed in the middle of Brooklyn.
+function mergePlaces(local, results, limit) {
+  const precise = results.filter((r) => r.precise);
+  const rough = results.filter((r) => !r.precise);
+  return dedupePlaces([...precise, ...local, ...rough], limit);
 }
 
 // A provider will often return the same city the curated list already gave.
-// Coordinates within ~10km of one already listed are the same place.
+// Coordinates within ~10km of one already listed are the same town. That rule
+// is only for towns: two buildings a block apart are different places, and a
+// building is never a duplicate of the town it is in.
 function dedupePlaces(rows, limit) {
   const out = [];
   for (const r of rows) {
-    if (out.some((k) => distanceKm(k.latitude, k.longitude, r.latitude, r.longitude) < 10)) continue;
+    const same = (k) => distanceKm(k.latitude, k.longitude, r.latitude, r.longitude) < (r.precise && k.precise ? 0.02 : 10);
+    if (out.some((k) => (r.precise ? k.precise : !k.precise) && same(k))) continue;
     out.push(r);
     if (out.length >= limit) break;
   }
