@@ -38,7 +38,10 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
       <MapPin className="text-brand-teal" />
       <input value={location} onChange={(e) => { typed.current = true; setLocation(e.target.value); }} className="w-full bg-transparent outline-none" placeholder="City, neighborhood, or ZIP" aria-label="Where" />
     </label>
-    <button type="submit" className="w-full rounded-lg bg-brand-gold px-6 py-3 font-bold text-brand-navy hover:opacity-90 md:w-auto">Search</button>
-    <button type="button" onClick={nearMe} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-tint px-4 py-3 font-semibold text-brand-teal md:mt-0 md:w-auto"><LocateFixed size={18} />{locating ? 'Locating…' : 'Near Me'}</button>
+    {/* Navy and white, the site's own primary button, instead of the gold
+        block: it reads cleaner in both themes and matches every other main
+        action. Near Me is its quiet outlined partner at the same height. */}
+    <button type="submit" className="primary w-full px-6 py-3 text-base md:w-auto"><Search size={18} />Search</button>
+    <button type="button" onClick={nearMe} className="secondary mt-2 w-full px-5 py-3 text-base md:mt-0 md:w-auto"><LocateFixed size={18} className="text-brand-teal" />{locating ? 'Locating…' : 'Near Me'}</button>
   </form>;
 }
