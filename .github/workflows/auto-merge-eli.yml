@@ -1,0 +1,53 @@
+name: Auto-merge Eli PRs
+
+on:
+  workflow_run:
+    workflows: ["Verify and deploy"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  auto-merge-eli:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge Eli's checked pull request and dispatch deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "The successful pull request run has no associated open pull request; nothing to merge."
+            exit 0
+          fi
+
+          PR="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          AUTHOR="$(jq -r '.user.login' <<< "$PR")"
+          BASE_BRANCH="$(jq -r '.base.ref' <<< "$PR")"
+          PR_STATE="$(jq -r '.state' <<< "$PR")"
+          HEAD_SHA="$(jq -r '.head.sha' <<< "$PR")"
+          IS_DRAFT="$(jq -r '.draft' <<< "$PR")"
+          if [ "$AUTHOR" != "eliepstein0817" ] || [ "$BASE_BRANCH" != "main" ] || [ "$PR_STATE" != "open" ] || [ "$IS_DRAFT" != "false" ] || [ "$HEAD_SHA" != "$CHECKED_SHA" ]; then
+            echo "Not merging: the PR author, target, state, draft status, or checked commit no longer matches."
+            exit 0
+          fi
+
+          MERGE="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f sha="$CHECKED_SHA" \
+            -f merge_method=squash)"
+          if [ "$(jq -r '.merged' <<< "$MERGE")" != "true" ]; then
+            echo "::error title=Pull request not merged::GitHub did not confirm the merge."
+            exit 1
+          fi
+          MERGED_SHA="$(jq -r '.sha' <<< "$MERGE")"
+          echo "Merged Eli's checked PR #$PR_NUMBER as $MERGED_SHA."
+
+          gh workflow run deploy.yml --ref main \
+            -f source_sha="$MERGED_SHA"
