@@ -90,7 +90,7 @@ export default function ProviderDetail(){
             definition, usually a more generous one than we earn. */}
         <div className="mt-4 space-y-2 border-t pt-4">
           <TrustMarks provider={provider}/>
-          <p className="text-xs leading-5 text-brand-muted">{provider.verified ? VERIFIED_MEANING : 'Not yet verified.'}</p>
+          <p className="text-xs leading-5 text-brand-muted">{provider.verified ? VERIFIED_MEANING : 'Not yet verified by Klal Connect. As with any listing, please do your own research.'}</p>
         </div></section>
         <ReportForm provider={provider}/>
         {/* Whoever may edit it gets the link to do so: the person who added it,
