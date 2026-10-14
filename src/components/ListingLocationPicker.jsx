@@ -13,6 +13,9 @@ export default function ListingLocationPicker({ value, onChange }) {
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // An address was searched but nothing came back for the building itself,
+  // only towns. Picking one of those pins the middle of town, so say so.
+  const [onlyTowns, setOnlyTowns] = useState(false);
   const pinned = value?.latitude != null && value?.longitude != null;
 
   const apply = (loc) => {
@@ -23,14 +26,19 @@ export default function ListingLocationPicker({ value, onChange }) {
       ...(loc.country_code ? { country_code: loc.country_code } : {}),
     });
     setResults([]);
+    setOnlyTowns(false);
     setQ('');
   };
 
   const search = async (e) => {
     e?.preventDefault();
     if (!q.trim()) return;
-    setBusy(true); setErr('');
-    try { setResults(await api.geo.search(q, 8)); }
+    setBusy(true); setErr(''); setOnlyTowns(false);
+    try {
+      const found = await api.geo.search(q, 8);
+      setResults(found);
+      setOnlyTowns(/^\s*\d+[a-z]?(-\d+)?\s+[a-z]/i.test(q) && found.length > 0 && !found.some((r) => r.precise));
+    }
     catch (ex) { setErr(ex.message || 'Location search is not available right now. You can still submit without a pin.'); }
     setBusy(false);
   };
@@ -60,6 +68,7 @@ export default function ListingLocationPicker({ value, onChange }) {
     {results.length > 0 && <div className="max-h-48 overflow-y-auto rounded-xl border border-brand-line">
       {results.map((r) => <button type="button" key={`${r.latitude},${r.longitude}`} onClick={() => apply(r)} className="block w-full border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-brand-tint">{r.label}</button>)}
     </div>}
+    {results.length > 0 && onlyTowns && <p className="helper">We could not find that exact address, so these pins go to the middle of town. Check the street name and number, or add the ZIP code.</p>}
     {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
     {pinned
       ? <p className="flex items-center gap-2 text-sm text-brand-body"><MapPin size={16} className="text-brand-teal" />Pinned at {Number(value.latitude).toFixed(4)}, {Number(value.longitude).toFixed(4)}<button type="button" onClick={() => onChange({ latitude: null, longitude: null })} className="icon-button" aria-label="Remove pin"><X size={14} /></button></p>

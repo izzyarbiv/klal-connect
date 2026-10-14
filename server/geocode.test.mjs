@@ -82,6 +82,32 @@ for (const name of Object.keys(FIXTURES)) {
   check('search label', typeof first.label === 'string' && first.label.length > 0, first.label);
 }
 
+// A street address in a town the curated list knows. The list names the town
+// (Brooklyn) and Google finds the building; the building must come first and
+// must survive, or the pin lands in the middle of Brooklyn.
+console.log('\naddress in a known town (google):');
+process.env.KC_GEOCODER = 'google';
+process.env.KC_GEOCODER_KEY = 'test-key';
+process.env.KC_GEOCODER_MIN_GAP_MS = '0';
+let asked = '';
+globalThis.fetch = async (url) => {
+  asked = String(url);
+  return { ok: true, status: 200, json: async () => ({ status: 'OK', results: [{
+    formatted_address: '1880 Ocean Ave, Brooklyn, NY 11230, USA',
+    types: ['street_address'],
+    geometry: { location: { lat: 40.6189, lng: -73.9580 }, location_type: 'ROOFTOP' },
+    address_components: [
+      { long_name: 'Brooklyn', short_name: 'Brooklyn', types: ['sublocality_level_1', 'sublocality', 'political'] },
+      { long_name: 'New York', short_name: 'New York', types: ['locality', 'political'] },
+      { long_name: 'United States', short_name: 'US', types: ['country', 'political'] },
+    ] }] }) };
+};
+const addr = await import(`${GEO_URL}?v=address`);
+const pins = await addr.searchPlaces('1880 Ocean Ave, Brooklyn NY 11230', 8);
+check('full address sent to google', asked.includes(encodeURIComponent('1880 Ocean Ave, Brooklyn NY 11230')), asked.split('?')[1]?.split('&')[0]);
+check('the building is first', pins[0]?.precise && Math.abs(pins[0].latitude - 40.6189) < 0.0001, pins[0] && `${pins[0].label} ${pins[0].latitude},${pins[0].longitude}`);
+check('the town is still offered', pins.some((p) => !p.precise && p.city === 'Brooklyn'), pins.map((p) => p.label));
+
 // The curated list answers a known community first, with no provider call at
 // all — that is what keeps city lookup, zmanim and map pins working with no
 // key configured.
