@@ -177,9 +177,13 @@ jobs:
           # contain: ' '"). That failed the first real deploy after every check
           # had passed.
           TOKEN="$(printf '%s' "$VERCEL_TOKEN" | tr -d '[:space:]')"
-          npx --yes vercel@latest pull --yes --environment=production --token="$TOKEN"
-          npx --yes vercel@latest build --prod --token="$TOKEN"
-          npx --yes vercel@latest deploy --prebuilt --prod --no-wait --token="$TOKEN" 2>&1 | tee /tmp/vercel-deploy.log
+          # Pinned, not @latest. Deploys worked on 63.1.2 and broke the hour Vercel
+          # shipped 64.0.2 with "Your deployment failed. Please retry later" after a
+          # clean upload. No commit in between touched anything a deploy reads.
+          # @latest meant every push gambled on whatever Vercel released that day.
+          npx --yes vercel@63.1.2 pull --yes --environment=production --token="$TOKEN"
+          npx --yes vercel@63.1.2 build --prod --token="$TOKEN"
+          npx --yes vercel@63.1.2 deploy --prebuilt --prod --no-wait --token="$TOKEN" 2>&1 | tee /tmp/vercel-deploy.log
 
           DEPLOYMENT_HOST="$(grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' /tmp/vercel-deploy.log | tail -n 1 | sed 's#^https://##')"
           if [ -z "$DEPLOYMENT_HOST" ]; then
