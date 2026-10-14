@@ -5,7 +5,9 @@
 # passed and the site looked fine. This is the fix for the cause rather than
 # the symptom.
 #
-# Inert until one secret exists. Add VERCEL_TOKEN under
+# Eli's pull requests are merged by auto-merge-eli.yml after both verification
+# jobs pass, then workflow_dispatch ships the exact merge commit. Pushes to
+# main also deploy directly. Inert until one secret exists. Add VERCEL_TOKEN under
 # Settings -> Secrets and variables -> Actions, and every push to main ships
 # after the checks pass. Without it the checks still run and the deploy step
 # says what is missing instead of failing.
@@ -26,6 +28,11 @@ on:
     branches: [main]
   # So a deploy can be triggered from the Actions tab without an empty commit.
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Expected main commit to deploy
+        required: false
+        type: string
 
 concurrency:
   # A newer push supersedes an older one rather than racing it to production.
@@ -139,7 +146,7 @@ jobs:
     # push still runs every check, and says why it stopped there.
     # Publishers are listed here and in explain-no-deploy below. To add one run:
     #   npm run add-publisher -- <github-username>
-    if: github.event_name != 'pull_request' && contains(fromJSON('["izzyarbiv", "eliepstein0817"]'), github.actor)
+    if: github.event_name != 'pull_request' && (contains(fromJSON('["izzyarbiv", "eliepstein0817"]'), github.actor) || (github.actor == 'github-actions[bot]' && inputs.source_sha != ''))
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -150,6 +157,15 @@ jobs:
           # for that, but the full history lets deploy:status name the
           # commits a deployment is behind.
           fetch-depth: 0
+      - name: Confirm the requested merge commit is on main
+        if: inputs.source_sha != ''
+        env:
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED_SHA" ]; then
+            echo "::error title=Main advanced::The merged commit is no longer the tip of main; refusing to deploy a different revision."
+            exit 1
+          fi
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -183,12 +199,18 @@ jobs:
           # @latest meant every push gambled on whatever Vercel released that day.
           npx --yes vercel@63.1.2 pull --yes --environment=production --token="$TOKEN"
           npx --yes vercel@63.1.2 build --prod --token="$TOKEN"
+          set +e
           npx --yes vercel@63.1.2 deploy --prebuilt --prod --no-wait --token="$TOKEN" 2>&1 | tee /tmp/vercel-deploy.log
+          VERCEL_CLI_EXIT=$?
+          set -e
 
           DEPLOYMENT_HOST="$(grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' /tmp/vercel-deploy.log | tail -n 1 | sed 's#^https://##')"
           if [ -z "$DEPLOYMENT_HOST" ]; then
-            echo "::error title=Deployment URL missing::Vercel did not return a deployment URL; see the deployment output above."
+            echo "::error title=Deployment URL missing::Vercel exited with status $VERCEL_CLI_EXIT and did not return a deployment URL; see the deployment output above."
             exit 1
+          fi
+          if [ "$VERCEL_CLI_EXIT" -ne 0 ]; then
+            echo "::warning title=Vercel CLI reported failure::Checking the deployment API for its exact terminal error."
           fi
 
           export DEPLOYMENT_HOST
