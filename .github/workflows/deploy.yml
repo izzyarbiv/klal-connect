@@ -5,7 +5,9 @@
 # passed and the site looked fine. This is the fix for the cause rather than
 # the symptom.
 #
-# Inert until one secret exists. Add VERCEL_TOKEN under
+# Eli's pull requests are merged after both verification jobs pass, then
+# workflow_dispatch ships the exact merge commit. Pushes to main also deploy
+# directly. Inert until one secret exists. Add VERCEL_TOKEN under
 # Settings -> Secrets and variables -> Actions, and every push to main ships
 # after the checks pass. Without it the checks still run and the deploy step
 # says what is missing instead of failing.
@@ -26,6 +28,20 @@ on:
     branches: [main]
   # So a deploy can be triggered from the Actions tab without an empty commit.
   workflow_dispatch:
+    inputs:
+      source_pr:
+        description: Pull request merged by the trusted auto-merge workflow
+        required: false
+        type: string
+      source_sha:
+        description: Expected main commit to deploy
+        required: false
+        type: string
+  # This workflow's checks run without secrets; the follow-up can safely merge
+  # only a matching, successful PR and dispatch a production deploy.
+  workflow_run:
+    workflows: ["Verify and deploy"]
+    types: [completed]
 
 concurrency:
   # A newer push supersedes an older one rather than racing it to production.
@@ -44,7 +60,53 @@ env:
 # 19 October 2026, and an OS change under the deploy pipeline during a launch is
 # a risk with no upside. Worth unpinning once there is a quiet week.
 jobs:
+  auto-merge-eli:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge Eli's checked pull request and dispatch deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "The successful pull request run has no associated open pull request; nothing to merge."
+            exit 0
+          fi
+
+          PR="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          AUTHOR="$(jq -r '.user.login' <<< "$PR")"
+          BASE_BRANCH="$(jq -r '.base.ref' <<< "$PR")"
+          PR_STATE="$(jq -r '.state' <<< "$PR")"
+          HEAD_SHA="$(jq -r '.head.sha' <<< "$PR")"
+          IS_DRAFT="$(jq -r '.draft' <<< "$PR")"
+          if [ "$AUTHOR" != "eliepstein0817" ] || [ "$BASE_BRANCH" != "main" ] || [ "$PR_STATE" != "open" ] || [ "$IS_DRAFT" != "false" ] || [ "$HEAD_SHA" != "$CHECKED_SHA" ]; then
+            echo "Not merging: the PR author, target, state, draft status, or checked commit no longer matches."
+            exit 0
+          fi
+
+          MERGE="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f sha="$CHECKED_SHA" \
+            -f merge_method=squash)"
+          if [ "$(jq -r '.merged' <<< "$MERGE")" != "true" ]; then
+            echo "::error title=Pull request not merged::GitHub did not confirm the merge."
+            exit 1
+          fi
+          MERGED_SHA="$(jq -r '.sha' <<< "$MERGE")"
+          echo "Merged Eli's checked PR #$PR_NUMBER as $MERGED_SHA."
+
+          gh workflow run deploy.yml --ref main \
+            -f source_pr="$PR_NUMBER" \
+            -f source_sha="$MERGED_SHA"
+
   verify:
+    if: github.event_name != 'workflow_run'
     # Nothing reaches production without these. The browser checks
     # (contrast, overflow, accessible names, critical paths, safe area) are
     # not here: they drive a Chrome at a hardcoded macOS path and need a dev
@@ -67,6 +129,7 @@ jobs:
         run: npm run build
 
   browser:
+    if: github.event_name != 'workflow_run'
     # What the verify job cannot see.
     #
     # verify checks logic: does it compile, do the permission rules hold, does
@@ -139,7 +202,7 @@ jobs:
     # push still runs every check, and says why it stopped there.
     # Publishers are listed here and in explain-no-deploy below. To add one run:
     #   npm run add-publisher -- <github-username>
-    if: github.event_name != 'pull_request' && contains(fromJSON('["izzyarbiv", "eliepstein0817"]'), github.actor)
+    if: github.event_name != 'pull_request' && github.event_name != 'workflow_run' && (contains(fromJSON('["izzyarbiv", "eliepstein0817"]'), github.actor) || (github.actor == 'github-actions[bot]' && inputs.source_sha != ''))
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -150,6 +213,15 @@ jobs:
           # for that, but the full history lets deploy:status name the
           # commits a deployment is behind.
           fetch-depth: 0
+      - name: Confirm the requested merge commit is on main
+        if: inputs.source_sha != ''
+        env:
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED_SHA" ]; then
+            echo "::error title=Main advanced::The merged commit is no longer the tip of main; refusing to deploy a different revision."
+            exit 1
+          fi
       - uses: actions/setup-node@v7
         with:
           node-version: 22
