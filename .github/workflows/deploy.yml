@@ -199,12 +199,18 @@ jobs:
           # @latest meant every push gambled on whatever Vercel released that day.
           npx --yes vercel@63.1.2 pull --yes --environment=production --token="$TOKEN"
           npx --yes vercel@63.1.2 build --prod --token="$TOKEN"
+          set +e
           npx --yes vercel@63.1.2 deploy --prebuilt --prod --no-wait --token="$TOKEN" 2>&1 | tee /tmp/vercel-deploy.log
+          VERCEL_CLI_EXIT=$?
+          set -e
 
           DEPLOYMENT_HOST="$(grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' /tmp/vercel-deploy.log | tail -n 1 | sed 's#^https://##')"
           if [ -z "$DEPLOYMENT_HOST" ]; then
-            echo "::error title=Deployment URL missing::Vercel did not return a deployment URL; see the deployment output above."
+            echo "::error title=Deployment URL missing::Vercel exited with status $VERCEL_CLI_EXIT and did not return a deployment URL; see the deployment output above."
             exit 1
+          fi
+          if [ "$VERCEL_CLI_EXIT" -ne 0 ]; then
+            echo "::warning title=Vercel CLI reported failure::Checking the deployment API for its exact terminal error."
           fi
 
           export DEPLOYMENT_HOST
