@@ -7,6 +7,7 @@ import DirectoryMap from '@/components/DirectoryMap';
 import { expandQuery, matchesQuery, providerHaystack } from '@/lib/searchTerms';
 import { servesPlace } from '@/lib/place';
 import { readStoredCommunity, storeCommunity } from '@/lib/community';
+import { categoryLabel } from '@/lib/categories';
 
 const rad = (x) => x * Math.PI / 180;
 const miles = (a, b, c, d) => {
@@ -157,7 +158,7 @@ export default function Browse() {
       <input className="field md:col-span-2" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="City or ZIP" />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
         <option value="">All categories ({providers.length})</option>
-        {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0}>{c.name} ({countFor(c.name)})</option>)}
+        {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0}>{categoryLabel(c.name)} ({countFor(c.name)})</option>)}
       </select>
       <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)}>
         {located && <option value="nearest">Nearest</option>}

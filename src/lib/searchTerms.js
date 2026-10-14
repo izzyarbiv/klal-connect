@@ -1,3 +1,5 @@
+import { categoryLabel } from './categories.js';
+
 // Search aliases.
 //
 // Two things break plain substring search in a directory like this one.
@@ -28,7 +30,7 @@ const GROUPS = [
 
   // Jewish community life
   ['mikvah', 'mikva', 'mikveh', 'mikvas', 'mikvaos', 'mikvahs'],
-  ['shul', 'shuls', 'synagogue', 'synagogues', 'beis medrash', 'bais medrash', 'minyan', 'minyanim'],
+  ['shul', 'shuls', 'shul/synagogue', 'synagogue', 'synagogues', 'shtiebel', 'shtiebels', 'shtieblach', 'beis medrash', 'bais medrash', 'minyan', 'minyanim'],
   ['gemach', 'gemachim', 'gemachs', 'gemmach'],
   ['yeshiva', 'yeshivah', 'yeshivas', 'yeshivos', 'mesivta'],
   ['cheder', 'chadarim', 'day school'],
@@ -137,7 +139,9 @@ export function expandQuery(raw) {
  */
 export function providerHaystack(p) {
   return [
-    p?.name, p?.tagline, p?.category, p?.subcategory,
+    // The on-screen names too, so a listing filed as "Synagogue" is found by
+    // the "Shul/Synagogue" it is shown as.
+    p?.name, p?.tagline, p?.category, p?.subcategory, categoryLabel(p?.category), categoryLabel(p?.subcategory),
     p?.short_description, p?.description, (p?.service_areas || []).join(' '),
   ].join(' ');
 }

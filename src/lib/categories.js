@@ -37,3 +37,18 @@ export const DIRECTORY_CATEGORIES = [
   // subcategory field is where it says what it actually is.
   { name: 'Other',           icon: 'MoreHorizontal', order: 99, subcategories: [] },
 ];
+
+// What a category or subcategory is called on screen.
+//
+// Shuls get filed under whatever word the person adding them reached for —
+// "Synagogue", "Shul", "Shuls" — and each read as a different kind of place.
+// They are one thing, so they are shown as one name, and the name carries both
+// words so a search for either finds it. Only the label changes: what is
+// stored stays as typed, so filters and the listing form keep matching.
+const SHUL_WORDS = /^(shul|shuls|synagogue|synagogues|shul\s*\/\s*synagogue)$/i;
+export const SHUL_LABEL = 'Shul/Synagogue';
+
+export function categoryLabel(name) {
+  const text = String(name ?? '').trim();
+  return SHUL_WORDS.test(text) ? SHUL_LABEL : name;
+}

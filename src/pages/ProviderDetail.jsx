@@ -18,6 +18,7 @@ import TrustMarks from '@/components/TrustMarks';
 import ListingLocation from '@/components/ListingLocation';
 import DirectionsMenu from '@/components/DirectionsMenu';
 import { VERIFIED_MEANING } from '@/lib/trust';
+import { categoryLabel } from '@/lib/categories';
 
 export default function ProviderDetail(){
   const { slug } = useParams();
@@ -45,7 +46,7 @@ export default function ProviderDetail(){
   },[slug]);
 
   useMetaTags(provider ? {
-    title: `${provider.name} · ${provider.category} · ${provider.city}`,
+    title: `${provider.name} · ${categoryLabel(provider.category)} · ${provider.city}`,
     description: provider.tagline || provider.short_description || (provider.description||'').slice(0,140),
     image: provider.logo_url || (provider.image_urls&&provider.image_urls[0]),
     url: window.location.href
@@ -72,7 +73,7 @@ export default function ProviderDetail(){
         admin grid. */}
     <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
-        <section className="panel"><div className="flex gap-4"><div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-brand-tint text-xl font-bold text-brand-teal">{provider.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><div><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">{provider.name}</h1>{provider.verified&&<CheckCircle2 className="text-brand-gold-ink"/>}</div><Headline text={provider.tagline} variant="header"/><p className="mt-1 font-semibold text-brand-teal">{provider.category} · {provider.subcategory}</p><p className="mt-3 text-brand-body">{provider.short_description}</p><div className="mt-3"><BadgeChips provider={provider}/></div></div></div>{provider.demo&&<p className="mt-4 rounded-xl bg-brand-gold-bg p-3 text-xs font-semibold text-brand-gold-ink">Demonstration content — this is a fictional listing for development.</p>}</section>
+        <section className="panel"><div className="flex gap-4"><div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-brand-tint text-xl font-bold text-brand-teal">{provider.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><div><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">{provider.name}</h1>{provider.verified&&<CheckCircle2 className="text-brand-gold-ink"/>}</div><Headline text={provider.tagline} variant="header"/><p className="mt-1 font-semibold text-brand-teal">{categoryLabel(provider.category)} · {categoryLabel(provider.subcategory)}</p><p className="mt-3 text-brand-body">{provider.short_description}</p><div className="mt-3"><BadgeChips provider={provider}/></div></div></div>{provider.demo&&<p className="mt-4 rounded-xl bg-brand-gold-bg p-3 text-xs font-semibold text-brand-gold-ink">Demonstration content — this is a fictional listing for development.</p>}</section>
         <section className="panel"><h2 className="section-title">About</h2><p className="mt-3 whitespace-pre-line leading-7 text-brand-body">{provider.description}</p><div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">{provider.address?<DirectionsMenu place={provider} trigger="address" onOpen={directions}/>:<p className="info"><MapPin/> {[provider.city, provider.state].filter(Boolean).join(', ')}</p>}<p className="info"><Clock/> {provider.hours||'Contact for hours'}</p><p className="info"><Languages/> {(provider.languages||['English']).join(', ')}</p>{(provider.service_areas?.length||provider.city)&&<p className="info"><MapPin/> Serves {(provider.service_areas?.length?provider.service_areas:[provider.city]).join(', ')}</p>}</div></section>
         <ListingLocation place={provider} onOpen={directions}/>
         {/* A community note is signed. On a sensitive listing that identifies

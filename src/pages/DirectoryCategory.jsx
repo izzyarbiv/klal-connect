@@ -6,6 +6,7 @@ import { api } from '@/api/client';
 import { slugify } from '@/lib/paths';
 import ResourceCard from '@/components/ResourceCard';
 import { useMetaTags } from '@/hooks/useMetaTags';
+import { categoryLabel } from '@/lib/categories';
 
 // The client-side twin of the /directory/:category(/:city) prerender in
 // server/seo.js — same slug parsing, same filtering. Without this route a
@@ -36,8 +37,8 @@ export default function DirectoryCategory() {
     : [];
 
   useMetaTags(match ? {
-    title: `${match.name}${where} · Klal Connect`,
-    description: `${match.name}${where} — ${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`,
+    title: `${categoryLabel(match.name)}${where} · Klal Connect`,
+    description: `${categoryLabel(match.name)}${where} — ${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`,
   } : {});
 
   if (!loadingCategories && categories.length && !match) {
@@ -50,7 +51,7 @@ export default function DirectoryCategory() {
     <Link to="/directory" className="flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={16}/>All categories</Link>
     <div>
       <span className="eyebrow">DIRECTORY</span>
-      <h1 className="title">{match ? `${match.name}${where}` : 'Loading…'}</h1>
+      <h1 className="title">{match ? `${categoryLabel(match.name)}${where}` : 'Loading…'}</h1>
       <p className="helper">{loadingProviders ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`}</p>
     </div>
     {rows.length > 0
