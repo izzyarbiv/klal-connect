@@ -11,6 +11,7 @@ import { servesPlace, communitiesFrom } from '@/lib/place';
 import { useCommunity } from '@/lib/community';
 import { useShabbosStatus } from '@/hooks/useShabbosStatus';
 import { timeInZone } from '@/lib/time';
+import { categoryLabel } from '@/lib/categories';
 
 // The words people actually use, as searches rather than category filters —
 // "Plumbers" is not a category, and the alias layer in @/lib/searchTerms is
@@ -133,7 +134,7 @@ export default function Home() {
             className={`group rounded-lg p-4 transition hover:-translate-y-0.5 hover:shadow-md ${empty ? 'border border-dashed border-brand-line bg-brand-canvas' : 'bg-brand-surface ring-1 ring-brand-line'}`}
           >
             <Icon className={`mb-3 ${empty ? 'text-brand-muted' : 'text-brand-teal'}`} size={22} />
-            <span className={`block text-sm font-semibold leading-tight ${empty ? 'text-brand-body' : 'text-brand-ink'}`}>{c.name}</span>
+            <span className={`block text-sm font-semibold leading-tight ${empty ? 'text-brand-body' : 'text-brand-ink'}`}>{categoryLabel(c.name)}</span>
             <span className="mt-1 block text-xs text-brand-muted">
               {empty ? 'Add the first' : `${c.count} listed`}
             </span>

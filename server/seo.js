@@ -12,6 +12,7 @@
 // Everything else still falls through to the static shell.
 import { store } from './db.js';
 import { slugify } from './seo-shared.js';
+import { categoryLabel } from '../src/lib/categories.js';
 
 const SITE_NAME = 'Klal Connect';
 const TAGLINE = 'Community resources & business directory';
@@ -84,7 +85,7 @@ function providerSchema(provider, url, image) {
     areaServed: (provider.service_areas || []).length ? provider.service_areas : undefined,
     knowsLanguage: (provider.languages || []).length ? provider.languages : undefined,
     openingHours: provider.hours || undefined,
-    additionalType: provider.category || undefined,
+    additionalType: categoryLabel(provider.category) || undefined,
   };
   if (provider.city || provider.address) {
     schema.address = {
@@ -106,7 +107,7 @@ function providerSchema(provider, url, image) {
 // so it exists to be parsed, not styled.
 function providerBody(provider, notes, vouches) {
   const facts = [
-    ['Category', [provider.category, provider.subcategory].filter(Boolean).join(' · ')],
+    ['Category', [provider.category, provider.subcategory].filter(Boolean).map(categoryLabel).join(' · ')],
     ['Location', addressOf(provider)],
     ['Serves', (provider.service_areas || []).join(', ')],
     ['Languages', (provider.languages || []).join(', ')],
@@ -197,7 +198,7 @@ export function mountSeo(app, shell) {
         store.count('Vouch', { provider_id: provider.id }).catch(() => 0),
       ]);
       const where = [provider.city, provider.state].filter(Boolean).join(', ');
-      const title = `${provider.name}${provider.category ? ` — ${provider.category}` : ''}${where ? ` in ${where}` : ''} · ${SITE_NAME}`;
+      const title = `${provider.name}${provider.category ? ` — ${categoryLabel(provider.category)}` : ''}${where ? ` in ${where}` : ''} · ${SITE_NAME}`;
       const description = clamp(provider.tagline || provider.short_description || provider.description || `${provider.name} on Klal Connect.`, 155);
       const image = provider.logo_url || (provider.image_urls || [])[0] || ogFallback(origin);
       const canonical = `${origin}${canonicalPath}`;
@@ -262,12 +263,12 @@ export function mountSeo(app, shell) {
         (!match || (p.category || '').toLowerCase() === match.name.toLowerCase())
         && (!city || slugify(p.city || '') === city));
       const where = cityName ? ` in ${cityName.replace(/\b\w/g, (m) => m.toUpperCase())}` : '';
-      const what = match ? match.name : 'Community resources';
+      const what = match ? categoryLabel(match.name) : 'Community resources';
       const canonical = `${origin}${req.path.replace(/\/$/, '')}`;
       send(res, renderPage(shell, {
         title: `${what}${where} · ${SITE_NAME}`,
         description: match
-          ? clamp(`${match.name}${where} — ${rows.length} vouched-for ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`, 155)
+          ? clamp(`${categoryLabel(match.name)}${where} — ${rows.length} vouched-for ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`, 155)
           : DEFAULT_DESCRIPTION,
         canonical,
         image: ogFallback(origin),
@@ -288,7 +289,7 @@ export function mountSeo(app, shell) {
             ? `<ul>${rows.slice(0, 100).map((p) => `<li><a href="/provider/${escapeHtml(p.slug || p.id)}">${escapeHtml(p.name)}</a>${p.city ? ` — ${escapeHtml(p.city)}` : ''}${p.short_description ? `: ${escapeHtml(clamp(p.short_description, 120))}` : ''}</li>`).join('')}</ul>`
             : '<p>No listings here yet.</p>',
           categories.length
-            ? `<h2>Categories</h2><ul>${categories.map((c) => `<li><a href="/directory/${slugify(c.name)}">${escapeHtml(c.name)}</a></li>`).join('')}</ul>`
+            ? `<h2>Categories</h2><ul>${categories.map((c) => `<li><a href="/directory/${slugify(c.name)}">${escapeHtml(categoryLabel(c.name))}</a></li>`).join('')}</ul>`
             : '',
         ].filter(Boolean).join('\n'),
       }));
@@ -320,7 +321,7 @@ export function mountSeo(app, shell) {
           // and a person should be told the same thing about this page.
           '<h1>Your community. Wherever you are.</h1>',
           `<p>${escapeHtml(HOME_DESCRIPTION)}</p>`,
-          categories.length ? `<h2>Browse by category</h2><ul>${categories.map((c) => `<li><a href="/directory/${slugify(c.name)}">${escapeHtml(c.name)}</a></li>`).join('')}</ul>` : '',
+          categories.length ? `<h2>Browse by category</h2><ul>${categories.map((c) => `<li><a href="/directory/${slugify(c.name)}">${escapeHtml(categoryLabel(c.name))}</a></li>`).join('')}</ul>` : '',
         ].filter(Boolean).join('\n'),
       }));
     } catch (err) { next(err); }

@@ -4,6 +4,7 @@ import { api } from '@/api/client';
 import { Image } from '@/components/ui/image';
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import Headline from '@/components/Headline';
+import { categoryLabel } from '@/lib/categories';
 
 export default function FeedPromotedPanel(){
   const [items,setItems]=useState(null);
@@ -22,7 +23,7 @@ export default function FeedPromotedPanel(){
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-brand-ink">{p.name}</p>
           <Headline text={p.tagline}/>
-          <p className="truncate text-xs text-brand-teal">{p.category}</p>
+          <p className="truncate text-xs text-brand-teal">{categoryLabel(p.category)}</p>
           <p className="truncate text-xs text-brand-muted">{p.city}{p.state?`, ${p.state}`:''}</p>
         </div>
         <ArrowRight size={15} className="mt-2 shrink-0 text-brand-muted"/>
