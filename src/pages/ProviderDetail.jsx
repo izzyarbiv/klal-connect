@@ -81,7 +81,7 @@ export default function ProviderDetail(){
             reaches the team privately. */}
         {!sensitive&&<>
           <CommunityTrust provider={provider} onCounts={(c)=>setProvider(p=>({...p,...c}))} onNote={(n)=>{if(n?.status==='published')setNotes(ns=>[n,...ns])}}/>
-          <section className="panel"><h2 className="section-title">Positive community experiences</h2><p className="helper">{notes.length} community {notes.length === 1 ? 'member' : 'members'} shared a positive experience.</p><div className="mt-4 space-y-3">{notes.map(n=><blockquote key={n.id} className="rounded-lg bg-brand-tint p-4 text-sm leading-6">“{n.body}”</blockquote>)}{notes.length===0&&<p className="text-sm text-brand-muted">No published notes yet.</p>}</div></section>
+          <section className="panel"><h2 className="section-title">Notes from the community</h2>{notes.length>0&&<p className="helper">{notes.length} community {notes.length === 1 ? 'member' : 'members'} shared a positive experience.</p>}<div className="mt-4 space-y-3">{notes.map(n=><blockquote key={n.id} className="rounded-lg bg-brand-tint p-4 text-sm leading-6">“{n.body}”</blockquote>)}{notes.length===0&&<p className="text-sm text-brand-muted">No notes yet. If you have used them, you can add a note above to share what you appreciated.</p>}</div></section>
         </>}
       </div>
       <aside className="space-y-5">
