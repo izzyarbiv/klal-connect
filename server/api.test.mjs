@@ -103,7 +103,8 @@ rr = await call('PUT', `/entities/Message/${msg.id}`, { token: userA, body: { bo
 ok(rr.status === 403, 'sender cannot edit a message', String(rr.status));
 const emailC = `c${Date.now()}@example.com`;
 const regC = await call('POST', '/auth/register', { body: { email: emailC, password: 'password123' } });
-const userC = (await call('POST', '/auth/verify-otp', { body: { email: emailC, otpCode: regC.data.dev_code } })).data.access_token;
+const verC = await call('POST', '/auth/verify-otp', { body: { email: emailC, otpCode: regC.data.dev_code } });
+const userC = verC.data.access_token, idC = verC.data.user.id;
 rr = await call('PUT', `/entities/Message/${msg.id}`, { token: userC, body: { read: true } });
 ok(rr.status === 403, 'a stranger cannot touch the message', String(rr.status));
 let mr = await call('POST', '/functions/reactToMessage', { token: userB, body: { message_id: msg.id, reaction: 'thanks' } });
@@ -599,29 +600,65 @@ ok(afterBulk.description !== 'Taken back through the bulk route', 'and the listi
 const myNotifs = await call('POST', '/entities/Notification/update-many', { token: userB, body: { query: { recipient_id: idB, read: false }, update: { read: true } } });
 ok(myNotifs.status === 200, 'marking your own notifications read still works', String(myNotifs.status));
 
-// A moderator is staff on rows that are not theirs and an ordinary member on
-// rows that are. The PUT route decided which by created_by_id, which is the
-// wrong question for a listing: a moderator who claimed one could change its
-// status and nothing else, and one who had posted a listing since claimed away
-// could still rewrite it. Both found by the audit agents.
+// The person who added a listing is its editor until a business claims it.
+// Reported in the field as "the creating account sees Claim, not Edit": the
+// client decides that from created_by_id on the row it fetched, so the row
+// has to carry it, the filter the Settings page runs has to find it, and the
+// server has to accept the edit.
+const creatorListing = await call('POST', '/functions/createListing', { token: userC, body: { name: 'Creator Plumbing', category: 'Home Services', short_description: 'Leaks fixed the same day.' } });
+const creatorRow = creatorListing.data?.provider || {};
+ok(creatorRow.created_by_id === idC, 'a created listing carries its creator id back to the client', JSON.stringify({ created_by_id: creatorRow.created_by_id, idC }));
+const creatorFetched = (await call('GET', `/entities/Provider/${creatorRow.id}`, { token: userC })).data || {};
+ok(creatorFetched.created_by_id === idC, 'and still carries it when the listing page fetches it', JSON.stringify(creatorFetched.created_by_id));
+const creatorMine = (await call('GET', `/entities/Provider?query=${encodeURIComponent(JSON.stringify({ created_by_id: idC }))}`, { token: userC })).data || [];
+ok(Array.isArray(creatorMine) && creatorMine.some((p) => p.id === creatorRow.id), 'Settings → Manage my listings finds it by creator', String(Array.isArray(creatorMine) && creatorMine.length));
+const creatorEdit = await call('PUT', `/entities/Provider/${creatorRow.id}`, { token: userC, body: { description: 'Licensed and insured.' } });
+ok(creatorEdit.status === 200 && creatorEdit.data?.description === 'Licensed and insured.', 'the creator can edit their own listing', String(creatorEdit.status));
+
+// Moderators are staff on listings: they edit the content of any listing
+// without claiming it, and without the listing changing hands. Protected
+// fields are refused for them exactly as for an owner.
 const modEmail = `moderator${Date.now()}@example.com`;
 const modReg = await call('POST', '/auth/register', { body: { email: modEmail, password: 'password123' } });
 const modVer = await call('POST', '/auth/verify-otp', { body: { email: modEmail, otpCode: modReg.data?.dev_code } });
 const modTok = modVer.data?.access_token, modId = modVer.data?.user?.id;
-await call('POST', `/users/${modId}/role`, { token: admin, body: { role: 'moderator' } });
+// PUT, not POST: an earlier version of this block POSTed here, got a 404 it
+// never checked, and every "moderator" assertion below ran as a plain member.
+const modRole = await call('PUT', `/users/${modId}/role`, { token: admin, body: { role: 'moderator' } });
+ok(modRole.status === 200 && modRole.data?.role === 'moderator', 'setup: the account really is a moderator', String(modRole.status));
 
-// A listing the moderator posts, then someone else claims.
+// A listing the moderator posts, then someone else claims — so afterwards the
+// moderator is neither its owner nor, in the editor's sense, its author.
 const modListing = await call('POST', '/functions/createListing', { token: modTok, body: { name: 'Moderator Hardware', category: 'Home Services', short_description: 'Keys cut and locks fitted.' } });
 const modListingId = modListing.data?.provider?.id;
 const modClaim = await call('POST', '/functions/createClaim', { token: userC, body: { provider_id: modListingId, provider_name: 'Moderator Hardware', relationship: 'owner', verification_details: 'Our shop, our sign, our phone number.' } });
 await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: modClaim.data?.claim?.id, approve: true } });
+const modBefore = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
+ok(modBefore.owner_id === idC, 'setup: the listing now belongs to the business that claimed it', JSON.stringify(modBefore.owner_id));
 
-await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { description: 'Rewritten by the former author who happens to be staff' } });
+// (a) content on a listing the moderator does not own, with no claim.
+const modEdit = await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { description: 'Corrected by staff: open Sundays too.', phone: '555-0199' } });
+ok(modEdit.status === 200 && modEdit.data?.description === 'Corrected by staff: open Sundays too.',
+  'a moderator can edit the content of a listing they do not own', String(modEdit.status) + ' ' + String(modEdit.data?.description || '').slice(0, 40));
+// (b) nothing about whose listing it is moved.
 const modAfter = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
-ok(modAfter.description !== 'Rewritten by the former author who happens to be staff',
-  'a moderator who posted a listing since claimed away cannot rewrite it', String(modAfter.description || '(none)').slice(0, 40));
-
-// And the other direction: a moderator who owns a listing is its editor.
+ok(modAfter.owner_id === idC && modAfter.created_by_id === modBefore.created_by_id,
+  'and the listing still belongs to the same owner and creator afterwards', JSON.stringify({ owner_id: modAfter.owner_id, created_by_id: modAfter.created_by_id }));
+// (c) the fields that only an admin may set stay refused for staff.
+await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { verified: true, featured: true, owner_id: modId, status: 'published' } });
+const modGrab = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
+ok(modGrab.verified !== true && modGrab.featured !== true && modGrab.owner_id === idC,
+  'a moderator still cannot verify, feature or take over a listing', JSON.stringify({ verified: modGrab.verified, featured: modGrab.featured, owner_id: modGrab.owner_id }));
+// A moderator does still change status — that is their queue work — and it
+// is logged as moderation like before.
+ok(modGrab.status === 'published', 'a moderator can still set a listing\'s status', String(modGrab.status));
+// (d) an ordinary member is not staff.
+const memberEdit = await call('PUT', `/entities/Provider/${modListingId}`, { token: userA, body: { description: 'Rewritten by a stranger' } });
+const afterMember = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
+ok(memberEdit.status === 403 && afterMember.description !== 'Rewritten by a stranger',
+  'an ordinary member still cannot edit another member\'s listing', String(memberEdit.status));
+// Narrowing is unchanged for the other staff queues: a moderator on someone
+// else's report changes its state, not its words.
 const modOwn = await call('POST', '/functions/createListing', { token: modTok, body: { name: 'Moderator Bakery', category: 'Food & Catering', short_description: 'Bread and rolls.' } });
 const modOwnEdit = await call('PUT', `/entities/Provider/${modOwn.data?.provider?.id}`, { token: modTok, body: { description: 'Fresh daily from 6am.' } });
 ok(modOwnEdit.status === 200 && modOwnEdit.data?.description === 'Fresh daily from 6am.',

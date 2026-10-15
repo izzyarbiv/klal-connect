@@ -14,9 +14,18 @@
 // them straight onto the row.
 export const listingEditor = (row) => (row && (row.owner_id || row.created_by_id)) || null;
 
-/** May this person change this listing? Admins always may. */
+// Staff on listings: admins and moderators. The team accounts correct
+// addresses, hours and descriptions across the directory as part of the job,
+// and before this the only way a moderator could fix a typo on a listing they
+// had not posted was to claim it — which would hand them a business's page.
+// Editing as staff changes the words on the page and nothing about whose page
+// it is: owner_id and created_by_id are left alone, so the rightful editor is
+// still the rightful editor afterwards.
+export const isListingStaff = (user) => !!user && (user.role === 'admin' || user.role === 'moderator');
+
+/** May this person change this listing? Staff always may. */
 export const canEditListing = (row, user) =>
-  !!user && !!row && (user.role === 'admin' || listingEditor(row) === user.id);
+  !!user && !!row && (isListingStaff(user) || listingEditor(row) === user.id);
 
 // Shape, not permission.
 //

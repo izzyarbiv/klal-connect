@@ -14,7 +14,7 @@ import BadgeChips from '@/components/BadgeChips';
 import AdminBadgePanel from '@/components/AdminBadgePanel';
 import { isSensitiveListing } from '@/lib/sensitivity';
 import { useAuth } from '@/lib/AuthContext';
-import { canEditListing } from '@/lib/listing';
+import { canEditListing, listingEditor } from '@/lib/listing';
 import TrustMarks from '@/components/TrustMarks';
 import ListingLocation from '@/components/ListingLocation';
 import DirectionsMenu from '@/components/DirectionsMenu';
@@ -63,6 +63,7 @@ export default function ProviderDetail(){
   // for every signed-out visitor, so without this the page offered "Edit this
   // listing" to anonymous readers on anything a previous visitor had added.
   const canEdit=!isGuest&&canEditListing(provider,user);
+  const staffOnly=canEdit&&listingEditor(provider)!==user?.id;
   return <div className="page-shell py-7">
     <Link to="/browse" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to browse</Link>
     {/* minmax(0,1fr), not 1fr, and an explicit single column below lg.
@@ -101,7 +102,16 @@ export default function ProviderDetail(){
             or the business once it has claimed it. Everyone else gets "suggest a
             correction" above, which reaches the team. */}
         {canEdit
-          ? <Link to={`/add?edit=${provider.id}`} className="primary block text-center">Edit this listing</Link>
+          ? <>
+            <Link to={`/add?edit=${provider.id}`} className="primary block text-center">Edit this listing</Link>
+            {/* Staff see the edit link on a listing that is not theirs. Saying
+                so here keeps a team member from thinking they own it, and keeps
+                the claim button available for the business that does. */}
+            {staffOnly&&<>
+              <p className="helper text-center">You are editing this as Klal Connect staff. The listing stays with whoever added or claimed it.</p>
+              <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>
+            </>}
+          </>
           : <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>}
         <AdminBadgePanel provider={provider} onChange={setProvider}/>
       </aside>
