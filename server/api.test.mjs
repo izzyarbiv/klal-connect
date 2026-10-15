@@ -16,8 +16,10 @@ delete process.env.NODE_ENV;
 // Uploads go to a throwaway directory, not server/uploads: the storage layer
 // reads this at import, and a test run must not leave files behind.
 import { mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 const uploadDir = mkdtempSync(join(tmpdir(), 'kc-test-uploads-'));
 process.env.KC_UPLOAD_DIR = uploadDir;
 
@@ -1038,6 +1040,81 @@ const joinedViaAlias = await call('POST', '/auth/register', { body: { email: `in
 ok(joinedViaAlias.status === 201, 'signing up through the old link is still accepted', JSON.stringify(joinedViaAlias.data));
 const invAfter = (await call('POST', '/functions/myInvite', { token: userA, body: {} })).data?.invite;
 ok(invAfter?.joined_count === 1 && invAfter.code === neutral, 'the join is credited to the renamed invite', JSON.stringify(invAfter));
+
+// Undoing a rename: the former code is this invite's own alias, so taking it
+// back is not a collision with anybody. It becomes current again and leaves
+// the alias list, so the row does not answer to the same code twice.
+const undone = await call('POST', '/functions/renameInvite', { token: userA, body: { code: neutral, new_code: inv.code } });
+ok(undone.status === 200 && undone.data.invite.code === inv.code, 'the inviter can rename a link back to one of its own former codes', JSON.stringify(undone.data));
+ok(undone.status === 200 && !undone.data.invite.aliases.includes(inv.code) && undone.data.invite.aliases.includes(neutral), 'a code made current again is no longer listed as an alias', JSON.stringify(undone.data?.invite?.aliases));
+const neutralStillResolves = await call('GET', `/invites/${neutral}`);
+ok(neutralStillResolves.status === 200 && neutralStillResolves.data.code === inv.code, 'the link that was just replaced keeps working as an alias', JSON.stringify(neutralStillResolves.data));
+
+// A freshly generated code must not land on a slug another invite still
+// holds as an alias, or everyone with that printed link would be credited
+// to the newcomer. The generator is name + four random letters, so a member
+// named "Zed" with Math.random pinned to 0 would be offered "zed-aaaa"; that
+// slug is parked as an alias on A's invite first, and the generator has to
+// move on to its next try.
+const aliasTrap = await call('POST', '/functions/renameInvite', { token: userA, body: { code: inv.code, new_code: 'zed-aaaa' } });
+const aliasTrapBack = await call('POST', '/functions/renameInvite', { token: userA, body: { code: 'zed-aaaa', new_code: inv.code } });
+ok(aliasTrap.status === 200 && aliasTrapBack.status === 200 && aliasTrapBack.data.invite.aliases.includes('zed-aaaa'), 'setup: zed-aaaa is parked as an alias of another invite', JSON.stringify([aliasTrap.data, aliasTrapBack.data]));
+const zedEmail = `zed${Date.now()}@example.com`;
+const zedReg = await call('POST', '/auth/register', { body: { email: zedEmail, password: 'password123' } });
+const zedTok = (await call('POST', '/auth/verify-otp', { body: { email: zedEmail, otpCode: zedReg.data?.dev_code } })).data?.access_token;
+await call('PUT', '/auth/me', { token: zedTok, body: { full_name: 'Zed Example' } });
+const realRandom = Math.random;
+let randomCalls = 0;
+// The first four draws spell the colliding tail; later draws pick another.
+Math.random = () => (randomCalls++ < 4 ? 0 : 0.5);
+let zedInvite;
+try {
+  zedInvite = (await call('POST', '/functions/myInvite', { token: zedTok, body: {} })).data?.invite;
+} finally {
+  Math.random = realRandom;
+}
+ok(zedInvite?.code && zedInvite.code !== 'zed-aaaa' && zedInvite.code.startsWith('zed-'), 'a generated invite code skips a slug another invite holds as an alias', JSON.stringify(zedInvite));
+const aliasOwner = await call('GET', '/invites/zed-aaaa');
+ok(aliasOwner.status === 200 && aliasOwner.data.code === inv.code, 'the parked alias still resolves to the invite that owned it', JSON.stringify(aliasOwner.data));
+
+// Aliases are capped so one member cannot reserve an unlimited number of
+// slugs by renaming in a loop. Past the cap the oldest alias is dropped and
+// that link stops resolving; the newer ones all still work.
+const capInviter = `cap${Date.now()}@example.com`;
+const capReg = await call('POST', '/auth/register', { body: { email: capInviter, password: 'password123' } });
+const capTok = (await call('POST', '/auth/verify-otp', { body: { email: capInviter, otpCode: capReg.data?.dev_code } })).data?.access_token;
+await call('PUT', '/auth/me', { token: capTok, body: { full_name: 'Cap Tester' } });
+const capInvite = (await call('POST', '/functions/myInvite', { token: capTok, body: {} })).data?.invite;
+const capStamp = Date.now().toString(36);
+const capNames = Array.from({ length: 7 }, (_, i) => `cap-${capStamp}-${i}`);
+let capCurrent = capInvite?.code, capLast = null, capMax = 0, capDropped = [];
+for (const name of capNames) {
+  capLast = await call('POST', '/functions/renameInvite', { token: capTok, body: { code: capCurrent, new_code: name } });
+  if (capLast.status !== 200) break;
+  capCurrent = name;
+  capMax = Math.max(capMax, capLast.data.invite.aliases.length);
+  capDropped = capDropped.concat(capLast.data.dropped_aliases || []);
+}
+ok(capLast?.status === 200 && capMax <= 5 && capLast.data.invite.aliases.length === 5, 'an invite keeps at most five former codes', JSON.stringify({ status: capLast?.status, max: capMax, aliases: capLast?.data?.invite?.aliases }));
+ok(capDropped.length === 2 && capDropped[0] === capInvite?.code && capDropped[1] === capNames[0], 'renaming past the cap drops the oldest aliases first and reports them', JSON.stringify(capDropped));
+const capGone = await call('GET', `/invites/${capInvite?.code}`);
+ok(capGone.status === 404, 'a link whose alias was dropped no longer resolves', String(capGone.status));
+const capKept = await call('GET', `/invites/${capNames[1]}`);
+ok(capKept.status === 200 && capKept.data.code === capNames[6], 'the newest former codes still resolve to the renamed invite', JSON.stringify(capKept.data));
+const capNoDup = capLast?.data?.invite?.aliases || [];
+ok(new Set(capNoDup).size === capNoDup.length && !capNoDup.includes(capNames[6]), 'the alias list has no duplicates and never contains the current code', JSON.stringify(capNoDup));
+
+// ---- the rename-invite CLI refuses an in-memory store ----------------------
+// Against the memory backend a rename could only vanish at exit, while the
+// output would read like production had been changed. The command exits
+// before looking anything up, and says why.
+const cliMemory = spawnSync(process.execPath, ['server/rename-invite.js', 'some-old-code', 'some-new-code'], {
+  cwd: fileURLToPath(new URL('..', import.meta.url)),
+  env: { ...process.env, KC_STORE: 'memory', KC_DEMO_MODE: '1' },
+  encoding: 'utf8',
+});
+const cliErr = String(cliMemory.stderr || cliMemory.error || '');
+ok(cliMemory.status === 1 && /in-memory/.test(cliErr) && !/no invite answers/.test(cliErr), 'the rename-invite CLI refuses to run against the in-memory store', JSON.stringify({ status: cliMemory.status, stderr: cliErr.slice(-300) }));
 
 console.log = log;
 server.close();

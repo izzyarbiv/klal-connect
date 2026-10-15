@@ -157,6 +157,32 @@ export async function findInviteByCode(code) {
   return aliased || null;
 }
 
+// How many former codes an invite keeps answering to. Every alias reserves a
+// slug for everyone else, so without a ceiling one member renaming in a loop
+// could squat "admin", "support", "klal" and so on forever. Five covers the
+// realistic case (a name swapped out, a typo fixed, a seasonal link retired)
+// while keeping the squattable surface small.
+export const INVITE_ALIAS_LIMIT = 5;
+
+// The rename itself, shared by the API function and the CLI so the two cannot
+// disagree about what a rename means. Returns the fields to store, or a
+// `conflict` when another invite already answers to the wanted code.
+//
+// A code the invite itself used to have is fair game: it only ever pointed
+// here, so making it current again is undoing a rename, not taking anything
+// from anyone. It leaves the alias list so the row does not answer to the
+// same code twice. When the list is over the limit the oldest alias is
+// dropped, and a link printed with that code stops working — that is the
+// price of the cap, and the caller is told which codes still resolve.
+export async function planInviteRename(invite, next) {
+  const taken = await findInviteByCode(next);
+  if (taken && taken.id !== invite.id) return { conflict: true };
+  const kept = Array.from(new Set([...(invite.aliases || []), invite.code])).filter((a) => a !== next);
+  const dropped = kept.slice(0, Math.max(0, kept.length - INVITE_ALIAS_LIMIT));
+  const aliases = kept.slice(dropped.length);
+  return { conflict: false, aliases, dropped };
+}
+
 // "New listings go live right away" is only a safe promise if one account
 // cannot paper the directory before anyone notices. Bounded per account per
 // day: more than enough for someone adding their own businesses, not enough
@@ -532,11 +558,15 @@ export const functions = {
     assertVerified(user);
     const [existing] = await store.filter('Invite', { created_by_id: user.id, provider_id: null });
     if (existing) return { invite: existing };
-    let code;
-    for (let i = 0; i < 5; i++) {
-      code = inviteCode(user);
-      if (!(await store.filter('Invite', { code })).length) break;
+    // A generated code must be free as a current code and as an alias:
+    // an alias is still a link someone printed, and a new invite with that
+    // code would be found first and take credit for every join through it.
+    let code = null;
+    for (let i = 0; i < 5 && !code; i++) {
+      const candidate = inviteCode(user);
+      if (!(await findInviteByCode(candidate))) code = candidate;
     }
+    if (!code) fail('Could not find a free link name just now. Try again.', 503);
     const invite = await store.create('Invite', { code, inviter_name: user.full_name || '', provider_id: null, provider_name: null, joined_user_ids: [], joined_count: 0 }, user);
     return { invite };
   },
@@ -554,10 +584,10 @@ export const functions = {
     const next = String(new_code || '').trim().toLowerCase();
     if (!INVITE_CODE_RE.test(next)) fail('A link name is 4-40 lowercase letters, digits or hyphens.');
     if (next === invite.code) fail('That is already the name of this link.');
-    if (await findInviteByCode(next)) fail('That link name is already in use.', 409);
-    const aliases = Array.from(new Set([...(invite.aliases || []), invite.code]));
-    const updated = await store.update('Invite', invite.id, { code: next, aliases });
-    return { invite: updated };
+    const plan = await planInviteRename(invite, next);
+    if (plan.conflict) fail('That link name is already in use.', 409);
+    const updated = await store.update('Invite', invite.id, { code: next, aliases: plan.aliases });
+    return { invite: updated, dropped_aliases: plan.dropped };
   },
 
   // ---- skills ----------------------------------------------------------------
