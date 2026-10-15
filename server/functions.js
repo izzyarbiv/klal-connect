@@ -11,7 +11,7 @@ import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
-import { canEditListing } from '../src/lib/listing.js';
+import { canEditListing, normalizeGallery } from '../src/lib/listing.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
@@ -68,7 +68,8 @@ function listingInput(payload) {
   // WhatsApp wants the number as digits with the country code, no plus.
   const whatsapp = rest.whatsapp ? String(rest.whatsapp).replace(/\D/g, '').replace(/^1?(\d{10})$/, '1$1') : '';
   const payment_link_url = safeExternalUrl(rest.payment_link_url);
-  return { ...rest, badges, whatsapp, payment_link_url };
+  const gallery = normalizeGallery(rest.gallery, { safeUrl: safeExternalUrl });
+  return { ...rest, badges, whatsapp, payment_link_url, gallery };
 }
 
 // A link a visitor will be sent to — a Stripe Payment Link, PayPal.me,

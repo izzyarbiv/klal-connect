@@ -40,9 +40,44 @@ export const canEditListing = (row, user) =>
 // carries. The alternative — running the create normalizer over a patch — adds
 // `badges: []`, `whatsapp: ''` and `languages: ['English']` to a row that never
 // had them, which is how a one-field edit quietly rewrites four other fields.
-export function normalizeListingPatch(patch, row, { badgeById, badgeApplies }) {
+export const GALLERY_MAX = 3;
+
+// Photos of the business, each one credited.
+//
+// A listing may carry a few pictures, but every one has to say where it came
+// from and link to the official source, so a visitor can tell a photo the
+// business published from one somebody found. An uncredited image is refused
+// rather than silently dropped: a form that quietly loses a photo looks like
+// the upload failed, and the person uploads it again. safeUrl is handed in
+// because the http(s)-only check lives in the server's functions module and
+// this file is shared with the browser, which must not import that.
+//
+// Throws with statusCode 400 like the server's own fail(), so both routes can
+// answer with the message as written.
+export function normalizeGallery(raw, { safeUrl }) {
+  const refuse = (message) => { const err = new Error(message); err.statusCode = 400; throw err; };
+  if (raw === null || raw === undefined || raw === '') return [];
+  if (!Array.isArray(raw)) refuse('Photos must be a list.');
+  if (raw.length > GALLERY_MAX) refuse(`A listing can show up to ${GALLERY_MAX} photos.`);
+  return raw.map((item) => {
+    if (!item || typeof item !== 'object') refuse('Each photo needs an image, a caption and a source link.');
+    const url = String(item.url || '').trim();
+    const caption = String(item.caption || '').trim().slice(0, 200);
+    if (!url) refuse('Each photo needs an image.');
+    // Our own uploads come back as absolute https links (Blob) or as a path
+    // under /api/files (local disk); anything else is not an image we served.
+    if (!/^https:\/\//.test(url) && !url.startsWith('/api/files/')) refuse('Photos have to be uploaded here, not linked from elsewhere.');
+    if (!caption) refuse('Each photo needs a caption saying where it came from, like "Photo: example.org".');
+    const source_url = safeUrl(item.source_url);
+    if (!source_url) refuse('Each photo needs a link to its official source.');
+    return { url, caption, source_url };
+  });
+}
+
+export function normalizeListingPatch(patch, row, { badgeById, badgeApplies, safeUrl }) {
   if (!patch || typeof patch !== 'object') return patch;
   const out = { ...patch };
+  if ('gallery' in out) out.gallery = normalizeGallery(out.gallery, { safeUrl });
   const category = 'category' in out ? out.category : row?.category;
   // A category change re-tests the badges already on the row, because a badge
   // only means anything next to the trade it was granted for.

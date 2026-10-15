@@ -79,6 +79,16 @@ export default function ProviderDetail(){
       <div className="space-y-6">
         <section className="panel"><div className="flex gap-4"><div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-brand-tint text-xl font-bold text-brand-teal">{provider.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><div><div className="flex items-center gap-2"><h1 className="text-3xl font-bold">{provider.name}</h1>{provider.verified&&<CheckCircle2 className="text-brand-gold-ink"/>}</div><Headline text={provider.tagline} variant="header"/><p className="mt-1 font-semibold text-brand-teal">{categoryLabel(provider.category)} · {categoryLabel(provider.subcategory)}</p><p className="mt-3 text-brand-body">{provider.short_description}</p><div className="mt-3"><BadgeChips provider={provider}/></div></div></div>{provider.demo&&<p className="mt-4 rounded-xl bg-brand-gold-bg p-3 text-xs font-semibold text-brand-gold-ink">Demonstration content — this is a fictional listing for development.</p>}</section>
         <section className="panel"><h2 className="section-title">About</h2><p className="mt-3 whitespace-pre-line leading-7 text-brand-body">{provider.description}</p><div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">{provider.address?<DirectionsMenu place={provider} trigger="address" onOpen={directions}/>:<p className="info"><MapPin/> {[provider.city, provider.state].filter(Boolean).join(', ')}</p>}<p className="info"><Clock/> {provider.hours||'Contact for hours'}</p><p className="info"><Languages/> {(provider.languages||['English']).join(', ')}</p>{(provider.service_areas?.length||provider.city)&&<p className="info"><MapPin/> Serves {(provider.service_areas?.length?provider.service_areas:[provider.city]).join(', ')}</p>}</div></section>
+        {/* Below About and above the map, and absent entirely when there are
+            no photos: an empty panel reads as something broken. Each image is
+            credited and linked to where it came from, so a visitor can tell a
+            picture the business published from one someone found. */}
+        {Array.isArray(provider.gallery)&&provider.gallery.length>0&&<section className="panel"><h2 className="section-title">Photos</h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{provider.gallery.map((g,i)=><figure key={g.url+i} className="m-0">
+            <img src={g.url} alt={g.caption} loading="lazy" className="aspect-[4/3] w-full rounded-lg border border-brand-line object-cover"/>
+            <figcaption className="mt-2 text-sm text-brand-muted">{g.source_url?<a href={g.source_url} target="_blank" rel="noopener noreferrer" className="underline">{g.caption}</a>:g.caption}</figcaption>
+          </figure>)}</div>
+        </section>}
         <ListingLocation place={provider} onOpen={directions}/>
         {/* A community note is signed. On a sensitive listing that identifies
             its author as someone who needed the service, so neither the notes
