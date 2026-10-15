@@ -55,7 +55,7 @@ const validReaction = (value) => (value === undefined || value === null || value
 // What a member may say about their own listing. Verification, status and
 // the counters are the server's and an admin's to set.
 function listingInput(payload) {
-  const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, owner_id, slug, ...given } = payload || {};
+  const { verified, verified_at, verified_by, verified_badges, status, claimed, demo, save_count, usage_count, vouch_count, heart_count, owner_id, slug, ...given } = payload || {};
   // Prominence and confirmation are an admin's to grant, and this is a function
   // route: stripProtected never runs here, so it has to refuse them itself —
   // from the same list the generic route uses, not a second copy of it.
@@ -156,6 +156,7 @@ const ACTIVITIES = {
   save: { entity: 'SavedProvider', field: 'save_count' },
   use: { entity: 'ProviderUsage', field: 'usage_count' },
   vouch: { entity: 'Vouch', field: 'vouch_count' },
+  heart: { entity: 'ProviderHeart', field: 'heart_count' },
 };
 
 async function notify(recipientId, payload) {
@@ -185,7 +186,7 @@ export const functions = {
     // happened when none did.
     const provider = await store.create(
       'Provider',
-      { ...listingInput(payload), status: INITIAL_STATUS, claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },
+      { ...listingInput(payload), status: INITIAL_STATUS, claimed: false, save_count: 0, usage_count: 0, vouch_count: 0, heart_count: 0 },
       user
     );
     return { provider };
@@ -748,6 +749,8 @@ export const functions = {
 
   // save   → SavedProvider  (private to the member: their own list)
   // use    → ProviderUsage   (private signal, public count)
+  // heart  → ProviderHeart   (private signal, public count: who hearted is
+  //                           nobody's business, only how many)
   // vouch  → Vouch           (public, and carries the member's name: a vouch
   //                           is a statement, not a bookmark)
   async toggleCommunityActivity({ providerId, activity }, user) {

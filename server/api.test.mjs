@@ -437,6 +437,20 @@ ok((await vouchRows(null)).length === 1, 'turning it on brings the kept vouch ba
 const onVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'vouch' } });
 ok(onVouch.status === 200 && onVouch.data?.active === true, 'vouching works again once on', String(onVouch.status));
 
+// ---- hearts ---------------------------------------------------------------
+// One per member, tapped again to take back. The count is public; who gave
+// one is not.
+const heartA = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'heart' } });
+const heartB = await call('POST', '/functions/toggleCommunityActivity', { token: userB, body: { providerId: switchId, activity: 'heart' } });
+ok(heartA.data?.active === true && heartB.data?.count === 2, 'two members heart a listing', JSON.stringify(heartB.data));
+const heartAgain = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'heart' } });
+ok(heartAgain.data?.active === false && heartAgain.data?.count === 1, 'a second tap takes the heart back', JSON.stringify(heartAgain.data));
+ok((await call('GET', `/entities/Provider/${switchId}`)).data?.heart_count === 1, 'the listing carries the count');
+const heartRows = (await call('GET', '/entities/ProviderHeart', { token: userA })).data || [];
+ok(heartRows.every((h) => h.created_by_id === idA), 'a member reads only their own hearts, never who else gave one');
+const forgedHearts = await call('PUT', `/entities/Provider/${switchId}`, { token: userB, body: { heart_count: 999 } });
+ok((await call('GET', `/entities/Provider/${switchId}`)).data?.heart_count === 1, 'the count cannot be set by hand', String(forgedHearts.status));
+
 // ---- a listing that turns private takes its vouches with it --------------
 // The dangerous case is not a listing that was always sensitive — vouching on
 // one of those is already refused. It is a listing that becomes sensitive
