@@ -5,10 +5,20 @@
 // Separate from api.test.mjs because delivery mode is fixed when auth.js loads.
 process.env.KC_STORE = 'memory';
 process.env.KC_DEMO_MODE = '1';
-delete process.env.KC_EMAIL_DELIVERY;
 delete process.env.RESEND_API_KEY;
 delete process.env.KC_MAIL_FROM;
-delete process.env.NODE_ENV;
+
+// Two configurations, two processes: delivery mode is fixed when auth.js
+// loads, so one run cannot cover both. The parent checks the honest case
+// (nothing configured). It then re-runs this file as a child with the
+// misconfiguration that actually matters — KC_EMAIL_DELIVERY=dev left on in
+// production — which must behave exactly the same, because NODE_ENV=production
+// is what switches dev codes off regardless of that variable.
+const MISCONFIGURED = process.env.KC_NODEVCODE_CHILD === '1';
+if (!MISCONFIGURED) {
+  delete process.env.KC_EMAIL_DELIVERY;
+  delete process.env.NODE_ENV;
+}
 
 const { default: app } = await import('./app.js');
 const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
@@ -44,5 +54,14 @@ ok(/contact/i.test(reset.data?.error || ''), 'the 503 tells the person how to ge
 
 console.log = log;
 server.close();
-console.log(fails ? `\nno-dev-code checks: ${fails} FAILED` : '\nno-dev-code checks: all passed');
-process.exit(fails ? 1 : 0);
+const label = MISCONFIGURED ? 'no-dev-code checks (KC_EMAIL_DELIVERY=dev in production)' : 'no-dev-code checks';
+console.log(fails ? `\n${label}: ${fails} FAILED` : `\n${label}: all passed`);
+if (fails || MISCONFIGURED) process.exit(fails ? 1 : 0);
+
+const { spawnSync } = await import('node:child_process');
+const { fileURLToPath } = await import('node:url');
+const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
+  stdio: 'inherit',
+  env: { ...process.env, KC_NODEVCODE_CHILD: '1', KC_EMAIL_DELIVERY: 'dev', NODE_ENV: 'production', KC_JWT_SECRET: process.env.KC_JWT_SECRET || 'test-only-secret-for-the-misconfig-run' },
+});
+process.exit(child.status ?? 1);
