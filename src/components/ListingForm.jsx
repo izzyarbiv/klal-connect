@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import { api } from '@/api/client';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 import ListingLocationPicker from '@/components/ListingLocationPicker';
@@ -32,7 +32,13 @@ const fromProvider = (row) => ({
   badges: Array.isArray(row?.badges) ? row.badges : [],
   gallery: Array.isArray(row?.gallery) ? row.gallery : [],
 });
-export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadErr,setUploadErr]=useState('');useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});
+// Shown when Save is pressed mid-upload, and taken down by itself once the
+// upload lands — it used to stay next to "New image ready" until the next click.
+const STILL_UPLOADING='Your image is still uploading — one moment.';
+// `logo` is '' while the stored image is left alone, a URL once a new one has
+// uploaded, and null when the person has asked for the stored one to come
+// down. The third state is what lets an edit send logo_url: '' at all.
+export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadErr,setUploadErr]=useState(''),[galleryUploading,setGalleryUploading]=useState(false);const logoInput=useRef(null),uploadSeq=useRef(0);useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});
   // The upload used to be fire-and-forget: a rejected request (too large, not
   // an image, storage down, session expired) threw inside the change handler
   // where nothing caught it, so the input looked accepted and `logo` stayed
@@ -40,21 +46,36 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
   // was often empty, and the form said "Your changes are live" having sent
   // nothing. The same happened to someone who clicked Save while the upload
   // was still in flight. Every outcome now shows on the page, and Save waits.
+  //
+  // The input is disabled while a file is in flight, and each upload carries a
+  // sequence number so only the latest one's outcome is applied: two quick
+  // picks on a slow connection used to let the first file's URL land after the
+  // second was chosen, and Save then stored the image the person had replaced.
+  const forgetUpload=()=>{ setUploadErr(''); if(logoInput.current) logoInput.current.value=''; };
   const upload=async e=>{
     const file=e.target.files?.[0]; if(!file) return;
+    const seq=++uploadSeq.current;
     setUploading(true);setUploadErr('');setErr('');setLogo('');
-    try{ const {file_url}=await api.integrations.Core.UploadFile({file}); if(!file_url) throw new Error('The image was not saved. Please try again.'); setLogo(file_url); }
-    catch(error){ setUploadErr(error.message||'Could not upload that image.'); e.target.value=''; }
-    finally{ setUploading(false); }
+    try{ const {file_url}=await api.integrations.Core.UploadFile({file}); if(seq!==uploadSeq.current) return; if(!file_url) throw new Error('The image was not saved. Please try again.'); setLogo(file_url); }
+    catch(error){ if(seq!==uploadSeq.current) return; setUploadErr(error.message||'Could not upload that image.'); if(logoInput.current) logoInput.current.value=''; }
+    finally{ if(seq===uploadSeq.current){ setUploading(false); setErr(cur=>cur===STILL_UPLOADING?'':cur); } }
   };
+  // The gallery's own uploads report in here, so Save waits for them the same
+  // way it waits for the logo. Before this a photo picked a second before Save
+  // was simply not in the patch, and its URL arrived in state nobody was
+  // looking at any more.
+  const galleryBusy=(on)=>{ setGalleryUploading(on); if(!on) setErr(cur=>cur===STILL_UPLOADING?'':cur); };
   const submit=async e=>{
     e.preventDefault();
     if(busy)return;
-    if(uploading){ setErr('Your image is still uploading — one moment.'); return; }
-    if(uploadErr){ setErr('The image did not upload. Choose it again, or remove it, before saving.'); return; }
+    if(uploading||galleryUploading){ setErr(STILL_UPLOADING); return; }
+    // A failed upload is not a reason to hold the rest of the form hostage:
+    // the patch carries no new logo in that state, so the phone number or
+    // hours this person also changed can still be saved. The error stays on
+    // the page next to the input until they dismiss it or pick again.
     if (!(await api.auth.requireAccount())) return;
     setBusy(true);setErr('');
-    const fields={...data,logo_url:logo||(provider?.logo_url||''),service_areas:data.service_areas.split(',').map(x=>x.trim()).filter(Boolean),languages:data.languages.split(',').map(x=>x.trim()).filter(Boolean)};
+    const fields={...data,logo_url:logo===null?'':(logo||(provider?.logo_url||'')),service_areas:data.service_areas.split(',').map(x=>x.trim()).filter(Boolean),languages:data.languages.split(',').map(x=>x.trim()).filter(Boolean)};
     if(provider){
       // Only what actually changed. Both stores merge a patch server-side, so
       // sending all twenty-two fields was not wrong so much as destructive:
@@ -69,7 +90,9 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
         ? JSON.stringify([...(a||[])].sort())===JSON.stringify([...(b||[])].sort())
         : (a??'')===(b??'');
       const patch=Object.fromEntries(Object.entries(fields).filter(([k,v])=>{
-        if(k==='logo_url') return !!logo;
+        // Sent when it differs from what is stored: a new upload, or '' to
+        // take the stored image down. Untouched, it stays out of the patch.
+        if(k==='logo_url') return v!==(provider.logo_url||'');
         // These two are the lossy ones: an array joined with ", " into one text
         // input and split on "," again. A stored area like "Brooklyn, NY" comes
         // apart into "Brooklyn" and a bogus "NY" — on any save, including one
@@ -104,7 +127,9 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
       a name and a category and nothing else, so a listing that reached the
       directory through the API or an older form can be missing either of
       these — and an owner fixing a phone number was told to write a full
-      description first or lose the change. */}<label className="block">Full description<textarea className="field min-h-32" name="description" value={data.description} onChange={change} required={!provider}/></label><div className="space-y-2"><label className="block">Logo or main image<input type="file" accept="image/*" onChange={upload} className="field" aria-busy={uploading||undefined}/></label>{uploading&&<p className="helper text-sm">Uploading…</p>}{uploadErr&&<p className="text-sm font-semibold text-brand-error" role="alert">{uploadErr}</p>}{(logo||provider?.logo_url)&&!uploading&&<div className="flex items-center gap-3"><img src={logo||provider.logo_url} alt="" className="h-16 w-16 rounded-lg object-cover ring-1 ring-brand-line"/><p className="helper text-sm">{logo?'New image ready — it is saved when you click the button below.':'Current image. Choose a file above to replace it.'}</p>{logo&&<button type="button" className="text-sm underline" onClick={()=>{setLogo('');setUploadErr('')}}>Remove</button>}</div>}</div><GalleryEditor value={data.gallery} onChange={gallery=>setData(d=>({...d,gallery}))}/>{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
+      description first or lose the change. */}<label className="block">Full description<textarea className="field min-h-32" name="description" value={data.description} onChange={change} required={!provider}/></label><div className="space-y-2"><label className="block">Logo or main image<input ref={logoInput} type="file" accept="image/*" onChange={upload} disabled={uploading} className="field" aria-busy={uploading||undefined}/></label>{uploading&&<p className="helper text-sm">Uploading…</p>}{uploadErr&&<p className="text-sm font-semibold text-brand-error" role="alert">{uploadErr} <button type="button" className="underline" onClick={forgetUpload}>Dismiss</button></p>}{logo===null&&provider?.logo_url&&<p className="helper text-sm">The current image comes down when you save. <button type="button" className="underline" onClick={()=>setLogo('')}>Keep it</button></p>}{logo!==null&&(logo||provider?.logo_url)&&!uploading&&<div className="flex items-center gap-3"><img src={logo||provider.logo_url} alt="" className="h-16 w-16 rounded-lg object-cover ring-1 ring-brand-line"/><p className="helper text-sm">{logo?'New image ready — it is saved when you click the button below.':'Current image. Choose a file above to replace it.'}</p>{logo
+  ? <button type="button" className="text-sm underline" onClick={()=>{setLogo('');forgetUpload()}}>Remove</button>
+  : <button type="button" className="text-sm underline" onClick={()=>{setLogo(null);forgetUpload()}}>Remove</button>}</div>}</div><GalleryEditor value={data.gallery} onChange={g=>setData(d=>({...d,gallery:typeof g==='function'?g(d.gallery):g}))} onUploading={galleryBusy}/>{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
 function Field({label,...props}){return <label>{label}<input className="field" {...props}/></label>}
 
 // Up to three photos, each credited to the business's own site or page. The
@@ -113,18 +138,25 @@ function Field({label,...props}){return <label>{label}<input className="field" {
 // person should see why before they press Save. Uploading happens the moment a
 // file is picked, the same way the logo does, so the Save button only ever
 // sends URLs.
-export function GalleryEditor({ value = [], onChange }){
+//
+// onUploading tells the form when a photo is in flight, so Save can wait for
+// it; the form owns the Save button and cannot otherwise see in here. onChange
+// may be handed a function of the current list, because the upload awaits and
+// the `value` this closure captured is stale by the time it resolves — a photo
+// removed during the upload used to come back when the upload landed.
+export function GalleryEditor({ value = [], onChange, onUploading }){
   const [err,setErr]=useState('');
   const [uploading,setUploading]=useState(false);
   const set=(i,patch)=>onChange(value.map((g,j)=>j===i?{...g,...patch}:g));
   const remove=(i)=>onChange(value.filter((_,j)=>j!==i));
+  const busy=(on)=>{ setUploading(on); onUploading?.(on); };
   const add=async e=>{
     const file=e.target.files?.[0]; e.target.value='';
     if(!file||value.length>=GALLERY_MAX)return;
-    setUploading(true);setErr('');
-    try{ const {file_url}=await api.integrations.Core.UploadFile({file}); onChange([...value,{url:file_url,caption:'',source_url:''}]); }
+    busy(true);setErr('');
+    try{ const {file_url}=await api.integrations.Core.UploadFile({file}); if(!file_url) throw new Error('The image was not saved. Please try again.'); onChange(cur=>(cur||[]).length>=GALLERY_MAX?cur:[...(cur||[]),{url:file_url,caption:'',source_url:''}]); }
     catch(error){ setErr(error.message||'Could not upload that image'); }
-    finally{ setUploading(false); }
+    finally{ busy(false); }
   };
   return <fieldset className="rounded-lg border border-brand-line p-4">
     <legend className="px-1 text-sm font-semibold text-brand-ink">Photos (up to {GALLERY_MAX}, official sources only)</legend>
