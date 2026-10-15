@@ -513,7 +513,8 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   }
   let reverified = null;
   if (entity === 'Provider') {
-    patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo });
+    try { patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl }); }
+    catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
     // Staff edit a listing in order to correct it, so their edit is not what
     // invalidates the check they themselves made.
     if (req.user.role !== 'admin' && !isModerator(req.user)) {

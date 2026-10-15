@@ -6,7 +6,8 @@ import CityInput, { StateSelect, stateForPlace } from '@/components/CityInput';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import { badgesForCategory } from '@/lib/badges';
 import { categoryLabel } from '@/lib/categories';
-const blank={name:'',tagline:'',category:'',subcategory:'',short_description:'',description:'',address:'',city:'',state:'',zip:'',phone:'',text_phone:'',email:'',website:'',hours:'',service_areas:'',languages:'English',delivery_mode:'in_person',whatsapp:'',payment_link_url:'',badges:[]};
+import { GALLERY_MAX } from '@/lib/listing';
+const blank={name:'',tagline:'',category:'',subcategory:'',short_description:'',description:'',address:'',city:'',state:'',zip:'',phone:'',text_phone:'',email:'',website:'',hours:'',service_areas:'',languages:'English',delivery_mode:'in_person',whatsapp:'',payment_link_url:'',badges:[],gallery:[]};
 // initialCategory arrives from /add?category=… — an empty category tile on the
 // homepage asking for the first listing of that kind. initialName and
 // sourcePostId arrive from /add?from_post=… — an answer to an ask being turned
@@ -29,6 +30,7 @@ const fromProvider = (row) => ({
   service_areas: Array.isArray(row?.service_areas) ? row.service_areas.join(', ') : (row?.service_areas || ''),
   languages: Array.isArray(row?.languages) ? row.languages.join(', ') : (row?.languages || 'English'),
   badges: Array.isArray(row?.badges) ? row.badges : [],
+  gallery: Array.isArray(row?.gallery) ? row.gallery : [],
 });
 export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});const upload=async e=>{const {file_url}=await api.integrations.Core.UploadFile({file:e.target.files[0]});setLogo(file_url)};const submit=async e=>{
     e.preventDefault();
@@ -58,6 +60,9 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
         // was actually shown: untouched text sends nothing, and a split only
         // happens to someone who typed in a field labelled "comma separated".
         if(k==='service_areas'||k==='languages') return data[k]!==before[k];
+        // Objects, not ids: the generic sort-and-compare above turns each photo
+        // into "[object Object]" and would call any two galleries equal.
+        if(k==='gallery') return JSON.stringify(v)!==JSON.stringify(before[k]);
         return !same(v,before[k]);
       }));
       if(!Object.keys(patch).length){ setDone(provider); setBusy(false); return; }
@@ -80,8 +85,44 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
       a name and a category and nothing else, so a listing that reached the
       directory through the API or an older form can be missing either of
       these — and an owner fixing a phone number was told to write a full
-      description first or lose the change. */}<label className="block">Full description<textarea className="field min-h-32" name="description" value={data.description} onChange={change} required={!provider}/></label><label className="block">Logo or main image<input type="file" accept="image/*" onChange={upload} className="field"/></label>{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
+      description first or lose the change. */}<label className="block">Full description<textarea className="field min-h-32" name="description" value={data.description} onChange={change} required={!provider}/></label><label className="block">Logo or main image<input type="file" accept="image/*" onChange={upload} className="field"/></label><GalleryEditor value={data.gallery} onChange={gallery=>setData(d=>({...d,gallery}))}/>{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
 function Field({label,...props}){return <label>{label}<input className="field" {...props}/></label>}
+
+// Up to three photos, each credited to the business's own site or page. The
+// caption and source are asked for next to the picture rather than in a
+// separate step, because a photo without them is refused by the server and the
+// person should see why before they press Save. Uploading happens the moment a
+// file is picked, the same way the logo does, so the Save button only ever
+// sends URLs.
+export function GalleryEditor({ value = [], onChange }){
+  const [err,setErr]=useState('');
+  const [uploading,setUploading]=useState(false);
+  const set=(i,patch)=>onChange(value.map((g,j)=>j===i?{...g,...patch}:g));
+  const remove=(i)=>onChange(value.filter((_,j)=>j!==i));
+  const add=async e=>{
+    const file=e.target.files?.[0]; e.target.value='';
+    if(!file||value.length>=GALLERY_MAX)return;
+    setUploading(true);setErr('');
+    try{ const {file_url}=await api.integrations.Core.UploadFile({file}); onChange([...value,{url:file_url,caption:'',source_url:''}]); }
+    catch(error){ setErr(error.message||'Could not upload that image'); }
+    finally{ setUploading(false); }
+  };
+  return <fieldset className="rounded-lg border border-brand-line p-4">
+    <legend className="px-1 text-sm font-semibold text-brand-ink">Photos (up to {GALLERY_MAX}, official sources only)</legend>
+    <p className="helper mt-0">Only pictures the business itself has published. Each one needs a short credit and a link to where it came from.</p>
+    {value.length>0&&<ul className="mt-3 space-y-4">{value.map((g,i)=><li key={g.url+i} className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+      <img src={g.url} alt={g.caption||`Photo ${i+1}`} className="h-24 w-24 rounded-lg border border-brand-line object-cover"/>
+      <div className="grid gap-2">
+        <Field label="Credit (shown under the photo)" value={g.caption} onChange={e=>set(i,{caption:e.target.value})} placeholder="Photo: example.org" maxLength={200} required/>
+        <Field label="Official source link" type="url" value={g.source_url} onChange={e=>set(i,{source_url:e.target.value})} placeholder="https://" required/>
+        <button type="button" onClick={()=>remove(i)} className="justify-self-start text-sm font-semibold text-brand-error underline">Remove photo</button>
+      </div>
+    </li>)}</ul>}
+    {value.length<GALLERY_MAX&&<label className="mt-3 block text-sm">Add a photo<input type="file" accept="image/*" onChange={add} disabled={uploading} className="field"/></label>}
+    {uploading&&<p className="helper">Uploading…</p>}
+    {err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}
+  </fieldset>;
+}
 
 // Only the badges this kind of business can honestly claim. Changing the
 // category re-offers the list and drops anything that no longer applies, so a

@@ -400,6 +400,29 @@ ok(!promoAfter.sponsored, 'an owner cannot mark their own listing sponsored', JS
 ok(!promoAfter.sponsored_until, 'an owner cannot set their own sponsorship window', JSON.stringify(promoAfter.sponsored_until));
 ok(!promoAfter.last_confirmed_at, 'an owner cannot forge a confirmation date', JSON.stringify(promoAfter.last_confirmed_at));
 
+// ---- gallery: credited photos, three at most --------------------------------
+// The create route and the edit route each shape the field themselves, so both
+// doors are tried: a fourth photo, a photo with no credit, a source link that
+// is not http(s), and then a good pair that has to come back exactly as sent.
+const photo = (n, extra = {}) => ({ url: `https://blob.example/p${n}.png`, caption: `Photo: example.org ${n}`, source_url: 'https://example.org/about', ...extra });
+const fourUp = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Gallery Four', category: 'Food', short_description: 'x', gallery: [photo(1), photo(2), photo(3), photo(4)] } });
+ok(fourUp.status === 400, 'a fourth photo is refused on create', JSON.stringify(fourUp.data));
+const galleryListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Gallery Bakery', category: 'Food', short_description: 'x' } });
+const galleryId = galleryListing.data?.provider?.id;
+ok(Array.isArray(galleryListing.data?.provider?.gallery) && galleryListing.data.provider.gallery.length === 0, 'a listing without photos stores an empty gallery', JSON.stringify(galleryListing.data?.provider?.gallery));
+let g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1), photo(2), photo(3), photo(4)] } });
+ok(g.status === 400, 'a fourth photo is refused on edit', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1, { caption: '' })] } });
+ok(g.status === 400 && /caption/i.test(g.data?.error || ''), 'a photo without a caption is refused', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1, { source_url: 'javascript:alert(1)' })] } });
+ok(g.status === 400, 'a javascript: source link is refused', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1), photo(2)] } });
+const galleryAfter = (await call('GET', `/entities/Provider/${galleryId}`, { token: userA })).data || {};
+ok(g.status === 200 && JSON.stringify(galleryAfter.gallery) === JSON.stringify([photo(1), photo(2)]), 'a valid two-photo gallery round-trips', JSON.stringify(galleryAfter.gallery));
+ok(JSON.stringify(galleryAfter.gallery) === JSON.stringify(g.data?.gallery), 'the PUT answer carries the stored gallery', JSON.stringify(g.data?.gallery));
+const stranger = await call('PUT', `/entities/Provider/${galleryId}`, { token: userB, body: { gallery: [photo(3)] } });
+ok(stranger.status === 403, 'someone else cannot set a listing\'s photos', String(stranger.status));
+
 // The same four fields through the other door. createListing is a function
 // route, so stripProtected never runs for it — and because the list of fields
 // to refuse was written out twice, it accepted all four at creation time while
