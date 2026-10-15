@@ -28,6 +28,7 @@ import { translateEnabled, LANGUAGES as TRANSLATE_LANGUAGES } from './translate.
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
 import { healthReport } from './health.js';
+import { vouchesEnabled, forgetSettings } from './settings.js';
 
 // The built index.html, baked in at build time by scripts/emit-shell.mjs.
 // Absent in dev and in tests, where Vite serves the shell itself.
@@ -272,6 +273,10 @@ async function visibleRows(entity, rows, user) {
   // happened once — can turn a listing private long after people vouched for it
   // in public. Those vouches must go private with it, not sit in the API
   // describing who needed the service.
+  // Vouches and notes can be switched off site-wide from the admin area. Off
+  // means off for anyone asking directly, not just a hidden section; the rows
+  // stay, and staff still see them (the note queue lives on them).
+  if ((entity === 'Vouch' || entity === 'CommunityNote') && !(await vouchesEnabled())) return [];
   if ((entity === 'Vouch' || entity === 'CommunityNote') && rows.length) {
     const ids = [...new Set(rows.map((row) => row.provider_id).filter(Boolean))];
     const listings = await Promise.all(ids.map((id) => store.get('Provider', id).catch(() => null)));
@@ -470,7 +475,9 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
     if (text.length > 2000) return res.status(400).json({ error: 'Recommendations must be 2000 characters or fewer.' });
     body.body = text;
   }
-  res.status(201).json(await store.create(entity, body, req.user));
+  const created = await store.create(entity, body, req.user);
+  if (entity === 'Setting') forgetSettings();
+  res.status(201).json(created);
 });
 
 app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
@@ -515,6 +522,7 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
     }
   }
   const updated = await store.update(entity, id, patch);
+  if (entity === 'Setting') forgetSettings();
   // A verified listing that changed identity is a thing a moderator has to be
   // able to find, since the mark they granted has just come off.
   if (reverified) {
@@ -687,7 +695,7 @@ app.get('/api/users/:id', requireAuth, async (req, res, next) => {
 // Cloud console to this site's referrers and to the Maps JavaScript API only.
 // The server-side geocoding key (KC_GEOCODER_KEY) is a different key and never
 // leaves this process.
-app.get('/api/config', (_req, res) => res.json({
+app.get('/api/config', async (_req, res) => res.json({
   // Visitors get a read-only shared guest session so the whole site is
   // browsable without an account. Named for what it is; "demo mode" made
   // more than one reviewer think the site was a sandbox.
@@ -708,6 +716,8 @@ app.get('/api/config', (_req, res) => res.json({
   // translateText in functions.js.
   translateEnabled: translateEnabled(),
   translateLanguages: TRANSLATE_LANGUAGES,
+  // The admin switch for vouches and community notes (server/settings.js).
+  vouchesEnabled: await vouchesEnabled(),
 }));
 
 // Issues a session for the shared guest account so a visitor can browse the

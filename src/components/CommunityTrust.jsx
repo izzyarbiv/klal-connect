@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import { markEngaged } from '@/lib/engagement';
 import { loadMyConnections, connectedIds } from '@/lib/connections';
 import { isSensitiveListing } from '@/lib/sensitivity';
+import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 
 const initials = (name) => (name || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
@@ -19,6 +20,9 @@ const initials = (name) => (name || '?').split(' ').map((x) => x[0]).slice(0, 2)
 // Names are public (a vouch is a statement, not a bookmark); the "you know"
 // count only appears for a signed-in member with connections, and never names
 // who. None of this exists on a sensitive listing — see @/lib/sensitivity.
+//
+// Vouches and notes can be switched off site-wide (Admin → Site switches).
+// Off, this is just the "used them" count: no names, no vouch or note steps.
 export default function CommunityTrust({ provider, onCounts, onNote }) {
   const [vouches, setVouches] = useState(null);
   const [known, setKnown] = useState(0);
@@ -32,6 +36,7 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [tick, setTick] = useState(0);
+  const vouchesOn = useVouchesEnabled();
 
   const sensitive = isSensitiveListing(provider);
 
@@ -91,7 +96,7 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
     setUsed(true);
     const isOwner = provider.created_by_id === user.id || provider.owner_id === user.id;
     const hasVouched = vouches.some((v) => v.created_by_id === user.id);
-    setStep(isOwner || hasVouched ? 'note' : 'vouch');
+    setStep(!vouchesOn ? null : isOwner || hasVouched ? 'note' : 'vouch');
   });
 
   const vouch = () => run(async () => {
@@ -128,6 +133,8 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
   };
 
   const usedCount = provider.usage_count || 0;
+  // Switched off, a vouch they gave earlier is kept but not shown or offered.
+  const vouchedShown = vouchesOn && vouched;
   const shown = vouches.slice(0, 5);
   const names = shown.slice(0, 2).map((v) => v.author_name || 'A community member');
 
@@ -138,7 +145,7 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
         : null}
       <div className="min-w-0">
         <h2 className="section-title">{usedCount === 1 ? 'person in the community has used them' : usedCount > 0 ? 'people in the community have used them' : 'Nobody has said they used them yet'}</h2>
-        {vouches.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-2">
+        {vouchesOn && vouches.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="flex">
             {shown.map((v, i) => <Link key={v.id} to={`/profile/${v.created_by_id}`} title={v.author_name || 'Community member'} className={`grid h-7 w-7 place-items-center rounded-full bg-brand-tint text-[10px] font-bold text-brand-teal ring-2 ring-brand-surface ${i ? '-ml-2' : ''}`}>{initials(v.author_name)}</Link>)}
           </span>
@@ -146,12 +153,12 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
             {vouches.length === 1 ? `${names[0]} would send a friend` : `${names.join(', ')}${vouches.length > 2 ? ` and ${vouches.length - 2} ${vouches.length - 2 === 1 ? 'other' : 'others'}` : ''} would send a friend`}
           </span>
         </div>}
-        {known > 0 && <p className="mt-1 text-sm font-semibold text-brand-teal">{known} {known === 1 ? 'is someone' : 'are people'} you know</p>}
+        {vouchesOn && known > 0 && <p className="mt-1 text-sm font-semibold text-brand-teal">{known} {known === 1 ? 'is someone' : 'are people'} you know</p>}
       </div>
     </div>
 
     <div className="rounded-xl bg-brand-tint p-4 text-sm text-brand-ink">
-      {!used && !vouched && step === null && <div className="space-y-3">
+      {!used && !vouchedShown && step === null && <div className="space-y-3">
         <p><b>Have you used {provider.name}?</b> Tapping below adds you to the count. It is how the next person knows who to call.</p>
         <button type="button" onClick={markUsed} disabled={busy} className="primary"><Check size={16}/>I&apos;ve used them</button>
       </div>}
@@ -173,12 +180,12 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
         </div>
       </form>}
 
-      {(used || vouched) && step === null && <div className="space-y-2">
-        <p className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-brand-success"/><span><b>{used && vouched ? "You're counted and vouching." : used ? "You're counted." : "You're vouching for them."}</b> <span className="text-brand-body">Thank you for helping the next person.</span></span></p>
+      {(used || vouchedShown) && step === null && <div className="space-y-2">
+        <p className="flex items-start gap-2"><Check size={16} className="mt-0.5 shrink-0 text-brand-success"/><span><b>{used && vouchedShown ? "You're counted and vouching." : used ? "You're counted." : "You're vouching for them."}</b> <span className="text-brand-body">Thank you for helping the next person.</span></span></p>
         <div className="flex flex-wrap gap-x-4 gap-y-1 pl-6 text-sm font-semibold">
-          {!vouched && !ownListing && <button type="button" onClick={vouch} disabled={busy} className="text-brand-teal hover:underline">Vouch for them</button>}
-          <button type="button" onClick={() => setStep('note')} disabled={busy} className="text-brand-teal hover:underline">Add a note</button>
-          {vouched && <button type="button" onClick={withdrawVouch} disabled={busy} className="text-brand-muted hover:underline">Withdraw my vouch</button>}
+          {vouchesOn && !vouched && !ownListing && <button type="button" onClick={vouch} disabled={busy} className="text-brand-teal hover:underline">Vouch for them</button>}
+          {vouchesOn && <button type="button" onClick={() => setStep('note')} disabled={busy} className="text-brand-teal hover:underline">Add a note</button>}
+          {vouchedShown && <button type="button" onClick={withdrawVouch} disabled={busy} className="text-brand-muted hover:underline">Withdraw my vouch</button>}
           {used && <button type="button" onClick={unmarkUsed} disabled={busy} className="text-brand-muted hover:underline">Remove me from the count</button>}
         </div>
       </div>}

@@ -411,6 +411,32 @@ ok(!born.sponsored, 'a listing cannot be born sponsored', JSON.stringify(born.sp
 ok(!born.sponsored_until, 'a listing cannot be born with a sponsorship window', JSON.stringify(born.sponsored_until));
 ok(!born.last_confirmed_at, 'a listing cannot be born already confirmed', JSON.stringify(born.last_confirmed_at));
 
+// ---- the admin switch for vouches and community notes --------------------
+// Off until an admin turns it on. Off is a rule, not a hidden section: no new
+// vouches or notes, and none served to anyone but staff. The rows are kept.
+const switchListing = await call('POST', '/functions/createListing', { token: userB, body: { name: 'Switch Test Plumbing', category: 'Home Services', short_description: 'Repairs and installations.' } });
+const switchId = switchListing.data?.provider?.id;
+await call('PUT', `/entities/Provider/${switchId}`, { token: admin, body: { status: 'published' } });
+ok((await call('GET', '/config')).data.vouchesEnabled === false, 'vouches start switched off');
+const offVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'vouch' } });
+ok(offVouch.status === 403, 'a vouch is refused while switched off', String(offVouch.status));
+const offNote = await call('POST', '/functions/createReview', { token: userA, body: { provider_id: switchId, provider_name: 'Switch Test Plumbing', body: 'Came the same day and fixed it.' } });
+ok(offNote.status === 403, 'a note is refused while switched off', String(offNote.status));
+const offUse = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'use' } });
+ok(offUse.status === 200 && offUse.data?.active === true, '"I\'ve used them" still works while switched off', String(offUse.status));
+const planted = await call('POST', '/entities/Vouch', { token: admin, body: { provider_id: switchId, provider_name: 'Switch Test Plumbing', author_name: 'Kept Row' } });
+ok(planted.status === 201, 'admin planted a vouch row for the test');
+const vouchRows = async (token) => ((await call('GET', '/entities/Vouch', token ? { token } : {})).data || []).filter((v) => v.provider_id === switchId);
+ok((await vouchRows(null)).length === 0 && (await vouchRows(userA)).length === 0, 'no vouch is served to visitors or members while switched off');
+ok((await vouchRows(admin)).length === 1, 'the row is kept, and admins still see it');
+const setting = await call('POST', '/entities/Setting', { token: userA, body: { key: 'vouches_enabled', value: 'true' } });
+ok(setting.status === 403, 'a member cannot flip the switch', String(setting.status));
+const flipped = await call('POST', '/entities/Setting', { token: admin, body: { key: 'vouches_enabled', value: 'true' } });
+ok(flipped.status === 201 && (await call('GET', '/config')).data.vouchesEnabled === true, 'an admin turns it on');
+ok((await vouchRows(null)).length === 1, 'turning it on brings the kept vouch back');
+const onVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'vouch' } });
+ok(onVouch.status === 200 && onVouch.data?.active === true, 'vouching works again once on', String(onVouch.status));
+
 // ---- a listing that turns private takes its vouches with it --------------
 // The dangerous case is not a listing that was always sensitive — vouching on
 // one of those is already refused. It is a listing that becomes sensitive

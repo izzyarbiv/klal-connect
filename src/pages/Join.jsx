@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { UserPlus, LogIn, Compass } from 'lucide-react';
 import { api } from '@/api/client';
+import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 import AuthLayout from '@/components/AuthLayout';
 
 // Where an invite link lands. Remembers the code so the account created next
 // is credited to the inviter, and says who invited you before asking for
 // anything.
 export default function Join() {
+  const vouchesOn = useVouchesEnabled();
   const { code } = useParams();
   const [state, setState] = useState({ loading: true });
 
@@ -29,7 +31,7 @@ export default function Join() {
   if (state.loading) return <div className="loading">Opening your invite…</div>;
 
   const register = '/register?returnTo=' + encodeURIComponent('/welcome');
-  return <AuthLayout icon={UserPlus} title={state.invite ? `${state.invite.inviter_name} invited you to Klal Connect` : 'Welcome to Klal Connect'} subtitle={state.error || 'Trusted businesses, gemachs and professionals — vouched for by people you know.'}
+  return <AuthLayout icon={UserPlus} title={state.invite ? `${state.invite.inviter_name} invited you to Klal Connect` : 'Welcome to Klal Connect'} subtitle={state.error || (vouchesOn ? 'Trusted businesses, gemachs and professionals — vouched for by people you know.' : 'Trusted businesses, gemachs and professionals, shared by people you know.')}
     footer={<Link to="/directory" className="text-primary font-medium hover:underline"><Compass className="w-3 h-3 inline mr-1" />Browse the directory first</Link>}>
     <div className="space-y-3">
       {state.member

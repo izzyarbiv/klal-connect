@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Compass } from 'lucide-react';
 import SearchPanel from '@/components/SearchPanel';
 import ResourceCard from '@/components/ResourceCard';
@@ -31,6 +32,7 @@ const QUICK_LINKS = [
 const LAUNCH_COMMUNITY = 'Boca Raton';
 
 export default function Home() {
+  const vouchesOn = useVouchesEnabled();
   const { data: providers = [] } = useQuery({
     queryKey: ['providers', 'all'],
     queryFn: () => api.entities.Provider.filter({ status: 'published' }),
@@ -92,7 +94,7 @@ export default function Home() {
         a dark band — now sits below it. */}
     <section>
       <h1 className="max-w-3xl font-display text-3xl font-bold tracking-tight text-brand-ink md:text-5xl">Find a plumber, a gemach, a shul — from people who know.</h1>
-      <p className="mt-3 max-w-2xl text-lg text-brand-body">A directory of frum businesses, gemachim and community resources, vouched for by members and checked by Klal.</p>
+      <p className="mt-3 max-w-2xl text-lg text-brand-body">A directory of frum businesses, gemachim and community resources, {vouchesOn ? 'vouched for' : 'shared'} by members and checked by Klal.</p>
       <div className="mt-6"><SearchPanel defaultLocation={community} /></div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {quickLinks.map(({ label, q, count }) => <Link
@@ -164,7 +166,7 @@ export default function Home() {
     <section className="rounded-xl bg-brand-canvas p-7 text-center ring-1 ring-brand-line md:p-10">
       <ShieldCheck size={26} className="mx-auto text-brand-teal" />
       <h2 className="mt-3 font-heading text-xl font-bold text-brand-ink">Built on trust, not reviews</h2>
-      <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews and no rating wars. Klal Connect shows community usage and positive experiences, and handles corrections privately — because a livelihood is on the other end of every listing.</p>
+      <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews and no rating wars. Klal Connect shows community usage{vouchesOn ? ' and positive experiences' : ''}, and handles corrections privately — because a livelihood is on the other end of every listing.</p>
     </section>
   </div>;
 }
