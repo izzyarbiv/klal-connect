@@ -3,7 +3,7 @@ import { api } from '@/api/client';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import CompletenessRing from '@/components/CompletenessRing';
 import { listingCompleteness } from '@/lib/completeness';
-import { listingEditor } from '@/lib/listing';
+import { listingEditor, isListingStaff } from '@/lib/listing';
 
 export default function ManageListings({user}){
   const [items,setItems]=useState([]);
@@ -55,6 +55,11 @@ export default function ManageListings({user}){
 
   return <section className="panel mt-6 space-y-5">
     <h2 className="section-title">Manage my listings</h2>
+    {/* Staff may edit any listing, but this list stays "mine": the whole
+        directory under a heading that says "my listings" would be the wrong
+        set, and nothing anyone needs to scroll. The way in is the listing
+        page, where the edit link shows for staff on every listing. */}
+    {isListingStaff(user)&&<p className="helper">As Klal Connect staff you can edit any listing from its own page — open the listing and use "Edit this listing". That changes its details, not who it belongs to.</p>}
     {items.length===0
       ? <p className="text-sm">You do not have a submitted listing yet.</p>
       : <>
