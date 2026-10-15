@@ -438,28 +438,71 @@ function dedupePlaces(rows, limit) {
 // address gets the building itself when a provider can place it, and the town
 // otherwise, never a provider's guess at some other town.
 //
-// Returns {latitude, longitude} or null; never throws. The lookup is bounded
-// so a slow or blocked provider cannot hold up the save it runs inside.
-const PIN_TIMEOUT_MS = 4000;
+// Returns {latitude, longitude, pin_precise} or null; never throws.
+// pin_precise says whether the pin is the building itself or the middle of
+// its town, so a page can tell a rooftop from a guess at the town. Stored
+// without it, the two were indistinguishable next to a street address.
+//
+// The lookup is bounded so a slow or blocked provider cannot hold up the save
+// it runs inside: two seconds is long enough for a provider that is answering
+// and short enough that a save does not feel broken when one is not.
+const PIN_TIMEOUT_MS = 2000;
+
+// A value the map can draw. null, undefined and '' are all "no coordinate";
+// Number('') and Number(null) are both 0, so a plain finiteness check read an
+// empty string as a pin on the equator and never geocoded the row.
+const hasCoord = (v) => v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(Number(v));
+
+// Curated towns the list knows by a name that also belongs to a sizable town
+// in another state or country. "Jackson" on its own is Jackson, NJ to this
+// directory and Jackson, MS to the rest of the world; without a state on the
+// row there is no way to tell, so the curated pin is withheld for these and
+// the row stays unpinned (or takes a provider's answer) rather than land in
+// the wrong state. The bar is a city of real size elsewhere, not a village
+// that happens to share the name: Lakewood is here because Colorado, Ohio
+// and California each have one bigger than a town, Monsey is not because
+// nowhere else does, and Elizabeth is not because the other Elizabeths are
+// too small for a listing to plausibly mean them.
+const AMBIGUOUS_TOWN_NAMES = new Set([
+  'jackson', 'hollywood', 'paris', 'manchester', 'london', 'columbus', 'portland', 'melbourne', 'vienna',
+  'lakewood', 'williamsburg', 'manhattan',
+]);
 
 export async function pinForListing(row) {
-  if (!row || (row.latitude != null && row.longitude != null)) return null;
+  if (!row || (hasCoord(row.latitude) && hasCoord(row.longitude))) return null;
   const address = String(row.address || '').trim();
   const city = String(row.city || '').trim();
+  const state = String(row.state || '').trim().toUpperCase();
   if (!address && !city) return null;
-  const q = [address, city, row.state].filter(Boolean).join(', ');
+  const q = [address, city, state].filter(Boolean).join(', ');
+  let timer;
   try {
     const results = await Promise.race([
       searchPlaces(q, address ? 5 : 1),
-      new Promise((_, reject) => setTimeout(() => reject(new GeoError(LOCATION_UNAVAILABLE, 504)), PIN_TIMEOUT_MS)),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new GeoError(LOCATION_UNAVAILABLE, 504)), PIN_TIMEOUT_MS); }),
     ]);
+    // A curated town is only an answer when it is the town the row means.
+    // findPlaces matches "Paris, TX" to the curated Paris by word containment
+    // and the pin used to be accepted on the city name alone, so a Texas
+    // listing was drawn in France. With a state on the row the town's state
+    // has to agree; without one, a name shared across states is no answer.
+    const rightPlace = (r) => {
+      if (r.source !== 'klal') return true;
+      if (state) return String(r.region || '').toUpperCase() === state;
+      return !AMBIGUOUS_TOWN_NAMES.has(String(r.city || '').toLowerCase());
+    };
+    const usable = results.filter(rightPlace);
     const sameTown = (r) => city && String(r.city || '').toLowerCase() === city.toLowerCase();
-    const hit = (address && results.find((r) => r.precise)) || results.find(sameTown) || (!address ? results[0] : null);
-    if (!hit || !isFiniteNum(hit.latitude) || !isFiniteNum(hit.longitude)) return null;
-    return { latitude: Number(hit.latitude), longitude: Number(hit.longitude) };
+    const hit = (address && usable.find((r) => r.precise)) || usable.find(sameTown) || (!address ? usable[0] : null);
+    if (!hit || !hasCoord(hit.latitude) || !hasCoord(hit.longitude)) return null;
+    return { latitude: Number(hit.latitude), longitude: Number(hit.longitude), pin_precise: Boolean(hit.precise) };
   } catch {
     // A listing without a pin is still a listing; the next edit tries again.
     return null;
+  } finally {
+    // The losing timer otherwise keeps the process busy for the full bound
+    // after every save the curated list answered in a millisecond.
+    clearTimeout(timer);
   }
 }
 

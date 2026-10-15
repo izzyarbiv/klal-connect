@@ -76,6 +76,47 @@ export const isStaleConfirmation = (provider, now = Date.now()) => {
 // its hours or add a photo without that meaning anything about who it is.
 const IDENTITY_FIELDS = ['name', 'category', 'city', 'address', 'phone'];
 
+const identityChanges = (patch, row) =>
+  IDENTITY_FIELDS.filter((f) => f in patch && String(patch[f] ?? '') !== String(row[f] ?? ''));
+
+/**
+ * Is this a coordinate the map can draw? null, undefined and '' are all "no
+ * pin". An imported row with empty strings in both columns passed every
+ * `!= null` check as pinned while the map had nothing to draw, and the
+ * geocoder never ran for it because it looked done.
+ */
+export const hasCoordinate = (v) => v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(Number(v));
+
+/**
+ * What a listing's pin loses when an edit moves the business.
+ *
+ * A pin from the old address on the new one is worse than no pin: the map and
+ * the prerendered JSON-LD then carry a Brooklyn address at Lakewood
+ * coordinates. So a change of address or city clears the coordinates and the
+ * server geocodes again from the new address. This applies to every editor,
+ * staff included. It used to live inside verificationAfterEdit, which the
+ * route skips for staff so a correction does not cost a listing its check, and
+ * so a moderator fixing a wrong address left the old pin exactly where it was.
+ * Staff are the people who correct addresses; the pin rule cannot skip them.
+ *
+ * A patch that brings its own new coordinates is the exception. The owner who
+ * moved the business and dropped the marker on the new door in the same save
+ * has already said where it is, and a geocoder's guess must not replace that.
+ * The same pair the row already holds does not count as new: a client echoing
+ * the row back with a different city is the stale-pin case, not a placement.
+ *
+ * Returns the fields to write alongside the patch, or null when nothing moved.
+ */
+export function pinAfterEdit(patch, row) {
+  if (!patch || !row) return null;
+  const changed = identityChanges(patch, row);
+  if (!changed.includes('address') && !changed.includes('city')) return null;
+  const supplied = hasCoordinate(patch.latitude) && hasCoordinate(patch.longitude)
+    && !(Number(patch.latitude) === Number(row.latitude) && Number(patch.longitude) === Number(row.longitude));
+  if (supplied) return null;
+  return { latitude: null, longitude: null };
+}
+
 /**
  * What a verified listing loses when an edit changes who it is.
  *
@@ -92,16 +133,12 @@ const IDENTITY_FIELDS = ['name', 'category', 'city', 'address', 'phone'];
  */
 export function verificationAfterEdit(patch, row) {
   if (!patch || !row) return null;
-  const changed = IDENTITY_FIELDS.filter((f) => f in patch && String(patch[f] ?? '') !== String(row[f] ?? ''));
+  const changed = identityChanges(patch, row);
   if (!changed.length) return null;
   const out = {};
   if (row.verified) Object.assign(out, { verified: false, verified_at: null, verified_by: null, verified_badges: [] });
   if (row.last_confirmed_at) out.last_confirmed_at = null;
-  // A pin from the old address on the new one is worse than no pin: the
-  // prerendered JSON-LD then carries a Brooklyn address at Lakewood
-  // coordinates. Geocoding runs again from the new address.
-  if ((changed.includes('address') || changed.includes('city')) && (row.latitude || row.longitude)) {
-    Object.assign(out, { latitude: null, longitude: null });
-  }
+  // The pin is pinAfterEdit's, on purpose: that rule applies to staff too and
+  // this one does not.
   return Object.keys(out).length ? { fields: out, changed } : null;
 }

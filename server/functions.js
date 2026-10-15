@@ -201,9 +201,24 @@ export const functions = {
     // to claim the opposite, which is worth more than a nitpick: a stale note
     // about what moderation does is how someone later assumes a review
     // happened when none did.
+    const input = listingInput(payload);
+    // Whether the pin is the building or its town centre is the geocoder's
+    // word, written below; a client cannot declare it. listingInput never sees
+    // PROTECTED_FIELDS, so it is refused here.
+    delete input.pin_precise;
+    // A pin the person placed, or picked from the town list, is kept as is.
+    // Anything less than a usable pair — an empty string from a form field,
+    // one coordinate without the other — is no pin, and is stored as none so
+    // the lookup below runs instead of the row looking pinned forever.
+    const hasCoord = (v) => v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(Number(v));
+    if ('latitude' in input || 'longitude' in input) {
+      const usable = hasCoord(input.latitude) && hasCoord(input.longitude);
+      input.latitude = usable ? Number(input.latitude) : null;
+      input.longitude = usable ? Number(input.longitude) : null;
+    }
     const provider = await store.create(
       'Provider',
-      { ...listingInput(payload), status: INITIAL_STATUS, claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },
+      { ...input, status: INITIAL_STATUS, claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },
       user
     );
     // Someone who typed a town without picking it from the list saved no

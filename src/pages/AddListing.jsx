@@ -5,7 +5,7 @@ import ClaimForm from '@/components/ClaimForm';
 import GuestPrompt from '@/components/GuestPrompt';
 import { api } from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
-import { canEditListing } from '@/lib/listing';
+import { canEditListing, listingEditor } from '@/lib/listing';
 
 // Gated on arrival rather than at the submit button. Filling in sixteen fields
 // and only then being told to create an account is the worst possible order,
@@ -59,10 +59,18 @@ export default function AddListing() {
     // The header said "YOUR LISTING / Edit this listing" above a refusal
     // explaining that it is not yours and there is no form, and the only way
     // out was the whole directory rather than the listing in question.
+    //
+    // Staff correcting a listing they neither added nor claimed are told so
+    // too: the listing page one click earlier called this a staff edit, and an
+    // eyebrow then reading "YOUR LISTING" contradicted it. The listing stays
+    // with whoever added or claimed it, and the header says that.
+    const staffEdit = !!editing && listingEditor(editing) !== user.id;
     return <div className="page-shell max-w-4xl py-9">
-      <span className="eyebrow">{editError ? 'LISTING' : 'YOUR LISTING'}</span>
-      <h1 className="title text-3xl">{editError ? editError.title : 'Edit this listing'}</h1>
-      {!editError && <p className="helper mb-6">Changes go live as soon as you save. Verification, featured placement and the community counters are not yours to set — those stay with the Klal team.</p>}
+      <span className="eyebrow">{editError ? 'LISTING' : staffEdit ? 'STAFF EDIT' : 'YOUR LISTING'}</span>
+      <h1 className="title text-3xl">{editError ? editError.title : staffEdit ? 'Edit this listing as staff' : 'Edit this listing'}</h1>
+      {!editError && (staffEdit
+        ? <p className="helper mb-6">Changes go live as soon as you save, and are recorded as a staff edit. The listing stays with whoever added or claimed it; you are correcting it, not taking it over.</p>
+        : <p className="helper mb-6">Changes go live as soon as you save. Verification, featured placement and the community counters are not yours to set — those stay with the Klal team.</p>)}
       {editError
         ? <div className="empty"><p>{editError.body}</p><div className="flex flex-wrap justify-center gap-2"><a href={`/provider/${encodeURIComponent(editId)}`} className="primary">Open the listing</a><Link to="/directory" className="secondary">Browse the directory</Link></div></div>
         : !editing
