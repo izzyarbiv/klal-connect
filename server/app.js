@@ -17,7 +17,7 @@ import { functions, publicFunctions, safeExternalUrl, findInviteByCode } from '.
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
-import { listingEditor, normalizeListingPatch } from '../src/lib/listing.js';
+import { listingEditor, normalizeListingPatch, canSetPaymentLink } from '../src/lib/listing.js';
 import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
@@ -542,6 +542,11 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   // and the same pin written straight back before the response went out.
   let pinRemoved = false;
   const isStaff = req.user.role === 'admin' || isModerator(req.user);
+  // The one field whose misuse moves money. Staff may fix anything else on a
+  // listing for the business; where its payments go stays with the business.
+  if (entity === 'Provider' && 'payment_link_url' in (patch || {}) && !canSetPaymentLink(existing, req.user)) {
+    return res.status(403).json({ error: 'Only the business that owns this listing can change its payment link.' });
+  }
   if (entity === 'Provider') {
     try { patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl }); }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }

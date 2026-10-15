@@ -728,7 +728,14 @@ await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: {
 const modGrab = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
 ok(modGrab.verified !== true && modGrab.featured !== true && modGrab.owner_id === idC,
   'a moderator still cannot verify, feature or take over a listing', JSON.stringify({ verified: modGrab.verified, featured: modGrab.featured, owner_id: modGrab.owner_id }));
-// A moderator does still change status — that is their queue work — and it
+
+// Editing any listing stops at the one field that moves money.
+const modPayFn = await call('POST', '/functions/updateListingPaymentLink', { token: modTok, body: { provider_id: modListingId, payment_link_url: 'https://buy.stripe.com/not-theirs' } });
+ok(modPayFn.status === 403, "a moderator cannot set another business's payment link through the function", String(modPayFn.status));
+const modPayPut = await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { payment_link_url: 'https://buy.stripe.com/not-theirs' } });
+ok(modPayPut.status === 403, 'nor through the generic edit route', String(modPayPut.status));
+const modPayAfter = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
+ok(!modPayAfter.payment_link_url, "and the listing's payment link is untouched", String(modPayAfter.payment_link_url));// A moderator does still change status — that is their queue work — and it
 // is logged as moderation like before. The listing starts out published, so
 // the proof is a move to a status it did not already have and back: an
 // earlier version asserted 'published' on a row that was already published,

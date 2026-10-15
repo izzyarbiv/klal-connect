@@ -24,6 +24,19 @@ export const listingEditor = (row) => (row && (row.owner_id || row.created_by_id
 export const isListingStaff = (user) => !!user && (user.role === 'admin' || user.role === 'moderator');
 
 /** May this person change this listing? Staff always may. */
+/**
+ * May this person change where a listing's money goes?
+ *
+ * Narrower than editing. Staff may fix a listing's hours, wording or photos
+ * for the business, but the payment link is the one field whose misuse
+ * moves money: a compromised or careless staff account pointing it at a
+ * stranger's account is the worst thing "edit any listing" could enable, and
+ * nothing a staff member legitimately does needs it. The business that owns
+ * the listing sets it, and an admin can undo a bad one.
+ */
+export const canSetPaymentLink = (row, user) =>
+  !!user && !!row && (user.role === 'admin' || listingEditor(row) === user.id);
+
 export const canEditListing = (row, user) =>
   !!user && !!row && (isListingStaff(user) || listingEditor(row) === user.id);
 

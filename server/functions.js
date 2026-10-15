@@ -12,7 +12,7 @@ import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
-import { canEditListing, normalizeGallery, normalizeLogoUrl } from '../src/lib/listing.js';
+import { canEditListing, canSetPaymentLink, normalizeGallery, normalizeLogoUrl } from '../src/lib/listing.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
@@ -270,7 +270,7 @@ export const functions = {
     // approved these were exactly inverted — the business that now owned the
     // listing could not change its tagline or payment link, while the original
     // poster still could.
-    if (!canEditListing(provider, user)) {
+    if (!canSetPaymentLink(provider, user)) {
       fail('You can only edit listings you manage.', 403);
     }
     const url = safeExternalUrl(payment_link_url);
