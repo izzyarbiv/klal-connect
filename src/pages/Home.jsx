@@ -94,8 +94,8 @@ export default function Home() {
     {/* Search first. Everything that used to sit above it — slogan, mission,
         a dark band — now sits below it. */}
     <section>
-      <h1 className="max-w-3xl font-display text-3xl font-bold tracking-tight text-brand-ink md:text-5xl">Find a plumber, a gemach, a shul — from people who know.</h1>
-      <p className="mt-3 max-w-2xl text-lg text-brand-body">A directory of frum businesses, gemachim and community resources, {vouchesOn ? 'vouched for' : 'shared'} by members and checked by Klal.</p>
+      <h1 className="max-w-3xl font-display text-2xl font-bold tracking-tight text-brand-ink sm:text-3xl md:text-5xl">Find a plumber, a gemach, a shul — from people who know.</h1>
+      <p className="mt-3 max-w-2xl text-base text-brand-body sm:text-lg">A directory of frum businesses, gemachim and community resources, {vouchesOn ? 'vouched for' : 'shared'} by members and checked by Klal.</p>
       <div className="mt-6"><SearchPanel defaultLocation={community} /></div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {quickLinks.map(({ label, q, count }) => <Link
