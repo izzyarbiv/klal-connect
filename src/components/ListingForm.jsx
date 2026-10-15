@@ -30,9 +30,26 @@ const fromProvider = (row) => ({
   languages: Array.isArray(row?.languages) ? row.languages.join(', ') : (row?.languages || 'English'),
   badges: Array.isArray(row?.badges) ? row.badges : [],
 });
-export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});const upload=async e=>{const {file_url}=await api.integrations.Core.UploadFile({file:e.target.files[0]});setLogo(file_url)};const submit=async e=>{
+export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadErr,setUploadErr]=useState('');useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});
+  // The upload used to be fire-and-forget: a rejected request (too large, not
+  // an image, storage down, session expired) threw inside the change handler
+  // where nothing caught it, so the input looked accepted and `logo` stayed
+  // empty. On an edit that meant logo_url was left out of the patch, the patch
+  // was often empty, and the form said "Your changes are live" having sent
+  // nothing. The same happened to someone who clicked Save while the upload
+  // was still in flight. Every outcome now shows on the page, and Save waits.
+  const upload=async e=>{
+    const file=e.target.files?.[0]; if(!file) return;
+    setUploading(true);setUploadErr('');setErr('');setLogo('');
+    try{ const {file_url}=await api.integrations.Core.UploadFile({file}); if(!file_url) throw new Error('The image was not saved. Please try again.'); setLogo(file_url); }
+    catch(error){ setUploadErr(error.message||'Could not upload that image.'); e.target.value=''; }
+    finally{ setUploading(false); }
+  };
+  const submit=async e=>{
     e.preventDefault();
     if(busy)return;
+    if(uploading){ setErr('Your image is still uploading — one moment.'); return; }
+    if(uploadErr){ setErr('The image did not upload. Choose it again, or remove it, before saving.'); return; }
     if (!(await api.auth.requireAccount())) return;
     setBusy(true);setErr('');
     const fields={...data,logo_url:logo||(provider?.logo_url||''),service_areas:data.service_areas.split(',').map(x=>x.trim()).filter(Boolean),languages:data.languages.split(',').map(x=>x.trim()).filter(Boolean)};
@@ -60,7 +77,9 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
         if(k==='service_areas'||k==='languages') return data[k]!==before[k];
         return !same(v,before[k]);
       }));
-      if(!Object.keys(patch).length){ setDone(provider); setBusy(false); return; }
+      // Saying "Your changes are live" over an empty patch is how a lost
+      // upload went unnoticed for weeks. Nothing changed, so say that.
+      if(!Object.keys(patch).length){ setErr('Nothing has changed yet, so there is nothing to save.'); setBusy(false); return; }
       try{ const updated=await api.entities.Provider.update(provider.id,patch); setDone(updated||true); }
       catch(error){ setErr(/not permitted/i.test(error.message||'')
         ? 'This listing is not yours to edit any more — the business has claimed it since you opened this form. Your changes have not been saved. You can suggest a correction from the listing page.'
@@ -80,7 +99,7 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
       a name and a category and nothing else, so a listing that reached the
       directory through the API or an older form can be missing either of
       these — and an owner fixing a phone number was told to write a full
-      description first or lose the change. */}<label className="block">Full description<textarea className="field min-h-32" name="description" value={data.description} onChange={change} required={!provider}/></label><label className="block">Logo or main image<input type="file" accept="image/*" onChange={upload} className="field"/></label>{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
+      description first or lose the change. */}<label className="block">Full description<textarea className="field min-h-32" name="description" value={data.description} onChange={change} required={!provider}/></label><div className="space-y-2"><label className="block">Logo or main image<input type="file" accept="image/*" onChange={upload} className="field" aria-busy={uploading||undefined}/></label>{uploading&&<p className="helper text-sm">Uploading…</p>}{uploadErr&&<p className="text-sm font-semibold text-brand-error" role="alert">{uploadErr}</p>}{(logo||provider?.logo_url)&&!uploading&&<div className="flex items-center gap-3"><img src={logo||provider.logo_url} alt="" className="h-16 w-16 rounded-lg object-cover ring-1 ring-brand-line"/><p className="helper text-sm">{logo?'New image ready — it is saved when you click the button below.':'Current image. Choose a file above to replace it.'}</p>{logo&&<button type="button" className="text-sm underline" onClick={()=>{setLogo('');setUploadErr('')}}>Remove</button>}</div>}</div>{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
 function Field({label,...props}){return <label>{label}<input className="field" {...props}/></label>}
 
 // Only the badges this kind of business can honestly claim. Changing the
