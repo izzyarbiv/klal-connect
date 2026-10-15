@@ -159,7 +159,7 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
 
     <div className="rounded-xl bg-brand-tint p-4 text-sm text-brand-ink">
       {!used && !vouchedShown && step === null && <div className="space-y-3">
-        <p><b>Have you used {provider.name}?</b> Tapping below adds you to the count. It is how the next person knows who to call.</p>
+        <p><b>Have you used {provider.name}?</b> Tapping below adds you to the count. Thanks for helping the next person.</p>
         <button type="button" onClick={markUsed} disabled={busy} className="primary"><Check size={16}/>I&apos;ve used them</button>
       </div>}
 
