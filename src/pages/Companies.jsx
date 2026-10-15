@@ -1,5 +1,7 @@
 import React,{useEffect,useState} from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import SuggestInput from '@/components/SuggestInput';
+import { startsWord } from '@/lib/searchTerms';
 import { api } from '@/api/client';
 import { Image } from '@/components/ui/image';
 import { Building2, Search, Plus } from 'lucide-react';
@@ -25,6 +27,18 @@ export default function Companies(){
     return hay.includes(q.toLowerCase());
   });
 
+  // As you type: company pages by name (opens the page), then industries and
+  // towns (fills the search).
+  const navigate = useNavigate();
+  const suggest = (text) => {
+    const pages = companies.filter(c => startsWord(c.name, text)).slice(0, 5)
+      .map(c => ({ group: 'Companies', kind: 'company', label: c.name, value: c, hint: c.industry || '' }));
+    const words = (field, group, kind) => [...new Set(companies.map(c => (c[field] || '').trim()).filter(v => v && startsWord(v, text)))].slice(0, 3)
+      .map(v => ({ group, kind, label: v, value: v, count: companies.filter(c => c[field] === v).length }));
+    return [...pages, ...words('industry', 'Industries', 'query'), ...words('city', 'Towns', 'place')];
+  };
+  const pick = (item) => (item.kind === 'company' ? navigate(companyPath(item.value)) : setQ(item.value));
+
   return <div className="page-shell space-y-8 py-9">
     <div className="flex items-end justify-between gap-4">
       <div>
@@ -35,8 +49,8 @@ export default function Companies(){
       <Link to="/create-company" className="primary"><Plus size={16}/>Create a page</Link>
     </div>
     <div className="relative">
-      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted"/>
-      <input className="field pl-9" placeholder="Search companies" value={q} onChange={e=>setQ(e.target.value)}/>
+      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-brand-muted"/>
+      <SuggestInput className="field pl-9" placeholder="Search companies" aria-label="Search companies" value={q} onChange={setQ} onPick={pick} suggest={suggest}/>
     </div>
     {loading ? <p className="text-sm text-brand-body">Loading…</p> : filtered.length===0
       ? <div className="empty"><Building2/><p>No company pages {q?`match "${q}"`:'yet'}. Be the first to create one.</p></div>

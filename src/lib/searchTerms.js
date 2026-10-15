@@ -152,3 +152,119 @@ export function matchesQuery(haystack, terms) {
   const hay = String(haystack || '').toLowerCase();
   return terms.some((term) => hay.includes(term));
 }
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Does `text` contain `term` at the start of a word? "shul" is in "Shul/Synagogue", not in "Schulman". */
+export function startsWord(text, term) {
+  if (!term) return false;
+  return new RegExp(`(^|[^a-z0-9])${escapeRe(term)}`, 'i').test(String(text || ''));
+}
+
+/** Does `text` contain `term` as a whole word? "shul" is a word in "Modern shul", not in "Shulman". */
+export function hasWord(text, term) {
+  if (!term) return false;
+  return new RegExp(`(^|[^a-z0-9])${escapeRe(term)}($|[^a-z0-9])`, 'i').test(String(text || ''));
+}
+
+/**
+ * How directly a listing answers the query, for ordering results.
+ *
+ * Every listing that mentions the word somewhere is still a result, but a
+ * search for "shul" should open on the shuls, not on a restaurant whose
+ * description says it is near one. So a listing filed under the thing, or
+ * named for it, comes first; then one whose one-line summary says it; then
+ * everything that only mentions it further down.
+ */
+export function relevance(p, terms) {
+  if (!terms.length) return 0;
+  const hit = (text) => terms.some((t) => hasWord(text, t));
+  if (hit([p?.category, p?.subcategory, categoryLabel(p?.category), categoryLabel(p?.subcategory)].join(' '))) return 3;
+  if (hit(p?.name)) return 3;
+  if (hit([p?.tagline, p?.short_description].join(' '))) return 2;
+  return 1;
+}
+
+/**
+ * What to offer under the keyword box while someone types.
+ *
+ * Categories first (picking one filters to it), then the words people search
+ * for that have listings behind them, then listings by name (picking one opens
+ * it). Each comes with how many listings it would show, and nothing is offered
+ * that would lead to an empty page.
+ */
+export function keywordSuggestions(raw, providers, categories = []) {
+  const text = String(raw || '').trim().toLowerCase();
+  if (!text) return [];
+  const count = (q) => {
+    const terms = expandQuery(q);
+    return providers.filter((p) => matchesQuery(providerHaystack(p), terms)).length;
+  };
+  const seen = new Set();
+  const fresh = (label) => {
+    const k = String(label).toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  };
+
+  // A category is offered when its name starts with what was typed, or when
+  // what was typed is one of the words for it ("synagogue" -> Shuls & Minyanim).
+  const typedTerms = expandQuery(text);
+  const cats = [];
+  for (const c of categories) {
+    const label = categoryLabel(c.name);
+    const n = providers.filter((p) => p.category === c.name).length;
+    if (!n || cats.length >= 3) continue;
+    const named = startsWord(label, text);
+    const aliased = typedTerms.some((t) => startsWord(label, t) || (c.subcategories || []).some((s) => startsWord(categoryLabel(s), t)));
+    if ((named || aliased) && fresh(label)) cats.push({ group: 'Categories', kind: 'category', label, value: c.name, count: n });
+  }
+
+  // Searches: the subcategories listings are actually filed under, shown by
+  // their on-screen name, then the everyday words ("plu" offers plumber).
+  const queries = [];
+  const subs = new Map();
+  for (const p of providers) {
+    const label = categoryLabel(p.subcategory);
+    if (typeof label === 'string' && label && startsWord(label, text)) subs.set(label, (subs.get(label) || 0) + 1);
+  }
+  for (const [label] of [...subs].sort((a, b) => b[1] - a[1])) {
+    if (queries.length < 3 && fresh(label)) queries.push({ group: 'Searches', kind: 'query', label, value: label, count: count(label) });
+  }
+  for (const group of GROUPS) {
+    if (queries.length >= 4) break;
+    const term = group.find((t) => t.startsWith(text));
+    // One suggestion per meaning: "shul" adds nothing under "Shul/Synagogue".
+    if (!term || group.some((t) => seen.has(t))) continue;
+    const n = count(term);
+    if (n && fresh(term)) queries.push({ group: 'Searches', kind: 'query', label: term, value: term, count: n });
+  }
+
+  const listings = providers
+    .filter((p) => startsWord(p.name, text))
+    .sort((a, b) => (b.usage_count || 0) - (a.usage_count || 0))
+    .slice(0, 5)
+    .map((p) => ({ group: 'Listings', kind: 'listing', label: p.name, value: p, hint: [categoryLabel(p.subcategory || p.category), p.city].filter(Boolean).join(' · ') }));
+  return [...cats, ...queries, ...listings];
+}
+
+/** Places that have listings, matched against what was typed. */
+export function placeSuggestions(raw, providers) {
+  const text = String(raw || '').trim().toLowerCase();
+  if (!text) return [];
+  const byCity = new Map();
+  for (const p of providers) {
+    const city = String(p.city || '').trim();
+    if (!city) continue;
+    const key = city.toLowerCase();
+    const row = byCity.get(key) || { city, state: p.state || '', count: 0 };
+    row.count += 1;
+    byCity.set(key, row);
+  }
+  return [...byCity.values()]
+    .filter((r) => startsWord(r.city, text) || startsWord(`${r.city} ${r.state}`, text) || startsWord(`${r.city}, ${r.state}`, text))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6)
+    .map((r) => ({ group: 'Places with listings', kind: 'place', label: r.city, value: r.city, hint: r.state, count: r.count }));
+}
