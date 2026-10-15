@@ -42,7 +42,14 @@ jobs:
 
           MERGE="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
             -f sha="$CHECKED_SHA" \
-            -f merge_method=squash)"
+            -f merge_method=merge)"
+          # merge, not squash. A squash puts the PR author's name on the commit
+          # that lands on main, and Vercel's Hobby plan blocks every production
+          # deploy whose commit author is not the one team member: 8 of Eli's
+          # commits, 0 exceptions. A merge commit is authored by whoever merges,
+          # here the Actions bot acting for the repository. Eli's own commits
+          # and his name stay in the history untouched; only the deployable
+          # commit on main changes hands.
           if [ "$(jq -r '.merged' <<< "$MERGE")" != "true" ]; then
             echo "::error title=Pull request not merged::GitHub did not confirm the merge."
             exit 1
