@@ -50,5 +50,6 @@ jobs:
           MERGED_SHA="$(jq -r '.sha' <<< "$MERGE")"
           echo "Merged Eli's checked PR #$PR_NUMBER as $MERGED_SHA."
 
-          gh workflow run deploy.yml --ref main \
+          # No checkout in this job, so gh cannot read the repository from git.
+          gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main \
             -f source_sha="$MERGED_SHA"
