@@ -20,7 +20,9 @@ export default function ForgotPassword() {
     try {
       const result = await api.auth.resetPasswordRequest(email.trim());
       const params = new URLSearchParams({ email: email.trim() });
-      if (result?.dev_code) params.set("code", result.dev_code);
+      // Local dev gets the code prefilled; production builds drop this line
+      // entirely and the person types the code from the email.
+      if (import.meta.env.DEV && result?.dev_code) params.set("code", result.dev_code);
       navigate(`/reset-password?${params.toString()}`);
     } catch (err) {
       // 503 means the server has no way to email a code at all; say so
@@ -38,7 +40,7 @@ export default function ForgotPassword() {
     <AuthLayout
       icon={Mail}
       title="Reset password"
-      subtitle="We'll send you a link to reset it"
+      subtitle="We'll email you a six-digit code to reset it"
       footer={
         <Link to="/login" className="text-primary font-medium hover:underline">
           <ArrowLeft className="w-3 h-3 inline mr-1" />Back to log in
@@ -77,7 +79,7 @@ export default function ForgotPassword() {
                 Sending...
               </>
             ) : (
-              "Send reset link"
+              "Send reset code"
             )}
           </Button>
         </form>

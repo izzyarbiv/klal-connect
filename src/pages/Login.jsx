@@ -36,7 +36,9 @@ export default function Login() {
       await api.auth.loginViaEmailPassword(email.trim(), password);
       window.location.href = returnTo;
     } catch (err) {
-      if (err.data?.verification_required) { setVerify({ email: email.trim(), devCode: err.data.dev_code }); return; }
+      // The code itself comes back only in local dev (see Register); in
+      // production the person reads it from their inbox.
+      if (err.data?.verification_required) { setVerify({ email: email.trim(), devCode: import.meta.env.DEV ? err.data.dev_code : undefined }); return; }
       // A password copied out of a message often carries a space on one end.
       // Only retried after the real attempt failed, so a password that
       // genuinely ends in a space still works.
