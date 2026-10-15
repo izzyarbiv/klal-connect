@@ -185,7 +185,7 @@ export default function Browse() {
         suggest={(text) => placeSuggestions(text, providers)} suggestMore={lookupPlaces} minLength={2}
         placeholder="City or ZIP" aria-label="Where" />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
-        <option value="">All categories ({scoped.length})</option>
+        <option value="">All categories</option>
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)} ({countFor(c.name)})</option>)}
       </select>
       <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)}>
