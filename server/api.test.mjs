@@ -415,7 +415,9 @@ ok(!promoAfter.last_confirmed_at, 'an owner cannot forge a confirmation date', J
 // The create route and the edit route each shape the field themselves, so both
 // doors are tried: a fourth photo, a photo with no credit, a source link that
 // is not http(s), and then a good pair that has to come back exactly as sent.
-const photo = (n, extra = {}) => ({ url: `https://blob.example/p${n}.png`, caption: `Photo: example.org ${n}`, source_url: 'https://example.org/about', ...extra });
+// The fixture lives on the Blob store's host shape, which is the one https
+// origin the uploads-only rule accepts; an arbitrary host is refused below.
+const photo = (n, extra = {}) => ({ url: `https://kc1test.public.blob.vercel-storage.com/uploads/p${n}.png`, caption: `Photo: example.org ${n}`, source_url: 'https://example.org/about', ...extra });
 // Their own member: the suite now creates more listings than the five-a-day
 // cap allows one account, and a 429 here would leave every row below undefined.
 const galleryEmail = `gallery${Date.now()}@example.com`;
@@ -439,6 +441,42 @@ ok(g.status === 200 && JSON.stringify(galleryAfter.gallery) === JSON.stringify([
 ok(JSON.stringify(galleryAfter.gallery) === JSON.stringify(g.data?.gallery), 'the PUT answer carries the stored gallery', JSON.stringify(g.data?.gallery));
 const stranger = await call('PUT', `/entities/Provider/${galleryId}`, { token: userB, body: { gallery: [photo(3)] } });
 ok(stranger.status === 403, 'someone else cannot set a listing\'s photos', String(stranger.status));
+// "Uploaded here" has to mean our own storage, not any https host: a remote
+// picture is a tracking pixel the host can swap after staff have seen it.
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { url: 'https://evil.example/pixel.png?u=1' })] } });
+ok(g.status === 400 && /uploaded here/i.test(g.data?.error || ''), 'a photo on another host is refused', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { url: 'https://public.blob.vercel-storage.com.evil.example/p.png' })] } });
+ok(g.status === 400, 'a look-alike host is refused', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { url: 'https://' })] } });
+ok(g.status === 400, 'a bare https:// is refused as a photo', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { url: `https://kc1test.public.blob.vercel-storage.com/${'a'.repeat(3000)}.png` })] } });
+ok(g.status === 400, 'a photo url over 2048 characters is refused', String(g.status));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { url: '/api/files/local-1.png' })] } });
+ok(g.status === 200 && g.data?.gallery?.[0]?.url === '/api/files/local-1.png', 'a local-disk upload path is accepted as a photo', JSON.stringify(g.data?.gallery));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { caption: '​‌ ﻿' })] } });
+ok(g.status === 400 && /caption/i.test(g.data?.error || ''), 'a caption made only of zero-width characters is refused', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { caption: '​Photo: example.org﻿' })] } });
+ok(g.status === 200 && g.data?.gallery?.[0]?.caption === 'Photo: example.org', 'zero-width characters are stripped from a real caption', JSON.stringify(g.data?.gallery));
+
+// The third door. Provider is client-writable, so a member can POST
+// /entities/Provider directly, and that route stored the gallery as sent:
+// javascript: source links and a null where a photo belongs, which crashed
+// the listing page for whoever reviewed it. Its own member, because a create
+// counts against the five-a-day cap.
+const doorEmail = `door${Date.now()}@example.com`;
+const doorReg = await call('POST', '/auth/register', { body: { email: doorEmail, password: 'password123' } });
+const doorTok = (await call('POST', '/auth/verify-otp', { body: { email: doorEmail, otpCode: doorReg.data?.dev_code } })).data?.access_token;
+const doorBad = await call('POST', '/entities/Provider', { token: doorTok, body: { name: 'Bypass', category: 'Food', short_description: 'x', gallery: [photo(1, { source_url: 'javascript:alert(1)' }), null, 'str'] } });
+ok(doorBad.status === 400, 'the generic create route refuses a gallery with a javascript: source', JSON.stringify(doorBad.data));
+const doorNull = await call('POST', '/entities/Provider', { token: doorTok, body: { name: 'Bypass', category: 'Food', short_description: 'x', gallery: [null] } });
+ok(doorNull.status === 400, 'the generic create route refuses a gallery with a non-object item', JSON.stringify(doorNull.data));
+const doorRemote = await call('POST', '/entities/Provider', { token: doorTok, body: { name: 'Bypass', category: 'Food', short_description: 'x', gallery: [photo(1, { url: 'https://evil.example/pixel.png' })] } });
+ok(doorRemote.status === 400, 'the generic create route refuses a photo on another host', JSON.stringify(doorRemote.data));
+const doorLogo = await call('POST', '/entities/Provider', { token: doorTok, body: { name: 'Bypass', category: 'Food', short_description: 'x', logo_url: 'https://evil.example/track.gif' } });
+ok(doorLogo.status === 400, 'the generic create route refuses a logo on another host', JSON.stringify(doorLogo.data));
+const doorGood = await call('POST', '/entities/Provider', { token: doorTok, body: { name: 'Bypass Bakery', category: 'Food', short_description: 'x', gallery: [photo(1)], badges: ['pas_yisroel', 'not-a-badge'], whatsapp: '+1 (732) 555-0100' } });
+ok(doorGood.status === 201 && JSON.stringify(doorGood.data?.gallery) === JSON.stringify([photo(1)]), 'the generic create route stores a valid gallery as shaped', JSON.stringify(doorGood.data?.gallery));
+ok(doorGood.status === 201 && Array.isArray(doorGood.data?.badges) && !doorGood.data.badges.includes('not-a-badge') && doorGood.data?.whatsapp === '17325550100', 'the generic create route shapes badges and WhatsApp like the edit route', JSON.stringify({ badges: doorGood.data?.badges, whatsapp: doorGood.data?.whatsapp }));
 
 // The same four fields through the other door. createListing is a function
 // route, so stripProtected never runs for it — and because the list of fields
@@ -877,6 +915,23 @@ const logoAfter = (await call('GET', `/entities/Provider/${logoRow.id}`, { token
 ok(logoPut.status === 200 && logoAfter.logo_url === (pngUpload.data?.file_url || '/api/files/test.png'), 'a logo_url patch by the creator persists on the listing', JSON.stringify({ put: logoPut.data, after: logoAfter.logo_url }));
 ok(logoAfter.updated_date && logoAfter.updated_date !== logoRow.updated_date && logoAfter.updated_date > logoRow.created_date, 'saving a logo moves updated_date', JSON.stringify({ before: logoRow.updated_date, after: logoAfter.updated_date }));
 ok(logoAfter.name === 'Logo Listing' && logoAfter.created_by_id === logoId, 'a logo-only patch leaves the rest of the row and its ownership alone');
+// The logo is held to the same uploads-only rule as the photos. It used to
+// pass through unvalidated on both doors while the gallery beside it was
+// checked, and it is what og:image and the promoted rail draw.
+for (const bad of ['javascript:alert(1)', 'data:text/html,<script>1</script>', 'http://evil.example/p.gif', 'https://evil.example/p.gif', 'not a url at all']) {
+  const r = await call('PUT', `/entities/Provider/${logoRow.id}`, { token: logoTok, body: { logo_url: bad } });
+  ok(r.status === 400 && /uploaded here/i.test(r.data?.error || ''), `a logo_url of ${JSON.stringify(bad)} is refused on edit`, JSON.stringify(r.data));
+}
+const logoStill = (await call('GET', `/entities/Provider/${logoRow.id}`, { token: logoTok })).data;
+ok(logoStill?.logo_url === logoAfter.logo_url, 'a refused logo leaves the stored one in place', JSON.stringify(logoStill?.logo_url));
+// Clearing: the form's Remove control on an existing image sends ''.
+const logoClear = await call('PUT', `/entities/Provider/${logoRow.id}`, { token: logoTok, body: { logo_url: '' } });
+const logoCleared = (await call('GET', `/entities/Provider/${logoRow.id}`, { token: logoTok })).data;
+ok(logoClear.status === 200 && logoCleared?.logo_url === '', 'an empty logo_url takes the stored logo down', JSON.stringify({ put: logoClear.status, after: logoCleared?.logo_url }));
+const logoCreateBad = await call('POST', '/functions/createListing', { token: logoTok, body: { name: 'Logo Hotlink', category: 'Business', short_description: 'x', logo_url: 'https://evil.example/track.gif?u=1' } });
+ok(logoCreateBad.status === 400 && /uploaded here/i.test(logoCreateBad.data?.error || ''), 'createListing refuses a logo on another host', JSON.stringify(logoCreateBad.data));
+const logoCreateOk = await call('POST', '/functions/createListing', { token: logoTok, body: { name: 'Logo Local', category: 'Business', short_description: 'x', logo_url: '/api/files/local-2.png' } });
+ok(logoCreateOk.status === 200 && logoCreateOk.data?.provider?.logo_url === '/api/files/local-2.png', 'createListing keeps a logo that is one of our uploads', JSON.stringify(logoCreateOk.data));
 
 // A demo instance adopts one shared guest account for every signed-out
 // visitor, so rows it created belong to nobody in particular.

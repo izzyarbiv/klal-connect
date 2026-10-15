@@ -12,7 +12,7 @@ import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
-import { canEditListing, normalizeGallery } from '../src/lib/listing.js';
+import { canEditListing, normalizeGallery, normalizeLogoUrl } from '../src/lib/listing.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 
@@ -70,7 +70,11 @@ function listingInput(payload) {
   const whatsapp = rest.whatsapp ? String(rest.whatsapp).replace(/\D/g, '').replace(/^1?(\d{10})$/, '1$1') : '';
   const payment_link_url = safeExternalUrl(rest.payment_link_url);
   const gallery = normalizeGallery(rest.gallery, { safeUrl: safeExternalUrl });
-  return { ...rest, badges, whatsapp, payment_link_url, gallery };
+  // The logo is drawn on the listing page and emitted as og:image, so it is
+  // held to the same uploads-only rule as the photos — it used to pass through
+  // `...rest` untouched while the gallery next to it was checked.
+  const logo_url = normalizeLogoUrl(rest.logo_url);
+  return { ...rest, badges, whatsapp, payment_link_url, gallery, logo_url };
 }
 
 // A link a visitor will be sent to — a Stripe Payment Link, PayPal.me,

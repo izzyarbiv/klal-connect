@@ -42,6 +42,46 @@ export const canEditListing = (row, user) =>
 // had them, which is how a one-field edit quietly rewrites four other fields.
 export const GALLERY_MAX = 3;
 
+// An image this site serves itself.
+//
+// A photo or logo on a listing is drawn into every visitor's browser, so a
+// link to some other host turns the directory into a tracking pixel for that
+// host, and lets whoever controls it swap the picture after staff have looked
+// at it. Only our own uploads pass: a path under /api/files (the local-disk
+// backend) or an https link on the Vercel Blob store (production). The Blob
+// host is matched by its suffix because the store's own subdomain is random
+// per store and this module is shared with the browser, which cannot read
+// the server's environment. The error text says "uploaded here" and the check
+// now means it.
+//
+// Length is capped and the link has to parse, because an unparseable
+// `https://` on its own gave a broken <img>, and a 100KB "URL" rode along on
+// every list response that carried the row.
+export const IMAGE_URL_MAX = 2048;
+export function isOwnUploadUrl(value) {
+  const url = String(value || '');
+  if (!url || url.length > IMAGE_URL_MAX) return false;
+  if (url.startsWith('/api/files/')) return /^\/api\/files\/[\w.-]+$/.test(url);
+  let parsed;
+  try { parsed = new URL(url); } catch { return false; }
+  return parsed.protocol === 'https:' && parsed.hostname.endsWith('.public.blob.vercel-storage.com');
+}
+
+const refuse = (message) => { const err = new Error(message); err.statusCode = 400; throw err; };
+
+// Zero-width characters survive String.prototype.trim, so a caption made
+// only of them read as present while showing nothing under the photo.
+const visibleText = (value) => String(value || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+
+// The listing's logo. Empty is allowed, because clearing a logo is sent as
+// logo_url: '' — the one way an owner can take a picture down.
+export function normalizeLogoUrl(raw) {
+  const url = String(raw || '').trim();
+  if (!url) return '';
+  if (!isOwnUploadUrl(url)) refuse('The logo has to be uploaded here, not linked from elsewhere.');
+  return url;
+}
+
 // Photos of the business, each one credited.
 //
 // A listing may carry a few pictures, but every one has to say where it came
@@ -55,18 +95,15 @@ export const GALLERY_MAX = 3;
 // Throws with statusCode 400 like the server's own fail(), so both routes can
 // answer with the message as written.
 export function normalizeGallery(raw, { safeUrl }) {
-  const refuse = (message) => { const err = new Error(message); err.statusCode = 400; throw err; };
   if (raw === null || raw === undefined || raw === '') return [];
   if (!Array.isArray(raw)) refuse('Photos must be a list.');
   if (raw.length > GALLERY_MAX) refuse(`A listing can show up to ${GALLERY_MAX} photos.`);
   return raw.map((item) => {
     if (!item || typeof item !== 'object') refuse('Each photo needs an image, a caption and a source link.');
     const url = String(item.url || '').trim();
-    const caption = String(item.caption || '').trim().slice(0, 200);
+    const caption = visibleText(item.caption).slice(0, 200);
     if (!url) refuse('Each photo needs an image.');
-    // Our own uploads come back as absolute https links (Blob) or as a path
-    // under /api/files (local disk); anything else is not an image we served.
-    if (!/^https:\/\//.test(url) && !url.startsWith('/api/files/')) refuse('Photos have to be uploaded here, not linked from elsewhere.');
+    if (!isOwnUploadUrl(url)) refuse('Photos have to be uploaded here, not linked from elsewhere.');
     if (!caption) refuse('Each photo needs a caption saying where it came from, like "Photo: example.org".');
     const source_url = safeUrl(item.source_url);
     if (!source_url) refuse('Each photo needs a link to its official source.');
@@ -78,6 +115,7 @@ export function normalizeListingPatch(patch, row, { badgeById, badgeApplies, saf
   if (!patch || typeof patch !== 'object') return patch;
   const out = { ...patch };
   if ('gallery' in out) out.gallery = normalizeGallery(out.gallery, { safeUrl });
+  if ('logo_url' in out) out.logo_url = normalizeLogoUrl(out.logo_url);
   const category = 'category' in out ? out.category : row?.category;
   // A category change re-tests the badges already on the row, because a badge
   // only means anything next to the trade it was granted for.

@@ -451,6 +451,16 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
     try { body[field] = safeExternalUrl(body[field]); }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
+  // Provider is client-writable, so this route is a third way to create a
+  // listing next to createListing and the PUT route — and it was the only one
+  // of the three that stored the gallery, logo and badges as sent. A member
+  // could post a photo whose "source" was a javascript: link, or a null where
+  // a photo belongs, and the listing page threw for every moderator who opened
+  // it. The same shaping the PUT route applies, with the same 400 on refusal.
+  if (entity === 'Provider') {
+    try { body = normalizeListingPatch(body, null, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl }); }
+    catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
+  }
   if (entity === 'Connection') {
     const recipient = body.recipient_id ? await users.byId(body.recipient_id) : null;
     if (!recipient || recipient.email === GUEST_EMAIL) return res.status(400).json({ error: 'That member cannot receive connection requests.' });
