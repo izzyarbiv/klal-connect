@@ -33,7 +33,10 @@ export default function Register() {
     try {
       const result = await api.auth.register({ email, password });
       if (result?.access_token) { window.location.href = welcomeUrl(); return; }
-      setVerify({ email, devCode: result?.dev_code });
+      // The server hands the code back only in local dev; the production
+      // bundle must not even know the field exists, so the read is behind a
+      // build-time constant Vite folds away.
+      setVerify({ email, devCode: import.meta.env.DEV ? result?.dev_code : undefined });
     } catch (err) {
       setError(err.message || "Registration failed");
     } finally {

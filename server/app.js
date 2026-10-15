@@ -841,8 +841,7 @@ app.post('/api/auth/login', async (req, res, next) => {
   // existed were marked verified at creation, so nobody is locked out by this.
   if (!row.verified && canDeliverCodes()) {
     const code = await otp.issue(String(email).trim(), 'verify');
-    const dev_code = await deliverCode(email, 'verify', code);
-    return res.status(403).json({ error: 'Please verify your email address first. We just sent you a new code.', verification_required: true, dev_code });
+    return res.status(403).json(withDevCode({ error: 'Please verify your email address first. We just sent you a new code.', verification_required: true }, await deliverCode(email, 'verify', code)));
   }
   res.json({ access_token: signToken(row), user: userToPublic(row) });
 });
@@ -864,6 +863,11 @@ const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 // A code costs an email and can be used to pester someone; one per minute per
 // address, and a fresh one only when the last is nearly spent.
+// deliverCode() hands a code back only in local dev. Outside dev the key is
+// left off the response altogether rather than sent as null, so a client (or a
+// bundle scan) never sees a `dev_code` field in production.
+const withDevCode = (payload, code) => (code ? { ...payload, dev_code: code } : payload);
+
 const RESEND_COOLDOWN_MS = 60_000;
 async function throttleCode(email, purpose, res) {
   const issued = await otp.issuedAt(normalizeEmail(email), purpose).catch(() => null);
@@ -904,7 +908,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   const row = await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '', ...invitedBy });
   await acceptInvite(invited, row);
   const code = await otp.issue(String(email).trim(), 'verify');
-  res.status(201).json({ ok: true, otp_sent: true, dev_code: await deliverCode(email, 'verify', code) });
+  res.status(201).json(withDevCode({ ok: true, otp_sent: true }, await deliverCode(email, 'verify', code)));
 });
 
 // Marks an invite as joined and tells the inviter. Invite rows are reusable
@@ -966,7 +970,7 @@ app.post('/api/auth/resend-otp', async (req, res, next) => {
   if (!(await users.byEmail(email))) return res.json({ ok: true }); // don't reveal who is registered
   if (await throttleCode(email, 'verify', res)) return;
   const code = await otp.issue(String(email).trim(), 'verify');
-  res.json({ ok: true, dev_code: await deliverCode(email, 'verify', code) });
+  res.json(withDevCode({ ok: true }, await deliverCode(email, 'verify', code)));
 });
 
 app.post('/api/auth/reset-password-request', async (req, res, next) => {
@@ -977,7 +981,7 @@ app.post('/api/auth/reset-password-request', async (req, res, next) => {
   if (!(await users.byEmail(email))) return res.json({ ok: true });
   if (await throttleCode(email, 'reset', res)) return;
   const code = await otp.issue(String(email).trim(), 'reset');
-  res.json({ ok: true, dev_code: await deliverCode(email, 'reset', code) });
+  res.json(withDevCode({ ok: true }, await deliverCode(email, 'reset', code)));
 });
 
 app.post('/api/auth/reset-password', async (req, res, next) => {
