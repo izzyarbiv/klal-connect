@@ -429,6 +429,40 @@ function dedupePlaces(rows, limit) {
   return out;
 }
 
+// ---- pinning a listing from its address -------------------------------------
+
+// The coordinates to store for a listing saved without any, from what it does
+// have: a street address, or just its town. Where the business is only known
+// by town, the town's centre is the pin — that is what the directory map and
+// "nearest" already work from when a city is picked in the form. A street
+// address gets the building itself when a provider can place it, and the town
+// otherwise, never a provider's guess at some other town.
+//
+// Returns {latitude, longitude} or null; never throws. The lookup is bounded
+// so a slow or blocked provider cannot hold up the save it runs inside.
+const PIN_TIMEOUT_MS = 4000;
+
+export async function pinForListing(row) {
+  if (!row || (row.latitude != null && row.longitude != null)) return null;
+  const address = String(row.address || '').trim();
+  const city = String(row.city || '').trim();
+  if (!address && !city) return null;
+  const q = [address, city, row.state].filter(Boolean).join(', ');
+  try {
+    const results = await Promise.race([
+      searchPlaces(q, address ? 5 : 1),
+      new Promise((_, reject) => setTimeout(() => reject(new GeoError(LOCATION_UNAVAILABLE, 504)), PIN_TIMEOUT_MS)),
+    ]);
+    const sameTown = (r) => city && String(r.city || '').toLowerCase() === city.toLowerCase();
+    const hit = (address && results.find((r) => r.precise)) || results.find(sameTown) || (!address ? results[0] : null);
+    if (!hit || !isFiniteNum(hit.latitude) || !isFiniteNum(hit.longitude)) return null;
+    return { latitude: Number(hit.latitude), longitude: Number(hit.longitude) };
+  } catch {
+    // A listing without a pin is still a listing; the next edit tries again.
+    return null;
+  }
+}
+
 // ---- IP fallback ------------------------------------------------------------
 
 // Used only when the browser's geolocation is unavailable or denied. Runs

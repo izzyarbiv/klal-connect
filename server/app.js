@@ -23,7 +23,7 @@ import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { ensureCoreCategories } from './ensure-core.js';
-import { reverseGeocode, searchPlaces, geolocateIp, PROVIDER as GEO_PROVIDER } from './geocode.js';
+import { reverseGeocode, searchPlaces, geolocateIp, pinForListing, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { translateEnabled, LANGUAGES as TRANSLATE_LANGUAGES } from './translate.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
@@ -521,8 +521,15 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
       if (reverified) patch = { ...patch, ...reverified.fields };
     }
   }
-  const updated = await store.update(entity, id, patch);
+  let updated = await store.update(entity, id, patch);
   if (entity === 'Setting') forgetSettings();
+  // A listing left without a pin — because it never had one, or because
+  // verificationAfterEdit just cleared a stale one off a new address — gets a
+  // fresh one from the address it has now.
+  if (entity === 'Provider') {
+    const pin = await pinForListing(updated);
+    if (pin) updated = await store.update(entity, id, pin);
+  }
   // A verified listing that changed identity is a thing a moderator has to be
   // able to find, since the mark they granted has just come off.
   if (reverified) {

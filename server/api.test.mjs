@@ -9,6 +9,9 @@ process.env.KC_DEMO_MODE = '1';
 process.env.KC_STORE = 'memory';
 process.env.KC_GUEST_READONLY = '1';
 process.env.KC_EMAIL_DELIVERY = 'dev';
+// Saving a listing looks up its pin; without a provider that is answered
+// from the curated towns alone, so the checks never reach the network.
+process.env.KC_GEOCODER = 'none';
 delete process.env.NODE_ENV;
 
 const { default: app } = await import('./app.js');
@@ -728,7 +731,17 @@ const hoursOnly = await call('PUT', `/entities/Provider/${vId}`, { token: ownerT
 ok(hoursOnly.data?.verified === true, 'fixing the hours does not cost a listing its verification', String(hoursOnly.data?.verified));
 const becameSomethingElse = await call('PUT', `/entities/Provider/${vId}`, { token: ownerTok, body: { name: "Shloimy's Auto Body", category: 'Home Services', city: 'Brooklyn', address: '1 Other St' } });
 ok(becameSomethingElse.data?.verified === false, 'but becoming a different business does', String(becameSomethingElse.data?.verified));
-ok(becameSomethingElse.data?.latitude == null, 'and the old pin does not stay on the new address', String(becameSomethingElse.data?.latitude));
+ok(becameSomethingElse.status === 200 && becameSomethingElse.data?.latitude !== 40.0963, 'and the old pin does not stay on the new address', String(becameSomethingElse.data?.latitude));
+
+// A town typed rather than picked saves without coordinates; the server finds
+// the pin itself, or saves the listing anyway when it cannot.
+const townOnly = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Town Only Tailor', category: 'Business', short_description: 'Alterations.', city: 'Lakewood', state: 'NJ' } });
+ok(townOnly.status === 200 && !!townOnly.data?.provider?.id, 'a listing with only a town saves without error', String(townOnly.status));
+const townPin = townOnly.data?.provider || {};
+ok((townPin.latitude == null && townPin.longitude == null) || (Math.abs(townPin.latitude - 40.0978) < 0.1 && Math.abs(townPin.longitude + 74.2176) < 0.1),
+  'and is pinned at the town when the town is known', `${townPin.latitude},${townPin.longitude}`);
+const noPlace = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Remote Only Tutor', category: 'Business', short_description: 'Online lessons.', delivery_mode: 'remote' } });
+ok(noPlace.status === 200 && noPlace.data?.provider?.latitude == null, 'a listing with no place at all saves with no pin and no error', String(noPlace.status));
 const trail2 = (await call('GET', '/entities/ActivityEvent?limit=500', { token: admin })).data || [];
 ok(trail2.some((e) => e.type === 'listing_identity_change' && e.target_id === vId),
   'a verified listing changing identity is something staff can find');
