@@ -727,8 +727,24 @@ const modGrab = (await call('GET', `/entities/Provider/${modListingId}`, { token
 ok(modGrab.verified !== true && modGrab.featured !== true && modGrab.owner_id === idC,
   'a moderator still cannot verify, feature or take over a listing', JSON.stringify({ verified: modGrab.verified, featured: modGrab.featured, owner_id: modGrab.owner_id }));
 // A moderator does still change status — that is their queue work — and it
-// is logged as moderation like before.
-ok(modGrab.status === 'published', 'a moderator can still set a listing\'s status', String(modGrab.status));
+// is logged as moderation like before. The listing starts out published, so
+// the proof is a move to a status it did not already have and back: an
+// earlier version asserted 'published' on a row that was already published,
+// and passed while every queue action silently did nothing.
+const modReject = await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { status: 'rejected' } });
+ok(modReject.status === 200 && modReject.data?.status === 'rejected', 'a moderator can reject a listing from the queue', String(modReject.status) + ' ' + String(modReject.data?.status));
+const modPublish = await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { status: 'published' } });
+ok(modPublish.status === 200 && modPublish.data?.status === 'published', 'and publish it again', String(modPublish.data?.status));
+// Staff fix addresses, so a staff edit has to move the pin without costing
+// the listing its verification: the mark is about the business, and the
+// business did not change, its address was corrected.
+await call('PUT', `/entities/Provider/${modListingId}`, { token: admin, body: { verified: true, verified_at: '2026-10-01T00:00:00Z' } });
+const modTown = await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { city: 'Lakewood', state: 'NJ' } });
+ok(modTown.status === 200 && Math.abs(modTown.data?.latitude - 40.0978) < 0.1, 'a staff address fix pins the listing at the new town', `${modTown.data?.latitude},${modTown.data?.longitude}`);
+const modMoved = await call('PUT', `/entities/Provider/${modListingId}`, { token: modTok, body: { city: 'Monsey', state: 'NY' } });
+ok(modMoved.status === 200 && Math.abs(modMoved.data?.latitude - 41.1115) < 0.1, 'and a later staff move does not leave the old town\'s pin on the new address', `${modMoved.data?.latitude},${modMoved.data?.longitude}`);
+ok(modMoved.data?.verified === true, 'while the listing keeps its verification through a staff correction', String(modMoved.data?.verified));
+ok(modMoved.data?.pin_precise === false, 'a town-centre pin is stored as not the building itself', String(modMoved.data?.pin_precise));
 // (d) an ordinary member is not staff.
 const memberEdit = await call('PUT', `/entities/Provider/${modListingId}`, { token: userA, body: { description: 'Rewritten by a stranger' } });
 const afterMember = (await call('GET', `/entities/Provider/${modListingId}`, { token: admin })).data || {};
@@ -748,6 +764,17 @@ ok(Array.isArray(trail) && trail.some((e) => e.entity === 'ClaimRequest' && e.ta
   'approving a claim is recorded', String(Array.isArray(trail) && trail.length));
 ok(Array.isArray(trail) && trail.some((e) => e.type === 'listing_handover' && e.target_id === ownId && e.to === idA),
   'and so is the handover itself, with who it went to');
+// A moderator's queue action and a moderator's rewrite of somebody's page
+// both leave a trace: the status change as moderation, the content change as
+// a staff edit naming the fields, so a redirected phone number or payment
+// link can be traced to who did it.
+ok(Array.isArray(trail) && trail.some((e) => e.type === 'moderation' && e.target_id === modListingId && e.to === 'rejected'),
+  'a moderator rejecting a listing is recorded as moderation');
+const staffEdit = Array.isArray(trail) ? trail.find((e) => e.type === 'staff_edit' && e.target_id === modListingId && /description/.test(e.fields || '')) : null;
+ok(!!staffEdit && /phone/.test(staffEdit.fields) && staffEdit.actor_role === 'moderator',
+  'a staff content edit on someone else\'s listing is recorded with the fields it changed', JSON.stringify(staffEdit));
+ok(!trail.some((e) => e.type === 'staff_edit' && e.target_id === modOwn.data?.provider?.id),
+  'while editing a listing that is genuinely theirs is not a staff edit');
 
 // Claims were the last unbounded write.
 const spamEmail = `spamclaim${Date.now()}@example.com`;
@@ -856,6 +883,42 @@ ok(noPlace.status === 200 && noPlace.data?.provider?.latitude == null, 'a listin
 const trail2 = (await call('GET', '/entities/ActivityEvent?limit=500', { token: admin })).data || [];
 ok(trail2.some((e) => e.type === 'listing_identity_change' && e.target_id === vId),
   'a verified listing changing identity is something staff can find');
+
+// Their own member: the listings above put ownerTok at the five-a-day cap.
+const pinEmail = `pinowner${Date.now()}@example.com`;
+const pinReg = await call('POST', '/auth/register', { body: { email: pinEmail, password: 'password123' } });
+const pinTok = (await call('POST', '/auth/verify-otp', { body: { email: pinEmail, otpCode: pinReg.data?.dev_code } })).data?.access_token;
+
+// A curated town is only an answer in its own state. The list knows a Paris
+// and a Jackson, and a listing in Paris, TX was drawn in France.
+const parisTx = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Paris Texas Tailor', category: 'Business', short_description: 'Alterations.', address: '12 Main St', city: 'Paris', state: 'TX' } });
+ok(parisTx.status === 200 && parisTx.data?.provider?.latitude == null, 'a listing in Paris, TX is not pinned at Paris, France', `${parisTx.data?.provider?.latitude}`);
+const jacksonMs = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Jackson Mississippi Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson', state: 'MS' } });
+ok(jacksonMs.status === 200 && jacksonMs.data?.provider?.latitude == null, 'nor Jackson, MS at Jackson, NJ', `${jacksonMs.data?.provider?.latitude}`);
+const jacksonBare = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Jackson Somewhere Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson' } });
+ok(jacksonBare.status === 200 && jacksonBare.data?.provider?.latitude == null, 'a town name shared across states is not pinned without a state', `${jacksonBare.data?.provider?.latitude}`);
+const jacksonNj = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Jackson NJ Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson', state: 'NJ', pin_precise: true } });
+const jnj = jacksonNj.data?.provider || {};
+ok(jacksonNj.status === 200 && Math.abs(jnj.latitude - 40.1090) < 0.1 && Math.abs(jnj.longitude + 74.3646) < 0.1, 'the same town with its state is pinned at the town', `${jnj.latitude},${jnj.longitude}`);
+ok(jnj.pin_precise === false, 'and a town pin is stored as not the building, whatever the client claimed', String(jnj.pin_precise));
+const claimPrecise = await call('PUT', `/entities/Provider/${jnj.id}`, { token: pinTok, body: { pin_precise: true } });
+ok(claimPrecise.status === 200 && claimPrecise.data?.pin_precise !== true, 'a client cannot mark its own pin as the building by editing', String(claimPrecise.data?.pin_precise));
+// Empty strings in both columns are no pin, not a pin that blocks the lookup.
+const emptyCoords = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Empty Coordinates Tailor', category: 'Business', short_description: 'Alterations.', city: 'Lakewood', state: 'NJ', latitude: '', longitude: '' } });
+ok(emptyCoords.status === 200 && Math.abs(emptyCoords.data?.provider?.latitude - 40.0978) < 0.1, 'a listing saved with empty-string coordinates is still pinned at its town', `${emptyCoords.data?.provider?.latitude}`);
+// "Remove pin" sends both coordinates as null; the same request must not pin
+// the town straight back, or the control is a no-op.
+const removePin = await call('PUT', `/entities/Provider/${jnj.id}`, { token: pinTok, body: { latitude: null, longitude: null } });
+ok(removePin.status === 200 && removePin.data?.latitude == null && removePin.data?.longitude == null, 'removing the pin leaves the listing unpinned', `${removePin.data?.latitude},${removePin.data?.longitude}`);
+const stillRemoved = (await call('GET', `/entities/Provider/${jnj.id}`, { token: pinTok })).data || {};
+ok(stillRemoved.latitude == null, 'and it stays unpinned when read back', String(stillRemoved.latitude));
+// A pin the owner placed in the same save as a move is where the business is;
+// a geocoder's guess at the new town must not replace it.
+const movedWithPin = await call('PUT', `/entities/Provider/${jnj.id}`, { token: pinTok, body: { city: 'Lakewood', state: 'NJ', latitude: 40.1234, longitude: -74.3456 } });
+ok(movedWithPin.status === 200 && movedWithPin.data?.latitude === 40.1234 && movedWithPin.data?.longitude === -74.3456, 'a pin placed alongside a city change is kept', `${movedWithPin.data?.latitude},${movedWithPin.data?.longitude}`);
+ok(movedWithPin.data?.pin_precise == null, 'and carries no geocoder precision, since the geocoder did not place it', String(movedWithPin.data?.pin_precise));
+const movedWithout = await call('PUT', `/entities/Provider/${jnj.id}`, { token: pinTok, body: { city: 'Monsey', state: 'NY' } });
+ok(movedWithout.status === 200 && Math.abs(movedWithout.data?.latitude - 41.1115) < 0.1, 'a city change without a pin drops the old one and pins the new town', `${movedWithout.data?.latitude}`);
 
 // A confirmed badge is the admin's word on a claim the listing made. When the
 // listing stops making the claim, the admin's confirmation of it has to go too

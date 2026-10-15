@@ -18,7 +18,7 @@ import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { listingEditor, normalizeListingPatch } from '../src/lib/listing.js';
-import { verificationAfterEdit } from '../src/lib/trust.js';
+import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
@@ -403,6 +403,10 @@ const PROTECTED_FIELDS = new Set([
   // at the victim's canonical URL, with their title, OG tags and JSON-LD.
   'slug',
   'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
+  // Whether the pin is the building or the middle of its town, as the
+  // geocoder reported it. A client that could set it would make a town-centre
+  // pin read as the business's door.
+  'pin_precise',
   // Prominence and confirmation, which a listing must never grant itself.
   // `featured` was missing here and Provider is client-writable, so an owner
   // could PUT { featured: true } and appear in the directory's "Featured
@@ -510,8 +514,18 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
     // owner_id, verified, featured and the rest are still refused, which is
     // what keeps a content edit from becoming a transfer or a promotion.
     const ownsRow = existing.created_by_id === req.user.id;
+    const pickModeratorFields = () => Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => MODERATOR_FIELDS.has(k)));
     if (isModerator(req.user) && MODERATED_BY_STAFF.has(entity) && entity !== 'Provider' && !ownsRow) {
-      patch = Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => MODERATOR_FIELDS.has(k)));
+      patch = pickModeratorFields();
+    } else if (isModerator(req.user) && entity === 'Provider') {
+      // stripProtected refuses status, so routing a moderator's listing edit
+      // through it alone took away the one thing moderators do all day:
+      // approving, rejecting and hiding listings from the queues. Each of
+      // those returned 200 and changed nothing, and the queue showed the
+      // listing as dealt with while it stayed live. The content edit and the
+      // queue action are both theirs, so the patch is both: the content
+      // fields an editor may set, plus the state fields a moderator may set.
+      patch = { ...stripProtected(req.body), ...pickModeratorFields() };
     } else {
       patch = stripProtected(req.body);
     }
@@ -522,12 +536,38 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
   let reverified = null;
+  // Set when this request itself took the pin off, which is what "Remove pin"
+  // in the form does by sending both coordinates as null. The re-geocode
+  // below must not run then, or the control is a no-op: the row was cleared
+  // and the same pin written straight back before the response went out.
+  let pinRemoved = false;
+  const isStaff = req.user.role === 'admin' || isModerator(req.user);
   if (entity === 'Provider') {
     try { patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl }); }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
+    if ('latitude' in patch || 'longitude' in patch) {
+      if (hasCoordinate(patch.latitude) && hasCoordinate(patch.longitude)) {
+        // A pin the person placed, or picked from the town list. The
+        // geocoder's precision flag described a pin the geocoder chose, not
+        // this one, so it comes off rather than mislabel the new pin.
+        patch = { ...patch, latitude: Number(patch.latitude), longitude: Number(patch.longitude), pin_precise: null };
+      } else {
+        // Half a pair, or empty strings, is no pin either; store it as none
+        // rather than as values the map cannot draw. Only an explicit null
+        // pair is the person asking for no pin: an empty string is a missing
+        // value, and a missing value is still worth geocoding.
+        pinRemoved = patch.latitude === null && patch.longitude === null;
+        patch = { ...patch, latitude: null, longitude: null, pin_precise: null };
+      }
+    }
+    // A moved business loses the old address's pin whoever moved it. Staff are
+    // the people who correct addresses, and skipping them here left a
+    // Brooklyn address drawn at Lakewood coordinates after every such fix.
+    const repinned = pinAfterEdit(patch, existing);
+    if (repinned) patch = { ...patch, ...repinned };
     // Staff edit a listing in order to correct it, so their edit is not what
     // invalidates the check they themselves made.
-    if (req.user.role !== 'admin' && !isModerator(req.user)) {
+    if (!isStaff) {
       reverified = verificationAfterEdit(patch, existing);
       if (reverified) patch = { ...patch, ...reverified.fields };
     }
@@ -535,9 +575,9 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   let updated = await store.update(entity, id, patch);
   if (entity === 'Setting') forgetSettings();
   // A listing left without a pin — because it never had one, or because
-  // verificationAfterEdit just cleared a stale one off a new address — gets a
-  // fresh one from the address it has now.
-  if (entity === 'Provider') {
+  // pinAfterEdit just cleared a stale one off a new address — gets a fresh
+  // one from the address it has now. Not when the person just removed it.
+  if (entity === 'Provider' && !pinRemoved) {
     const pin = await pinForListing(updated);
     if (pin) updated = await store.update(entity, id, pin);
   }
@@ -545,6 +585,18 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
   // able to find, since the mark they granted has just come off.
   if (reverified) {
     await store.create('ActivityEvent', { type: 'listing_identity_change', entity: 'Provider', target_id: id, fields: reverified.changed.join(','), was_verified: !!existing.verified }, req.user);
+  }
+  // Staff rewriting a page that is not theirs — a phone number, a payment
+  // link, an address — is a write the business never sees happen. Claim
+  // approvals and status changes already leave a trace; this one did not, so
+  // nothing recorded who changed what. The status fields are the moderation
+  // event's below, so only the content fields that actually changed go here.
+  if (entity === 'Provider' && isStaff && listingEditor(existing) !== req.user.id) {
+    const differs = (k) => JSON.stringify(patch[k] ?? null) !== JSON.stringify(existing[k] ?? null);
+    const fields = Object.keys(patch).filter((k) => !MODERATOR_FIELDS.has(k) && differs(k));
+    if (fields.length) {
+      await store.create('ActivityEvent', { type: 'staff_edit', entity: 'Provider', target_id: id, fields: fields.join(','), actor_role: req.user.role }, req.user);
+    }
   }
   // Every status change by staff leaves a trace: who, what, from, to.
   if (MODERATED.has(entity) || MODERATED_BY_STAFF.has(entity)) {
