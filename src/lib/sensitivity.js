@@ -95,3 +95,6 @@ export const allowsPublicEngagement = (provider) => !isSensitiveListing(provider
 // than broken.
 export const SENSITIVE_NOTICE =
   'Saving is private. Public "used this" and vouches are turned off for this kind of listing, so reaching out never becomes a public record.';
+// The same, while vouches are switched off site-wide (Admin → Site switches).
+export const SENSITIVE_NOTICE_NO_VOUCHES =
+  'Saving is private. Public "used this" is turned off for this kind of listing, so reaching out never becomes a public record.';

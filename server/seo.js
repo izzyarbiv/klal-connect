@@ -11,6 +11,7 @@
 //
 // Everything else still falls through to the static shell.
 import { store } from './db.js';
+import { vouchesEnabled } from './settings.js';
 import { slugify } from './seo-shared.js';
 import { categoryLabel } from '../src/lib/categories.js';
 
@@ -193,10 +194,12 @@ export function mountSeo(app, shell) {
         }));
       }
       const canonicalPath = `/${(provider.category || '').toLowerCase().includes('gemach') ? 'gemach' : 'provider'}/${provider.slug || provider.id}`;
-      const [notes, vouchCount] = await Promise.all([
+      // Switched off from the admin area: crawlers read neither, same as people.
+      const showVouches = await vouchesEnabled();
+      const [notes, vouchCount] = showVouches ? await Promise.all([
         store.filter('CommunityNote', { provider_id: provider.id, status: 'published' }).catch(() => []),
         store.count('Vouch', { provider_id: provider.id }).catch(() => 0),
-      ]);
+      ]) : [[], 0];
       const where = [provider.city, provider.state].filter(Boolean).join(', ');
       const title = `${provider.name}${provider.category ? ` — ${categoryLabel(provider.category)}` : ''}${where ? ` in ${where}` : ''} · ${SITE_NAME}`;
       const description = clamp(provider.tagline || provider.short_description || provider.description || `${provider.name} on Klal Connect.`, 155);
@@ -268,7 +271,7 @@ export function mountSeo(app, shell) {
       send(res, renderPage(shell, {
         title: `${what}${where} · ${SITE_NAME}`,
         description: match
-          ? clamp(`${categoryLabel(match.name)}${where} — ${rows.length} vouched-for ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`, 155)
+          ? clamp(`${categoryLabel(match.name)}${where} — ${rows.length} ${await vouchesEnabled() ? 'vouched-for ' : ''}${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`, 155)
           : DEFAULT_DESCRIPTION,
         canonical,
         image: ogFallback(origin),

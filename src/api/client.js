@@ -301,7 +301,8 @@ const geo = {
 };
 
 let configPromise = null;
-// Cached for the page's lifetime — it is static per deployment. A *failure*
+// Cached for the page's lifetime — it is static per deployment, apart from
+// admin switches like vouchesEnabled, which a reload picks up. A *failure*
 // is not cached: one flaky request at boot used to pin `{}` for the whole
 // session, which silently disabled guest browsing (guestBrowsing falsy, so
 // adoptDemoSession refused) and left the Google sign-in button unrendered

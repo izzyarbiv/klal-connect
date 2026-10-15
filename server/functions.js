@@ -6,6 +6,7 @@
 import { store, users, userToPublic, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable as assertShabbosWritable } from './shabbos.js';
 import { canDeliverCodes } from './auth.js';
+import { vouchesEnabled } from './settings.js';
 import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
@@ -388,6 +389,7 @@ export const functions = {
   async createReview({ provider_id, provider_name, body }, user) {
     await assertWritable(user);
     need(provider_id, 'Missing listing.');
+    if (!(await vouchesEnabled())) fail('Community notes are turned off right now.', 403);
     if (String(body || '').trim().length < 10) fail('Please share a little more detail.');
     // A community note is signed, so a public note on a sensitive listing
     // identifies its author as someone who needed that service. Same rule as
@@ -766,6 +768,9 @@ export const functions = {
     if (activity !== 'save' && isSensitiveListing(provider)) {
       fail('Public "used this" and vouches are turned off for this kind of listing.');
     }
+    // Switched off site-wide from the admin area: no new vouches and no
+    // withdrawals either, so the rows stand as they were until it comes back.
+    if (activity === 'vouch' && !(await vouchesEnabled())) fail('Vouching is turned off right now.', 403);
     if (activity === 'vouch' && (provider.created_by_id === user.id || provider.owner_id === user.id)) {
       fail('You cannot vouch for your own listing.');
     }

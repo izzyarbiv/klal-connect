@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 import { useLocation } from 'react-router-dom';
 import { Download, Share, X } from 'lucide-react';
 import { hasEngaged } from '@/lib/engagement';
@@ -36,6 +37,7 @@ function snoozed() {
 }
 
 export default function InstallPrompt() {
+  const vouchesOn = useVouchesEnabled();
   const { pathname } = useLocation();
   const [show, setShow] = useState(false);
   const [deferred, setDeferred] = useState(null);
@@ -71,8 +73,8 @@ export default function InstallPrompt() {
       <div className="flex-1">
         <p className="font-semibold">Add Klal to your home screen</p>
         {ios
-          ? <p className="mt-1 text-white/80">Tap <Share size={13} className="inline -mt-0.5" /> Share in Safari, then <b>Add to Home Screen</b>. Klal opens like an app, and you can get notified when someone vouches for you or answers your ask.</p>
-          : <p className="mt-1 text-white/80">Opens like an app, works offline for what you have seen, and can notify you when someone vouches for you or answers your ask.</p>}
+          ? <p className="mt-1 text-white/80">Tap <Share size={13} className="inline -mt-0.5" /> Share in Safari, then <b>Add to Home Screen</b>. Klal opens like an app, and you can get notified when {vouchesOn ? 'someone vouches for you or answers your ask' : 'someone answers your ask'}.</p>
+          : <p className="mt-1 text-white/80">Opens like an app, works offline for what you have seen, and can notify you when {vouchesOn ? 'someone vouches for you or answers your ask' : 'someone answers your ask'}.</p>}
         <div className="mt-3 flex items-center gap-3">
           {!ios && <button onClick={install} className="rounded-xl bg-[#f3c66a] px-3 py-1.5 text-xs font-bold text-[#0b2c38]">Install</button>}
           <button onClick={dismiss} className="text-xs text-white/60 hover:text-white">Not now</button>
