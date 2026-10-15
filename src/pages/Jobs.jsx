@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import SuggestInput from '@/components/SuggestInput';
+import { startsWord } from '@/lib/searchTerms';
 import { api } from '@/api/client';
 import { Briefcase, Search, Plus, MapPin, Wifi } from 'lucide-react';
 import { EMPLOYMENT_TYPES, employmentLabel } from '@/lib/jobTypes';
@@ -22,6 +24,18 @@ export default function Jobs() {
     return hay.includes(q.toLowerCase());
   });
   const open = filtered.filter((j) => j.open !== false);
+
+  // As you type: matching roles (opens the job), then companies and fields
+  // (fills the search).
+  const navigate = useNavigate();
+  const suggest = (text) => {
+    const roles = jobs.filter((j) => startsWord(j.title, text)).slice(0, 5)
+      .map((j) => ({ group: 'Jobs', kind: 'job', label: j.title, value: j, hint: j.company_name || '' }));
+    const words = (field, group, kind) => [...new Set(jobs.map((j) => (j[field] || '').trim()).filter((v) => v && startsWord(v, text)))].slice(0, 3)
+      .map((v) => ({ group, kind, label: v, value: v, count: jobs.filter((j) => j[field] === v).length }));
+    return [...roles, ...words('company_name', 'Companies', 'company'), ...words('category', 'Fields', 'query')];
+  };
+  const pick = (item) => (item.kind === 'job' ? navigate(`/jobs/${item.value.id}`) : setQ(item.value));
   const closed = filtered.filter((j) => j.open === false);
 
   return <div className="page-shell space-y-8 py-9">
@@ -35,8 +49,8 @@ export default function Jobs() {
     </div>
 
     <div className="relative">
-      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted"/>
-      <input className="field pl-9" placeholder="Search jobs by title, company, or category" value={q} onChange={(e) => setQ(e.target.value)}/>
+      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-brand-muted"/>
+      <SuggestInput className="field pl-9" placeholder="Search jobs by title, company, or category" aria-label="Search jobs" value={q} onChange={setQ} onPick={pick} suggest={suggest}/>
     </div>
     <div className="flex flex-wrap gap-2">
       <button type="button" onClick={() => setType('')} className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${type === '' ? 'bg-brand-navy text-white ring-brand-navy' : 'bg-brand-surface text-brand-muted ring-brand-line'}`}>All types</button>

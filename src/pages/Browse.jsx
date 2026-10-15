@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
 import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
-import { expandQuery, matchesQuery, providerHaystack } from '@/lib/searchTerms';
+import { expandQuery, matchesQuery, providerHaystack, relevance, keywordSuggestions, placeSuggestions } from '@/lib/searchTerms';
+import SuggestInput from '@/components/SuggestInput';
+import { lookupPlaces } from '@/lib/placeLookup';
+import { providerPath } from '@/lib/paths';
 import { servesPlace } from '@/lib/place';
 import { readStoredCommunity, storeCommunity } from '@/lib/community';
 import { categoryLabel } from '@/lib/categories';
@@ -63,17 +66,23 @@ export default function Browse() {
   useEffect(() => { storeCommunity(place); }, [place]);
 
   const matchesText = (p) => matchesQuery(providerHaystack(p), terms);
-  const matches = (p, where) => matchesText(p)
+  // Everything but the category, so the category list can count what each
+  // choice would show for this search.
+  const matchesExceptCategory = (p, where) => matchesText(p)
     && servesPlace(p, where)
-    && (!category || p.category === category)
     && (!verified || p.verified);
+  const matches = (p, where) => matchesExceptCategory(p, where)
+    && (!category || p.category === category);
 
+  // With a search typed, the listings that are what was asked for come first
+  // (a search for shul opens on the shuls), and the chosen sort orders each
+  // tier. Without one, the sort alone decides.
   const order = (rows) => [...rows].sort((a, b) =>
-    sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
+    (terms.length ? relevance(b, terms) - relevance(a, terms) : 0) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
       : sort === 'used' ? (b.usage_count || 0) - (a.usage_count || 0)
         : sort === 'saved' ? (b.save_count || 0) - (a.save_count || 0)
           : sort === 'recent' ? new Date(b.created_date) - new Date(a.created_date)
-            : (a.name || '').localeCompare(b.name || ''));
+            : (a.name || '').localeCompare(b.name || '')));
 
   // Results are what actually matched — nothing else. The previous version
   // widened the search when it came up empty, and its last stage dropped the
@@ -93,9 +102,24 @@ export default function Browse() {
     return { results: order(hits), elsewhere: order(other), askedPlace: where };
   }, [providers, q, place, category, sort, verified, lat, lng, homeCity]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Counts come from what is actually listed, so a category never promises
-  // results it does not have.
-  const countFor = (name) => providers.filter((p) => p.category === name).length;
+  // Counts follow the search on screen: after searching for shul in Boca
+  // Raton, "All categories" counts those results, and each category how many
+  // of them it holds, never the whole directory.
+  const scoped = useMemo(() => {
+    const where = place || homeCity;
+    return providers.filter((p) => matchesExceptCategory(p, where));
+  }, [providers, q, place, verified, homeCity]); // eslint-disable-line react-hooks/exhaustive-deps
+  const countFor = (name) => scoped.filter((p) => p.category === name).length;
+
+  // Suggestions under the keyword box count what is listed in the place being
+  // searched, so they never promise results the page will not show.
+  const navigate = useNavigate();
+  const local = useMemo(() => providers.filter((p) => servesPlace(p, place || homeCity)), [providers, place, homeCity]);
+  const pickKeyword = (item) => {
+    if (item.kind === 'listing') navigate(providerPath(item.value));
+    else if (item.kind === 'category') { setCategory(item.value); setQ(''); }
+    else setQ(item.value);
+  };
 
   const isSearch = !!(q || place || category || verified);
 
@@ -154,11 +178,15 @@ export default function Browse() {
     </div>
 
     <div className="mb-6 grid gap-2 rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:grid-cols-12">
-      <input className="field md:col-span-3" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Plumber, therapist, gemach…" />
-      <input className="field md:col-span-2" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="City or ZIP" />
+      <SuggestInput wrapperClassName="md:col-span-3" value={q} onChange={setQ} onPick={pickKeyword}
+        suggest={(text) => keywordSuggestions(text, local, categories)}
+        placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
+      <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={setPlace} onPick={(item) => setPlace(item.value)}
+        suggest={(text) => placeSuggestions(text, providers)} suggestMore={lookupPlaces} minLength={2}
+        placeholder="City or ZIP" aria-label="Where" />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
-        <option value="">All categories ({providers.length})</option>
-        {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0}>{categoryLabel(c.name)} ({countFor(c.name)})</option>)}
+        <option value="">All categories ({scoped.length})</option>
+        {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)} ({countFor(c.name)})</option>)}
       </select>
       <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)}>
         {located && <option value="nearest">Nearest</option>}

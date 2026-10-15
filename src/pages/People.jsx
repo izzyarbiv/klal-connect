@@ -1,5 +1,7 @@
 import React,{useEffect,useState} from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import SuggestInput from '@/components/SuggestInput';
+import { startsWord } from '@/lib/searchTerms';
 import { api } from '@/api/client';
 import { Search } from 'lucide-react';
 import UserCard from '@/components/UserCard';
@@ -48,6 +50,21 @@ export default function People(){
     return true;
   });
 
+  // As you type: members by name (opens their profile), then towns and
+  // companies (fills the search).
+  const navigate = useNavigate();
+  const suggest = (text) => {
+    const people = users.filter(({user}) => startsWord(user.full_name, text)).slice(0, 5)
+      .map(({user}) => ({ group: 'People', kind: 'person', label: user.full_name, value: user, hint: user.home_city || '' }));
+    const words = (get, group, kind) => {
+      const all = users.map(({user}) => (get(user) || '').trim()).filter(Boolean);
+      return [...new Set(all.filter((v) => startsWord(v, text)))].slice(0, 3)
+        .map((v) => ({ group, kind, label: v, value: v, count: all.filter((x) => x === v).length }));
+    };
+    return [...people, ...words((u) => u.home_city, 'Towns', 'place'), ...words((u) => topJob(u)?.company, 'Companies', 'company')];
+  };
+  const pick = (item) => (item.kind === 'person' ? navigate(`/profile/${item.value.id}`) : setQ(item.value));
+
   if (!me) return <div className="loading">Loading community…</div>;
 
   const used = sentThisWeekCount(connections.sent);
@@ -65,8 +82,8 @@ export default function People(){
     </div>
 
     <div className="relative">
-      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9AA8A2]"/>
-      <input className="field pl-9" placeholder="Search by name, city, or company" value={q} onChange={e=>setQ(e.target.value)}/>
+      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[#9AA8A2]"/>
+      <SuggestInput className="field pl-9" placeholder="Search by name, city, or company" aria-label="Search people" value={q} onChange={setQ} onPick={pick} suggest={suggest}/>
     </div>
 
     <div className="flex flex-wrap gap-2">
