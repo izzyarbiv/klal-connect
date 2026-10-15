@@ -101,7 +101,7 @@ function meNow({ force = false } = {}) {
 const ENTITY_NAMES = [
   'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
-  'SavedProvider', 'ProviderUsage', 'ProviderHeart', 'ClaimRequest', 'ListingChangeRequest',
+  'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'User',
   'SavedPost', 'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication',
 ];

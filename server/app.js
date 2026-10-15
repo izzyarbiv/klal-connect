@@ -150,7 +150,6 @@ const OWNER_SCOPED = {
   SavedProvider: (row, user) => row.created_by_id === user.id,
   SavedPost: (row, user) => row.created_by_id === user.id,
   ProviderUsage: (row, user) => row.created_by_id === user.id,
-  ProviderHeart: (row, user) => row.created_by_id === user.id,
   FeedLike: (row, user) => row.created_by_id === user.id,
   CommentVote: (row, user) => row.created_by_id === user.id,
   Invite: (row, user) => row.created_by_id === user.id,
@@ -358,7 +357,7 @@ const parseJSON = (value, fallback) => {
 const ENTITIES = new Set([
   'Provider', 'Company', 'Category', 'Comment', 'CommunityNote', 'Connection',
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
-  'SavedProvider', 'ProviderUsage', 'ProviderHeart', 'ClaimRequest', 'ListingChangeRequest',
+  'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'SavedPost',
   'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication',
 ]);
@@ -403,7 +402,7 @@ const PROTECTED_FIELDS = new Set([
   // member could set another business's slug on their own listing and serve it
   // at the victim's canonical URL, with their title, OG tags and JSON-LD.
   'slug',
-  'save_count', 'usage_count', 'vouch_count', 'heart_count', 'created_by_id', 'created_by', 'id',
+  'save_count', 'usage_count', 'vouch_count', 'created_by_id', 'created_by', 'id',
   // Prominence and confirmation, which a listing must never grant itself.
   // `featured` was missing here and Provider is client-writable, so an owner
   // could PUT { featured: true } and appear in the directory's "Featured
