@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Compass } from 'lucide-react';
 import SearchPanel from '@/components/SearchPanel';
+import AddListingPrompt from '@/components/AddListingPrompt';
 import ResourceCard from '@/components/ResourceCard';
 import { iconFor, guessIcon } from '@/lib/categoryIcons';
 import { expandQuery, matchesQuery, providerHaystack } from '@/lib/searchTerms';
@@ -103,6 +104,7 @@ export default function Home() {
           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
         >{label}{count > 0 && <span className="text-xs font-bold text-brand-teal/70">{count}</span>}</Link>)}
       </div>
+      <AddListingPrompt className="mt-5" />
     </section>
 
     {/* Choosing a community here is remembered everywhere else on the site. */}

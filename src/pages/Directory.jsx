@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import SearchPanel from '@/components/SearchPanel';
+import AddListingPrompt from '@/components/AddListingPrompt';
 import { useCommunity } from '@/lib/community';
 import CategoryGrid from '@/components/CategoryGrid';
 import ResourceCard from '@/components/ResourceCard';
@@ -33,7 +34,7 @@ export default function Directory(){
     enabled:!!gemachCategory,
     queryFn:()=>api.entities.Provider.filter({...published,category:gemachCategory},'-created_date',3)});
   return <div className="page-shell space-y-12 py-10">
-    <div><span className="eyebrow">RESOURCES</span><h1 className="title">Find trusted community resources</h1><p className="helper">Search the directory, browse categories, or explore what's new and popular near you.</p><div className="mt-5"><SearchPanel defaultLocation={community}/></div></div>
+    <div><span className="eyebrow">RESOURCES</span><h1 className="title">Find trusted community resources</h1><p className="helper">Search the directory, browse categories, or explore what's new and popular near you.</p><div className="mt-5"><SearchPanel defaultLocation={community}/></div><AddListingPrompt className="mt-4"/></div>
 
     <section>
       <div className="section-head"><div><span className="eyebrow">EXPLORE</span><h2 className="title">Popular categories</h2></div><Link to="/browse" className="text-sm font-semibold text-brand-teal">View all</Link></div>
