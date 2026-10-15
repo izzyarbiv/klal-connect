@@ -6,6 +6,7 @@
 import { store, users, userToPublic, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable as assertShabbosWritable } from './shabbos.js';
 import { canDeliverCodes } from './auth.js';
+import { pinForListing } from './geocode.js';
 import { vouchesEnabled } from './settings.js';
 import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
@@ -205,7 +206,11 @@ export const functions = {
       { ...listingInput(payload), status: INITIAL_STATUS, claimed: false, save_count: 0, usage_count: 0, vouch_count: 0 },
       user
     );
-    return { provider };
+    // Someone who typed a town without picking it from the list saved no
+    // coordinates, and the listing then never appeared on the map or in
+    // "nearest". The pin is found here from the address instead.
+    const pin = await pinForListing(provider);
+    return { provider: pin ? await store.update('Provider', provider.id, pin) : provider };
   },
 
   // A business's own Stripe Payment Link, PayPal.me, Venmo or Zelle page.

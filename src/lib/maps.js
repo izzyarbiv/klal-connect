@@ -36,10 +36,13 @@ export function directionsLinks(place) {
   ];
 }
 
-// The address as a person writes it, for display and for Copy address.
+// The address as a person writes it, for display and for Copy address. A
+// listing known only by town gets the town line, so the Location panel and
+// Copy address still have something true to show rather than nothing.
 export function addressLine(place) {
-  if (!place?.address) return '';
+  if (!place) return '';
   const town = [place.city, [place.state, place.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  if (!place.address) return town;
   const hasTown = !place.city || place.address.toLowerCase().includes(place.city.toLowerCase());
   return hasTown ? place.address : `${place.address}, ${town}`;
 }
