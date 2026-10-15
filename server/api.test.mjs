@@ -416,19 +416,25 @@ ok(!promoAfter.last_confirmed_at, 'an owner cannot forge a confirmation date', J
 // doors are tried: a fourth photo, a photo with no credit, a source link that
 // is not http(s), and then a good pair that has to come back exactly as sent.
 const photo = (n, extra = {}) => ({ url: `https://blob.example/p${n}.png`, caption: `Photo: example.org ${n}`, source_url: 'https://example.org/about', ...extra });
-const fourUp = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Gallery Four', category: 'Food', short_description: 'x', gallery: [photo(1), photo(2), photo(3), photo(4)] } });
+// Their own member: the suite now creates more listings than the five-a-day
+// cap allows one account, and a 429 here would leave every row below undefined.
+const galleryEmail = `gallery${Date.now()}@example.com`;
+const galleryReg = await call('POST', '/auth/register', { body: { email: galleryEmail, password: 'password123' } });
+const galleryVer = await call('POST', '/auth/verify-otp', { body: { email: galleryEmail, otpCode: galleryReg.data?.dev_code } });
+const galleryTok = galleryVer.data?.access_token, galleryUserId = galleryVer.data?.user?.id;
+const fourUp = await call('POST', '/functions/createListing', { token: galleryTok, body: { name: 'Gallery Four', category: 'Food', short_description: 'x', gallery: [photo(1), photo(2), photo(3), photo(4)] } });
 ok(fourUp.status === 400, 'a fourth photo is refused on create', JSON.stringify(fourUp.data));
-const galleryListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Gallery Bakery', category: 'Food', short_description: 'x' } });
+const galleryListing = await call('POST', '/functions/createListing', { token: galleryTok, body: { name: 'Gallery Bakery', category: 'Food', short_description: 'x' } });
 const galleryId = galleryListing.data?.provider?.id;
 ok(Array.isArray(galleryListing.data?.provider?.gallery) && galleryListing.data.provider.gallery.length === 0, 'a listing without photos stores an empty gallery', JSON.stringify(galleryListing.data?.provider?.gallery));
-let g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1), photo(2), photo(3), photo(4)] } });
+let g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1), photo(2), photo(3), photo(4)] } });
 ok(g.status === 400, 'a fourth photo is refused on edit', JSON.stringify(g.data));
-g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1, { caption: '' })] } });
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { caption: '' })] } });
 ok(g.status === 400 && /caption/i.test(g.data?.error || ''), 'a photo without a caption is refused', JSON.stringify(g.data));
-g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1, { source_url: 'javascript:alert(1)' })] } });
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { source_url: 'javascript:alert(1)' })] } });
 ok(g.status === 400, 'a javascript: source link is refused', JSON.stringify(g.data));
-g = await call('PUT', `/entities/Provider/${galleryId}`, { token: userA, body: { gallery: [photo(1), photo(2)] } });
-const galleryAfter = (await call('GET', `/entities/Provider/${galleryId}`, { token: userA })).data || {};
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1), photo(2)] } });
+const galleryAfter = (await call('GET', `/entities/Provider/${galleryId}`, { token: galleryTok })).data || {};
 ok(g.status === 200 && JSON.stringify(galleryAfter.gallery) === JSON.stringify([photo(1), photo(2)]), 'a valid two-photo gallery round-trips', JSON.stringify(galleryAfter.gallery));
 ok(JSON.stringify(galleryAfter.gallery) === JSON.stringify(g.data?.gallery), 'the PUT answer carries the stored gallery', JSON.stringify(g.data?.gallery));
 const stranger = await call('PUT', `/entities/Provider/${galleryId}`, { token: userB, body: { gallery: [photo(3)] } });
@@ -846,6 +852,12 @@ async function uploadAs(token, bytes, type, name) {
 }
 const anonUpload = await uploadAs(null, PNG_1X1, 'image/png', 'logo.png');
 ok(anonUpload.status === 401, 'an upload needs a session', String(anonUpload.status));
+// Their own member: the suite now creates more listings than the five-a-day
+// cap allows one account, and a 429 here would leave every row below undefined.
+const logoEmail = `logo${Date.now()}@example.com`;
+const logoReg = await call('POST', '/auth/register', { body: { email: logoEmail, password: 'password123' } });
+const logoVer = await call('POST', '/auth/verify-otp', { body: { email: logoEmail, otpCode: logoReg.data?.dev_code } });
+const logoTok = logoVer.data?.access_token, logoId = logoVer.data?.user?.id;
 const textUpload = await uploadAs(userA, Buffer.from('not an image'), 'text/plain', 'notes.txt');
 ok(textUpload.status === 400 && /image/i.test(textUpload.data?.error || ''), 'a non-image upload is refused with a message', JSON.stringify(textUpload));
 const pngUpload = await uploadAs(userA, PNG_1X1, 'image/png', 'logo.png');
@@ -854,17 +866,17 @@ if (pngUpload.data?.file_url) {
   const served = await fetch(`http://127.0.0.1:${server.address().port}${pngUpload.data.file_url}`);
   ok(served.status === 200 && /^image\/png/.test(served.headers.get('content-type') || ''), 'the uploaded file is served back as image/png', `${served.status} ${served.headers.get('content-type')}`);
 }
-const logoListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Logo Listing', category: 'Business', short_description: 'x' } });
+const logoListing = await call('POST', '/functions/createListing', { token: logoTok, body: { name: 'Logo Listing', category: 'Business', short_description: 'x' } });
 const logoRow = logoListing.data?.provider;
 ok(!!logoRow?.id && !logoRow.logo_url, 'a listing starts without a logo', JSON.stringify(logoListing.data));
 // Timestamps are millisecond ISO strings; a save within the same tick as the
 // create would read as "unchanged" and make this check lie.
 await new Promise((r) => setTimeout(r, 5));
-const logoPut = await call('PUT', `/entities/Provider/${logoRow.id}`, { token: userA, body: { logo_url: pngUpload.data?.file_url || '/api/files/test.png' } });
-const logoAfter = (await call('GET', `/entities/Provider/${logoRow.id}`, { token: userA })).data;
+const logoPut = await call('PUT', `/entities/Provider/${logoRow.id}`, { token: logoTok, body: { logo_url: pngUpload.data?.file_url || '/api/files/test.png' } });
+const logoAfter = (await call('GET', `/entities/Provider/${logoRow.id}`, { token: logoTok })).data;
 ok(logoPut.status === 200 && logoAfter.logo_url === (pngUpload.data?.file_url || '/api/files/test.png'), 'a logo_url patch by the creator persists on the listing', JSON.stringify({ put: logoPut.data, after: logoAfter.logo_url }));
 ok(logoAfter.updated_date && logoAfter.updated_date !== logoRow.updated_date && logoAfter.updated_date > logoRow.created_date, 'saving a logo moves updated_date', JSON.stringify({ before: logoRow.updated_date, after: logoAfter.updated_date }));
-ok(logoAfter.name === 'Logo Listing' && logoAfter.created_by_id === idA, 'a logo-only patch leaves the rest of the row and its ownership alone');
+ok(logoAfter.name === 'Logo Listing' && logoAfter.created_by_id === logoId, 'a logo-only patch leaves the rest of the row and its ownership alone');
 
 // A demo instance adopts one shared guest account for every signed-out
 // visitor, so rows it created belong to nobody in particular.
