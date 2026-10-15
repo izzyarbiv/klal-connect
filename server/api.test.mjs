@@ -10,6 +10,13 @@ process.env.KC_STORE = 'memory';
 process.env.KC_GUEST_READONLY = '1';
 process.env.KC_EMAIL_DELIVERY = 'dev';
 delete process.env.NODE_ENV;
+// Uploads go to a throwaway directory, not server/uploads: the storage layer
+// reads this at import, and a test run must not leave files behind.
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const uploadDir = mkdtempSync(join(tmpdir(), 'kc-test-uploads-'));
+process.env.KC_UPLOAD_DIR = uploadDir;
 
 const { default: app } = await import('./app.js');
 const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
@@ -751,6 +758,41 @@ const dupes = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, 
 ok(JSON.stringify(dupes.data?.service_areas) === JSON.stringify(['Boca Raton', 'Delray Beach']),
   'an edit does not store the same area twice', JSON.stringify(dupes.data?.service_areas));
 
+// ---- logo upload --------------------------------------------------------
+// The form reported "Your changes are live" while logo_url stayed empty. The
+// server half of that path is pinned here: an image upload hands back a URL
+// the browser can load, anything else is refused with a message, and a
+// logo_url patch lands on the row and moves updated_date.
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+async function uploadAs(token, bytes, type, name) {
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type }), name);
+  const res = await fetch(API + '/upload', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
+  let data = null; try { data = await res.json(); } catch { /* empty body */ }
+  return { status: res.status, data };
+}
+const anonUpload = await uploadAs(null, PNG_1X1, 'image/png', 'logo.png');
+ok(anonUpload.status === 401, 'an upload needs a session', String(anonUpload.status));
+const textUpload = await uploadAs(userA, Buffer.from('not an image'), 'text/plain', 'notes.txt');
+ok(textUpload.status === 400 && /image/i.test(textUpload.data?.error || ''), 'a non-image upload is refused with a message', JSON.stringify(textUpload));
+const pngUpload = await uploadAs(userA, PNG_1X1, 'image/png', 'logo.png');
+ok(pngUpload.status === 200 && /^\/api\/files\/[\w-]+\.png$/.test(pngUpload.data?.file_url || ''), 'a PNG upload returns a file_url on the local-disk backend', JSON.stringify(pngUpload));
+if (pngUpload.data?.file_url) {
+  const served = await fetch(`http://127.0.0.1:${server.address().port}${pngUpload.data.file_url}`);
+  ok(served.status === 200 && /^image\/png/.test(served.headers.get('content-type') || ''), 'the uploaded file is served back as image/png', `${served.status} ${served.headers.get('content-type')}`);
+}
+const logoListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Logo Listing', category: 'Business', short_description: 'x' } });
+const logoRow = logoListing.data?.provider;
+ok(!!logoRow?.id && !logoRow.logo_url, 'a listing starts without a logo', JSON.stringify(logoListing.data));
+// Timestamps are millisecond ISO strings; a save within the same tick as the
+// create would read as "unchanged" and make this check lie.
+await new Promise((r) => setTimeout(r, 5));
+const logoPut = await call('PUT', `/entities/Provider/${logoRow.id}`, { token: userA, body: { logo_url: pngUpload.data?.file_url || '/api/files/test.png' } });
+const logoAfter = (await call('GET', `/entities/Provider/${logoRow.id}`, { token: userA })).data;
+ok(logoPut.status === 200 && logoAfter.logo_url === (pngUpload.data?.file_url || '/api/files/test.png'), 'a logo_url patch by the creator persists on the listing', JSON.stringify({ put: logoPut.data, after: logoAfter.logo_url }));
+ok(logoAfter.updated_date && logoAfter.updated_date !== logoRow.updated_date && logoAfter.updated_date > logoRow.created_date, 'saving a logo moves updated_date', JSON.stringify({ before: logoRow.updated_date, after: logoAfter.updated_date }));
+ok(logoAfter.name === 'Logo Listing' && logoAfter.created_by_id === idA, 'a logo-only patch leaves the rest of the row and its ownership alone');
+
 // A demo instance adopts one shared guest account for every signed-out
 // visitor, so rows it created belong to nobody in particular.
 const guestSession = await call('POST', '/auth/demo-session', { body: {} });
@@ -768,5 +810,6 @@ if (guestTok) {
 
 console.log = log;
 server.close();
+rmSync(uploadDir, { recursive: true, force: true });
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');
 process.exit(fails ? 1 : 0);
