@@ -135,6 +135,22 @@ function inviteCode(user) {
   return `${first}-${tail}`;
 }
 
+// The shape of a code people type into a URL. Hyphens inside only, because
+// a leading or trailing one reads like a typo and `--` is unreadable aloud.
+export const INVITE_CODE_RE = /^(?=.{4,40}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+// The one place an invite is looked up by what is in the URL. A renamed
+// invite answers to its current code and to every code it has ever had, so
+// a link shared before the rename is as good as one shared after.
+export async function findInviteByCode(code) {
+  const clean = String(code || '').trim().toLowerCase();
+  if (!clean) return null;
+  const [current] = await store.filter('Invite', { code: clean });
+  if (current) return current;
+  const [aliased] = await store.filter('Invite', { aliases: clean });
+  return aliased || null;
+}
+
 // "New listings go live right away" is only a safe promise if one account
 // cannot paper the directory before anyone notices. Bounded per account per
 // day: more than enough for someone adding their own businesses, not enough
@@ -498,6 +514,25 @@ export const functions = {
     }
     const invite = await store.create('Invite', { code, inviter_name: user.full_name || '', provider_id: null, provider_name: null, joined_user_ids: [], joined_count: 0 }, user);
     return { invite };
+  },
+
+  // Gives an invite a new slug while the old link keeps working. Invite codes
+  // are built from the inviter's first name, and a name is not always
+  // something a person wants in a URL they hand out. The old code moves into
+  // `aliases`, which every lookup also consults, so links already shared or
+  // printed still land on the same invite. Reachable for the inviter and for
+  // admins; plain users cannot rename someone else's link.
+  async renameInvite({ code, new_code }, user) {
+    const invite = await findInviteByCode(code);
+    if (!invite) fail('That invite link is not valid.', 404);
+    if (user.role !== 'admin' && invite.created_by_id !== user.id) fail('Only the inviter or an admin can rename this link.', 403);
+    const next = String(new_code || '').trim().toLowerCase();
+    if (!INVITE_CODE_RE.test(next)) fail('A link name is 4-40 lowercase letters, digits or hyphens.');
+    if (next === invite.code) fail('That is already the name of this link.');
+    if (await findInviteByCode(next)) fail('That link name is already in use.', 409);
+    const aliases = Array.from(new Set([...(invite.aliases || []), invite.code]));
+    const updated = await store.update('Invite', invite.id, { code: next, aliases });
+    return { invite: updated };
   },
 
   // ---- skills ----------------------------------------------------------------

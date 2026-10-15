@@ -13,7 +13,7 @@ import {
   attachUser, requireAuth, requireAdmin,
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
-import { functions, publicFunctions, safeExternalUrl } from './functions.js';
+import { functions, publicFunctions, safeExternalUrl, findInviteByCode } from './functions.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
@@ -799,7 +799,7 @@ app.post('/api/auth/google', async (req, res, next) => {
       // is verified by this, and remembers its Google id.
       row = await users.update(row.id, { verified: true, google_sub: g.sub, ...(row.data?.avatar_url ? {} : (g.picture ? { avatar_url: g.picture } : {})) });
     } else {
-      const invited = invite_code ? (await store.filter('Invite', { code: String(invite_code).toLowerCase() }))[0] : null;
+      const invited = invite_code ? await findInviteByCode(invite_code) : null;
       const invitedBy = invited ? { invited_by_id: invited.created_by_id, invited_by_name: invited.inviter_name || '' } : {};
       const role = (await users.all()).length === 0 ? 'admin' : 'user';
       row = await users.create({ email: g.email, password_hash: null, role, verified: true, full_name: g.name, avatar_url: g.picture, google_sub: g.sub, ...invitedBy });
@@ -851,7 +851,9 @@ app.post('/api/auth/login', async (req, res, next) => {
 // say "Miriam invited you" before there is an account. Names only.
 app.get('/api/invites/:code', async (req, res, next) => {
   try {
-    const [invite] = await store.filter('Invite', { code: String(req.params.code).toLowerCase() });
+    // Resolved through aliases too, and the current code is what goes back,
+    // so a visitor who followed an old link sees the name the inviter chose.
+    const invite = await findInviteByCode(req.params.code);
     if (!invite) return res.status(404).json({ error: 'That invite link is not valid.' });
     res.json({ code: invite.code, inviter_name: invite.inviter_name || 'A community member', for_business: invite.provider_name || null });
   } catch (err) { next(err); }
@@ -892,7 +894,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   // Login never required verification anyway; this just stops pretending.
   // An invite link, if the visitor arrived through one. Recorded on both
   // sides so the profile can say "Invited by" and the inviter gets credit.
-  const invited = invite_code ? (await store.filter('Invite', { code: String(invite_code).toLowerCase() }))[0] : null;
+  const invited = invite_code ? await findInviteByCode(invite_code) : null;
   const invitedBy = invited ? { invited_by_id: invited.created_by_id, invited_by_name: invited.inviter_name || '' } : {};
 
   if (!canDeliverCodes()) {

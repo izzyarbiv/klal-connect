@@ -766,6 +766,34 @@ if (guestTok) {
   }
 }
 
+// ---- renaming an invite link ----------------------------------------------
+// An invite built from someone's first name can be renamed to something
+// neutral, and the old link has to keep working for everyone who already has it.
+const inv = (await call('POST', '/functions/myInvite', { token: userA, body: {} })).data?.invite;
+ok(inv?.code, 'member has an invite link', JSON.stringify(inv));
+const neutral = `welcome-${Date.now().toString(36)}`;
+const notMine = await call('POST', '/functions/renameInvite', { token: userB, body: { code: inv.code, new_code: `other-${neutral}` } });
+ok(notMine.status === 403, 'another member cannot rename someone else\'s invite', String(notMine.status));
+const badSlug = await call('POST', '/functions/renameInvite', { token: userA, body: { code: inv.code, new_code: 'Bad Slug!' } });
+ok(badSlug.status === 400, 'an invite slug must be lowercase letters, digits and hyphens', String(badSlug.status));
+const renamed = await call('POST', '/functions/renameInvite', { token: userA, body: { code: inv.code, new_code: neutral } });
+ok(renamed.status === 200 && renamed.data.invite.code === neutral && renamed.data.invite.aliases.includes(inv.code), 'the inviter renames their own link', JSON.stringify(renamed.data));
+const viaOld = await call('GET', `/invites/${inv.code}`);
+ok(viaOld.status === 200 && viaOld.data.code === neutral, 'the old link still resolves and reports the new code', JSON.stringify(viaOld.data));
+const viaNew = await call('GET', `/invites/${neutral}`);
+ok(viaNew.status === 200 && viaNew.data.code === neutral, 'the new link resolves', JSON.stringify(viaNew.data));
+const invB = (await call('POST', '/functions/myInvite', { token: userB, body: {} })).data?.invite;
+const takenCurrent = await call('POST', '/functions/renameInvite', { token: userB, body: { code: invB.code, new_code: neutral } });
+ok(takenCurrent.status === 409, 'a slug already in use as a code is refused', String(takenCurrent.status));
+const takenAlias = await call('POST', '/functions/renameInvite', { token: userB, body: { code: invB.code, new_code: inv.code } });
+ok(takenAlias.status === 409, 'a slug still held as an alias is refused', String(takenAlias.status));
+const byAdmin = await call('POST', '/functions/renameInvite', { token: admin, body: { code: invB.code, new_code: `${neutral}-b` } });
+ok(byAdmin.status === 200 && byAdmin.data.invite.code === `${neutral}-b`, 'an admin can rename any invite', JSON.stringify(byAdmin.data));
+const joinedViaAlias = await call('POST', '/auth/register', { body: { email: `inv${Date.now()}@example.com`, password: 'password123', invite_code: inv.code } });
+ok(joinedViaAlias.status === 201, 'signing up through the old link is still accepted', JSON.stringify(joinedViaAlias.data));
+const invAfter = (await call('POST', '/functions/myInvite', { token: userA, body: {} })).data?.invite;
+ok(invAfter?.joined_count === 1 && invAfter.code === neutral, 'the join is credited to the renamed invite', JSON.stringify(invAfter));
+
 console.log = log;
 server.close();
 console.log(fails ? `\napi checks: ${fails} FAILED` : '\napi checks: all passed');
