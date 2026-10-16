@@ -45,7 +45,7 @@ export default function Feed(){
         {loading&&<div className="loading">Loading feed…</div>}
         {!loading&&posts?.length===0&&<div className="empty"><p>{postId?'That post is no longer available.':'Be the first to post to the Klal feed.'}</p>{postId&&<Link to="/feed" className="text-sm font-semibold text-brand-teal hover:underline">Show all posts</Link>}</div>}
         {!loading&&posts?.length>0&&visible?.length===0&&<div className="empty"><p>{filter==='unanswered'?'Every ask has an answer. Nice work, klal.':'Nothing here yet — try another filter.'}</p></div>}
-        {visible?.map(p=><FeedPostItem key={p.id} post={p} user={user} onDeleted={removed}/>)}
+        {visible?.map(p=><FeedPostItem key={p.id} post={p} user={user} onDeleted={removed} onReposted={()=>{if(postId)setParams({});load();}}/>)}
       </div>
       <aside className="hidden space-y-5 lg:block">
         <FeedPromotedPanel/>

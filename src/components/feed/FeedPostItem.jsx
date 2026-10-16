@@ -1,8 +1,10 @@
 import React,{useState} from 'react';
 import { api } from '@/api/client';
-import { MessageCircle, Eye, ThumbsUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { MessageCircle, Eye, ThumbsUp, Repeat2, Loader2 } from 'lucide-react';
 import FeedCommentList from '@/components/feed/FeedCommentList';
 import FeedPostMenu, { ReportPostForm } from '@/components/feed/FeedPostMenu';
+import FeedShareButton from '@/components/feed/FeedShare';
 import Headline from '@/components/Headline';
 import ReactionPicker, { useReactionPicker } from '@/components/feed/ReactionPicker';
 import TranslateToggle from '@/components/TranslateToggle';
@@ -10,7 +12,65 @@ import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf, topReactions } from '@/lib/reactions';
 import { timeAgo, fullDate } from '@/lib/time';
 
-export default function FeedPostItem({ post, user, onDeleted }) {
+// The post a repost carries, as it was when it was reposted.
+function RepostedCard({ post }) {
+  if(post.repost_removed) return <p className="rounded-lg bg-brand-tint px-4 py-3 text-sm text-brand-muted">The original post is no longer available.</p>;
+  const when=timeAgo(post.repost_created_date);
+  return <Link to={`/feed?post=${encodeURIComponent(post.repost_of)}`} className="block space-y-2 rounded-lg p-3 ring-1 ring-brand-line transition hover:bg-brand-tint">
+    <div className="flex items-start gap-2.5">
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-tint text-xs font-bold text-brand-teal">{(post.repost_author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-brand-ink">{post.repost_author_name||'Community member'}{when&&<span className="font-normal text-brand-muted"> · {when}</span>}</p>
+        <Headline text={post.repost_author_headline}/>
+      </div>
+    </div>
+    {post.repost_body&&<p className="line-clamp-6 whitespace-pre-line text-sm leading-6 text-brand-body">{post.repost_body}</p>}
+    {post.repost_image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.repost_image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
+  </Link>;
+}
+
+// Repost: share it to the feed as it is, or with a few words of your own.
+function RepostButton({ post, className, onReposted }) {
+  const [open,setOpen]=useState(false),[writing,setWriting]=useState(false),[text,setText]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[done,setDone]=useState(false);
+  const ref=React.useRef(null);
+  React.useEffect(()=>{
+    if(!open)return;
+    const onDown=e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
+    const onKey=e=>{ if(e.key==='Escape') setOpen(false); };
+    document.addEventListener('pointerdown',onDown); document.addEventListener('keydown',onKey);
+    return ()=>{ document.removeEventListener('pointerdown',onDown); document.removeEventListener('keydown',onKey); };
+  },[open]);
+  const send=async(body='')=>{
+    if(!(await api.auth.requireAccount())){ setOpen(false); return; }
+    setBusy(true);
+    const r=await api.functions.invoke('repostPost',{post_id:post.repost_of||post.id,body});
+    setBusy(false);
+    if(r.status>=400){ setErr(r.data?.error||'Could not repost'); return; }
+    setErr(''); setOpen(false); setWriting(false); setText(''); setDone(true);
+    onReposted?.();
+  };
+  const item='flex w-full items-start gap-2.5 px-3 py-2 text-left text-sm text-brand-body hover:bg-brand-tint hover:text-brand-ink focus:bg-brand-tint focus:outline-none';
+  return <>
+    <div ref={ref} className="relative flex flex-1 sm:flex-none">
+      <button type="button" onClick={()=>{ setErr(''); setOpen(o=>!o); }} aria-haspopup="menu" aria-expanded={open} className={`${className} w-full ${done?'text-brand-teal':''}`}><Repeat2 size={17}/>{done?'Reposted':'Repost'}</button>
+      {open&&<div role="menu" aria-label="Repost" className="absolute bottom-full left-1/2 z-30 mb-2 w-64 -translate-x-1/2 overflow-hidden rounded-lg bg-brand-surface py-1 shadow-lg ring-1 ring-brand-line">
+        <button type="button" role="menuitem" disabled={busy} onClick={()=>send()} className={item}><Repeat2 size={16} className="mt-0.5 shrink-0"/><span><span className="block font-semibold text-brand-ink">Repost</span><span className="text-xs text-brand-muted">Share it to the feed as it is</span></span></button>
+        <button type="button" role="menuitem" onClick={async()=>{ setOpen(false); if(await api.auth.requireAccount()) setWriting(true); }} className={item}><MessageCircle size={16} className="mt-0.5 shrink-0"/><span><span className="block font-semibold text-brand-ink">Repost with your thoughts</span><span className="text-xs text-brand-muted">Add a few words above it</span></span></button>
+        {err&&<p className="px-3 py-1.5 text-xs font-semibold text-brand-error">{err}</p>}
+      </div>}
+    </div>
+    {writing&&<form onSubmit={e=>{e.preventDefault();send(text);}} className="order-last basis-full space-y-2 pt-2">
+      <textarea value={text} onChange={e=>setText(e.target.value)} autoFocus maxLength={5000} placeholder="What do you think about this?" className="min-h-16 w-full resize-none rounded-lg border border-brand-line bg-brand-canvas px-4 py-3 text-sm outline-none focus:border-[#0D6B66]"/>
+      {err&&<p className="text-xs font-semibold text-brand-error">{err}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={()=>{ setWriting(false); setText(''); setErr(''); }} className="secondary py-2">Cancel</button>
+        <button type="submit" disabled={busy} className="primary py-2">{busy?<Loader2 size={15} className="animate-spin"/>:<Repeat2 size={15}/>}Repost</button>
+      </div>
+    </form>}
+  </>;
+}
+
+export default function FeedPostItem({ post, user, onDeleted, onReposted }) {
   const type=POST_TYPE_BY_ID[normalizePostType(post.post_type)];
   const isAsk=type.id==='question';
   const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null),[reporting,setReporting]=useState(false);
@@ -50,15 +110,20 @@ export default function FeedPostItem({ post, user, onDeleted }) {
   // guest session is nobody.
   const showViews=!!user&&!user.guest&&post.created_by_id===user.id;
   const when=timeAgo(post.created_date);
+  const isRepost=!!post.repost_of;
+  // Reposting your own post is just sharing it; the Share button does that.
+  const canRepost=!(user&&!user.guest&&(isRepost?post.repost_author_id:post.created_by_id)===user.id);
+  const reposts=post.repost_count||0;
+  const action='flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-xs font-semibold hover:bg-brand-tint sm:flex-none sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm';
 
   return <article className="panel space-y-3">
     <div className="flex items-start gap-3">
       <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">{(post.author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="truncate font-semibold text-brand-ink">{post.author_name||'Community member'}</p>
+          <p className="truncate font-semibold text-brand-ink">{post.author_name||'Community member'}{isRepost&&<span className="font-normal text-brand-muted"> reposted</span>}</p>
           {when&&<time dateTime={post.created_date} title={fullDate(post.created_date)} className="text-xs text-brand-muted">· {when}</time>}
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${BADGE_TONES[type.tone]}`}>{type.badge}</span>
+          {!isRepost&&<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${BADGE_TONES[type.tone]}`}>{type.badge}</span>}
           {isAsk&&helpfulId&&<span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-bold text-brand-teal">Answered ✓</span>}
         </div>
         <Headline text={post.author_headline}/>
@@ -66,24 +131,28 @@ export default function FeedPostItem({ post, user, onDeleted }) {
       </div>
       <FeedPostMenu post={post} user={user} onReport={()=>setReporting(true)} onDeleted={onDeleted}/>
     </div>
-    <p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>
-    <TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages}/>
+    {post.body&&<p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
+    {post.body&&<TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages}/>}
+    {isRepost&&<RepostedCard post={post}/>}
     {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
     {reporting&&<ReportPostForm post={post} onClose={()=>setReporting(false)}/>}
-    {(likes>0||cc>0||showViews)&&<div className="flex items-center gap-3 text-xs text-brand-muted">
+    {(likes>0||cc>0||reposts>0||showViews)&&<div className="flex items-center gap-3 text-xs text-brand-muted">
       {likes>0&&<span className="flex items-center gap-1"><span className="flex -space-x-1">{stack.map(r=><span key={r.id} className="grid h-5 w-5 place-items-center rounded-full bg-brand-surface text-[13px] ring-1 ring-brand-line" title={r.label}>{r.emoji}</span>)}</span>{likes}</span>}
       {cc>0&&<span>{cc} {isAsk?(cc===1?'answer':'answers'):(cc===1?'comment':'comments')}</span>}
+      {reposts>0&&<span>{reposts} {reposts===1?'repost':'reposts'}</span>}
       {showViews&&<span className="ml-auto flex items-center gap-1"><Eye size={14}/>{views} {views===1?'view':'views'}</span>}
     </div>}
-    <div className="flex items-center gap-1 border-t pt-3 text-sm text-brand-body">
-      <div className="relative" {...picker.hoverProps}>
+    <div className="flex flex-wrap items-center gap-1 border-t pt-3 text-sm text-brand-body">
+      <div className="relative flex flex-1 sm:flex-none" {...picker.hoverProps}>
         <ReactionPicker open={picker.open} current={mine} onPick={react} className="bottom-full left-0 mb-2"/>
-        <button type="button" {...picker.pressProps} onClick={tap} aria-label={current?`You reacted ${current.label}. Tap to remove, hold to change.`:'Like. Hold to choose a reaction.'} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold hover:bg-brand-tint ${current?'text-brand-teal':''}`}>
+        <button type="button" {...picker.pressProps} onClick={tap} aria-label={current?`You reacted ${current.label}. Tap to remove, hold to change.`:'Like. Hold to choose a reaction.'} className={`${action} w-full ${current?'text-brand-teal':''}`}>
           {current?<span className="text-base leading-none">{current.emoji}</span>:<ThumbsUp size={17}/>}{current?current.label:'Like'}
         </button>
       </div>
-      <button onClick={()=>setShowComments(s=>!s)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold hover:bg-brand-tint ${isAsk?'text-brand-teal':''}`}><MessageCircle size={17}/>{isAsk?(helpfulId?'Answers':'Answer'):'Comment'}</button>
-      {likeErr&&<span className="ml-auto text-xs font-semibold text-brand-error">{likeErr}</span>}
+      <button onClick={()=>setShowComments(s=>!s)} className={`${action} ${isAsk?'text-brand-teal':''}`}><MessageCircle size={17}/>{isAsk?(helpfulId?'Answers':'Answer'):'Comment'}</button>
+      {canRepost&&<RepostButton post={post} className={action} onReposted={onReposted}/>}
+      <FeedShareButton post={post} className={`${action} w-full`}/>
+      {likeErr&&<span className="basis-full text-xs font-semibold text-brand-error sm:ml-auto sm:basis-auto">{likeErr}</span>}
     </div>
     {showComments&&<FeedCommentList postId={post.id} user={user} authorId={post.created_by_id} isAsk={isAsk} helpfulId={helpfulId} onHelpful={setHelpfulId} onCount={n=>setCc(n)}/>}
   </article>;

@@ -401,6 +401,29 @@ export function mountSeo(app, shell) {
     '/reset-password': 'Reset your password', '/jobs': 'Jobs',
     '/post-job': 'Post a job', '/add': 'Add a listing', '/create-company': 'Create a company page',
   };
+  // A shared post link (/feed?post=<id>) previews as that post — who wrote
+  // it, its first words and its photo — wherever it is pasted: WhatsApp,
+  // LinkedIn, a text. Still kept out of the index, like the rest of the feed.
+  app.get('/feed', async (req, res, next) => {
+    const id = typeof req.query.post === 'string' ? req.query.post : '';
+    if (!id) return next();
+    try {
+      const post = await store.get('FeedPost', id).catch(() => null);
+      if (!post) return next();
+      const origin = siteOrigin(req);
+      const author = post.author_name && post.author_name !== 'Guest' ? post.author_name : 'A community member';
+      const words = post.body || post.repost_body || '';
+      send(res, renderPage(shell, {
+        title: `${author} on ${SITE_NAME}`,
+        description: clamp(words, 155) || DEFAULT_DESCRIPTION,
+        canonical: `${origin}/feed?post=${encodeURIComponent(post.id)}`,
+        image: (post.image_urls || [])[0] || (post.repost_image_urls || [])[0] || ogFallback(origin),
+        type: 'article',
+        noindex: true,
+      }));
+    } catch (err) { next(err); }
+  });
+
   app.get(PRIVATE, (req, res) => {
     const origin = siteOrigin(req);
     // Exact path first, then "/profile/" for a path with a segment after it
