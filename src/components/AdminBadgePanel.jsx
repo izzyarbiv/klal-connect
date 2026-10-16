@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { BadgeCheck } from 'lucide-react';
 import { api } from '@/api/client';
 import { BADGES } from '@/lib/badges';
-import { VERIFIED_MEANING, confirmedLabel } from '@/lib/trust';
 
 // Admin-only: confirm (or withdraw) the badges a listing declared, and mark
 // the listing itself verified. Writes go through the entity route, which
@@ -35,14 +34,6 @@ export default function AdminBadgePanel({ provider, onChange }) {
       <input type="checkbox" disabled={busy} checked={!!provider.verified} onChange={(e) => save({ verified: e.target.checked, verified_at: e.target.checked ? new Date().toISOString() : null, verified_by: e.target.checked ? me.id : null })}/>
       <span className="font-medium text-brand-ink">Verified by Klal</span>
     </label>
-    <p className="text-xs leading-5 text-brand-muted">{VERIFIED_MEANING}</p>
-
-    {/* Confirming details is a smaller, more frequent act than verifying, and
-        the one that keeps a listing worth trusting a year from now. */}
-    <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-      <button type="button" disabled={busy} onClick={() => save({ last_confirmed_at: new Date().toISOString() })} className="secondary text-xs">Confirm details are current</button>
-      <span className="text-xs text-brand-muted">{confirmedLabel(provider) || 'Never confirmed'}</span>
-    </div>
 
     {/* Paid placement is an admin field and reads as a label, never a check.
         Kept visually apart from verification for the same reason. */}

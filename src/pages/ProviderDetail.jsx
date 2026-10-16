@@ -110,9 +110,10 @@ export default function ProviderDetail(){
           <p className="text-xs leading-5 text-brand-muted">{provider.verified ? VERIFIED_MEANING : 'Not yet verified by Klal Connect. As with any listing, please do your own research.'}</p>
         </div></section>
         <ReportForm provider={provider}/>
-        {/* Whoever may edit it gets the link to do so: the person who added it,
-            or the business once it has claimed it. Everyone else gets "suggest a
-            correction" above, which reaches the team. */}
+        {/* Whoever may edit it gets the link to do so: the owner the team
+            accepted through a claim, and staff. Everyone else, including
+            whoever added it, gets "suggest a correction" above, which reaches
+            the team. */}
         {canEdit
           ? <>
             <Link to={`/add?edit=${provider.id}`} className="primary block text-center">Edit this listing</Link>
@@ -120,7 +121,7 @@ export default function ProviderDetail(){
                 so here keeps a team member from thinking they own it, and keeps
                 the claim button available for the business that does. */}
             {staffOnly&&<>
-              <p className="helper text-center">You are editing this as Klal Connect staff. The listing stays with whoever added or claimed it.</p>
+              <p className="helper text-center">You are editing this as Klal Connect staff. The listing stays with its owner, if it has one.</p>
               <Link to={`/add?claim=${provider.id}`} className="secondary block text-center">Claim this listing</Link>
             </>}
           </>

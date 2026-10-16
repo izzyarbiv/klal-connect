@@ -316,10 +316,10 @@ function canWrite(entity, user, row) {
   // notify() creates without an actor — fell through to `return true`, so any
   // member could rewrite or delete any notification by id, including
   // somebody else's.
-  // A listing's editor is whoever claimed it, or whoever added it while nobody
-  // has. Claiming hands the page to the business, which is the point of
-  // claiming: a community member who added it in good faith can still suggest a
-  // correction, but a business should not have a stranger editing its own page.
+  // A listing's editor is the owner the team accepted through a claim, and
+  // nobody else (see listingEditor). Adding a listing does not make it yours:
+  // a community member who added it in good faith can suggest a correction,
+  // but a business should not have a stranger editing its own page.
   // owner_id was previously read for self-vouch checks and notification
   // recipients and never consulted here, so a business that claimed its listing
   // still could not change a word of it.

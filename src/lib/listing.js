@@ -2,10 +2,14 @@ import { normalizeMinyanim } from './minyanim.js';
 
 // Who controls a listing.
 //
-// Whoever claimed it, or whoever added it while nobody has. Claiming hands the
-// page to the business — that is what claiming is for — so the community member
-// who first added it stops being its editor and goes back to suggesting
-// corrections like anyone else.
+// Whoever the Klal team has accepted as its owner, through a claim. Nobody
+// else: adding a listing does not make it yours. It used to — whoever added a
+// listing could keep rewriting it until the business claimed it, so a stranger
+// who typed in a shop could change its phone number or description for as long
+// as the shop had not noticed. Everyone who is not the owner (the person who
+// added it included) suggests a correction, which reaches the team privately.
+// Someone adding their own business ticks "This is my business" on the form,
+// which files the claim for them.
 //
 // This lives in one place because the rule needs to hold in five: canWrite on
 // the generic entity route, the two self-service functions (tagline and payment
@@ -14,7 +18,7 @@ import { normalizeMinyanim } from './minyanim.js';
 // drift would be silent — which is exactly what happened with the admin-only
 // field list earlier: the generic route refused them while createListing wrote
 // them straight onto the row.
-export const listingEditor = (row) => (row && (row.owner_id || row.created_by_id)) || null;
+export const listingEditor = (row) => (row && row.owner_id) || null;
 
 // Staff on listings: admins and moderators. The team accounts correct
 // addresses, hours and descriptions across the directory as part of the job,

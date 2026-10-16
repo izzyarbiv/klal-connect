@@ -127,7 +127,10 @@ if (!LOCAL) {
     await send('Page.navigate', { url: `${BASE}/` });
     await sleep(2000);
     await ev(`localStorage.setItem('kc_access_token', ${JSON.stringify(token)})`);
-    await api('POST', '/functions/createListing', { token, body: { name: 'Contrast Check Listing', category: 'Home Services', short_description: 'A listing to render the owner panel.', description: 'Measured, not imagined.', city: 'Lakewood', tagline: 'Measured in both themes' } });
+    // Adding a listing does not make it yours; the claim the team accepts does.
+    const ownListing = await api('POST', '/functions/createListing', { token, body: { name: 'Contrast Check Listing', category: 'Home Services', short_description: 'A listing to render the owner panel.', description: 'Measured, not imagined.', city: 'Lakewood', tagline: 'Measured in both themes', claim_as_owner: true } });
+    const ownAdmin = (await api('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;
+    if (ownListing.data?.claim && ownAdmin) await api('POST', '/functions/resolveClaim', { token: ownAdmin, body: { claim_id: ownListing.data.claim.id, approve: true } });
     for (const theme of ['light', 'dark']) {
       console.log(`  ${theme} mode, signed in`);
       for (const route of AUTH_ROUTES) {
@@ -173,7 +176,9 @@ if (LOCAL) {
     const member = `queue${Date.now()}@example.com`;
     const mreg = await api2('POST', '/auth/register', { body: { email: member, password: 'password123' } });
     const mtok = (await api2('POST', '/auth/verify-otp', { body: { email: member, otpCode: mreg.data?.dev_code } })).data?.access_token;
-    const target = (await api2('GET', '/entities/Provider?status=published&limit=1')).data?.[0];
+    // One nobody owns yet: a claim on an owned listing is refused, and the
+    // signed-in pass above hands its own listing to its member.
+    const target = ((await api2('GET', '/entities/Provider?status=published&limit=50')).data || []).find((p) => !p.owner_id);
     if (mtok && target) {
       await api2('POST', '/functions/createClaim', { token: mtok, body: { provider_id: target.id, provider_name: target.name, relationship: 'I am the owner', verification_details: 'Our sign, our phone number, our website.' } });
     }
