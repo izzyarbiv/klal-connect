@@ -14,6 +14,7 @@ import { store } from './db.js';
 import { vouchesEnabled } from './settings.js';
 import { slugify } from './seo-shared.js';
 import { categoryLabel } from '../src/lib/categories.js';
+import { isScheduled } from '../src/lib/scheduledPosts.js';
 
 const SITE_NAME = 'Klal Connect';
 const TAGLINE = 'Community resources & business directory';
@@ -409,7 +410,8 @@ export function mountSeo(app, shell) {
     if (!id) return next();
     try {
       const post = await store.get('FeedPost', id).catch(() => null);
-      if (!post) return next();
+      // A scheduled post is not out yet: its link previews as the plain feed.
+      if (!post || isScheduled(post)) return next();
       const origin = siteOrigin(req);
       const author = post.author_name && post.author_name !== 'Guest' ? post.author_name : 'A community member';
       const words = post.body || post.repost_body || '';

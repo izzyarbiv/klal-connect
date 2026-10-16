@@ -107,6 +107,49 @@ ok(notes.data.filter((n) => n.type === 'like').length === 1, 'author notified on
 r = await call('POST', '/functions/toggleLike', { token: guest, body: { post_id: post.id } });
 ok(r.status === 403 && r.data.guest, 'guest cannot react');
 
+// ---- scheduled posts: the author's alone until their time ----------------
+{
+  const later = new Date(Date.now() + 2 * 86_400_000).toISOString();
+  const made = await call('POST', '/functions/createPost', { token: userA, body: { body: 'scheduled hello', publish_at: later } });
+  const sp = made.data?.post;
+  ok(made.status === 200 && sp?.publish_at === later, 'a post can be scheduled', JSON.stringify(made.data));
+  const seen = async (token) => (await call('GET', '/entities/FeedPost?sort=-created_date', { token })).data.some((p) => p.id === sp.id);
+  ok(await seen(userA), 'the author sees their scheduled post in the feed');
+  ok(!(await seen(userB)) && !(await seen(guest)) && !(await seen(admin)) && !(await seen(undefined)), 'nobody else sees it, an admin included');
+  ok((await call('GET', `/entities/FeedPost/${sp.id}`, { token: userB })).status === 403, 'nor opens it by its link');
+  for (const [fn, body] of [['toggleLike', { post_id: sp.id }], ['createComment', { post_id: sp.id, body: 'hi' }], ['repostPost', { post_id: sp.id }], ['toggleSavePost', { post_id: sp.id }]]) {
+    const res = await call('POST', `/functions/${fn}`, { token: userB, body });
+    ok(res.status === 404, `${fn} on a scheduled post answers as missing`, `${res.status} ${JSON.stringify(res.data)}`);
+  }
+  const past = await call('POST', '/functions/createPost', { token: userA, body: { body: 'x', publish_at: new Date(Date.now() - 60_000).toISOString() } });
+  ok(past.status === 400, 'a time already gone is refused', JSON.stringify(past.data));
+  const far = await call('POST', '/functions/createPost', { token: userA, body: { body: 'x', publish_at: new Date(Date.now() + 400 * 86_400_000).toISOString() } });
+  ok(far.status === 400, 'more than a year ahead is refused', JSON.stringify(far.data));
+  const other = await call('POST', '/functions/updateScheduledPost', { token: userB, body: { post_id: sp.id, body: 'hijack' } });
+  ok(other.status === 403, 'only the author can change it', String(other.status));
+  const moved = new Date(Date.now() + 3 * 86_400_000).toISOString();
+  const edited = await call('POST', '/functions/updateScheduledPost', { token: userA, body: { post_id: sp.id, body: 'edited hello', publish_at: moved } });
+  ok(edited.status === 200 && edited.data.post.body === 'edited hello' && edited.data.post.publish_at === moved, 'the author can change its words and time', JSON.stringify(edited.data));
+  const direct = await call('PUT', `/entities/FeedPost/${sp.id}`, { token: userA, body: { publish_at: new Date().toISOString() } });
+  ok(direct.status === 403, 'the time cannot be set around the checks', String(direct.status));
+  const now = await call('POST', '/functions/updateScheduledPost', { token: userA, body: { post_id: sp.id, post_now: true } });
+  ok(now.status === 200 && Date.parse(now.data.post.publish_at) <= Date.now(), 'Post now puts it live', JSON.stringify(now.data));
+  ok(await seen(userB), 'once live, everyone sees it');
+  const feed = (await call('GET', '/entities/FeedPost?sort=-created_date', { token: userB })).data;
+  ok(feed[0]?.id === sp.id, 'and it sits at the top, by when it went live', feed[0]?.id);
+  const again = await call('POST', '/functions/updateScheduledPost', { token: userA, body: { post_id: sp.id, body: 'too late' } });
+  ok(again.status === 400, 'a live post is no longer a scheduled one to edit', JSON.stringify(again.data));
+  // Nothing goes live on Shabbos. A member in New York, the coming Saturday at noon there.
+  const emailS = `s${Date.now()}@example.com`;
+  const regS = await call('POST', '/auth/register', { body: { email: emailS, password: 'password123' } });
+  const userS = (await call('POST', '/auth/verify-otp', { body: { email: emailS, otpCode: regS.data.dev_code } })).data.access_token;
+  await call('PUT', '/auth/me', { token: userS, body: { latitude: 40.7128, longitude: -74.006, timezone: 'America/New_York', city: 'New York' } });
+  const sat = new Date(); sat.setUTCDate(sat.getUTCDate() + ((6 - sat.getUTCDay() + 7) % 7 || 7)); sat.setUTCHours(16, 0, 0, 0);
+  const shab = await call('POST', '/functions/createPost', { token: userS, body: { body: 'x', publish_at: sat.toISOString() } });
+  // (423 if the run itself happens on Shabbos in New York: refused either way.)
+  ok([400, 423].includes(shab.status) && /Shabbos/.test(shab.data?.error || ''), 'a time on Shabbos is refused', `${sat.toISOString()} ${JSON.stringify(shab.data)}`);
+}
+
 // ---- messages: read receipt + reaction -----------------------------------
 const emailC0 = `c0${Date.now()}@example.com`;
 const regC0 = await call('POST', '/auth/register', { body: { email: emailC0, password: 'password123' } });
