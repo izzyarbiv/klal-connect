@@ -77,12 +77,14 @@ export default function Browse() {
   // With a search typed, the listings that are what was asked for come first
   // (a search for shul opens on the shuls), and the chosen sort orders each
   // tier. Without one, the sort alone decides.
-  const order = (rows) => [...rows].sort((a, b) =>
-    (terms.length ? relevance(b, terms) - relevance(a, terms) : 0) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
+  const order = (rows) => {
+    const score = new Map(rows.map((p) => [p, relevance(p, q)]));
+    return [...rows].sort((a, b) => (score.get(b) - score.get(a)) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
       : sort === 'used' ? (b.usage_count || 0) - (a.usage_count || 0)
         : sort === 'saved' ? (b.save_count || 0) - (a.save_count || 0)
           : sort === 'recent' ? new Date(b.created_date) - new Date(a.created_date)
             : (a.name || '').localeCompare(b.name || '')));
+  };
 
   // Results are what actually matched — nothing else. The previous version
   // widened the search when it came up empty, and its last stage dropped the

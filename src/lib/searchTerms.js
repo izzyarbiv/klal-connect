@@ -170,19 +170,36 @@ export function hasWord(text, term) {
 /**
  * How directly a listing answers the query, for ordering results.
  *
- * Every listing that mentions the word somewhere is still a result, but a
- * search for "shul" should open on the shuls, not on a restaurant whose
- * description says it is near one. So a listing filed under the thing, or
- * named for it, comes first; then one whose one-line summary says it; then
- * everything that only mentions it further down.
+ * Every listing that mentions the search somewhere is still a result, but the
+ * ones that are what was asked for come first. Each word typed is scored on
+ * where it is found: in the name or category (best), in the one-line summary,
+ * or only further down. The whole phrase found in the name or category counts
+ * extra. So "pizza restaurant" puts a pizza restaurant ahead of every other
+ * restaurant, and "shul" opens on the shuls rather than on a restaurant whose
+ * description says it is near one.
  */
-export function relevance(p, terms) {
-  if (!terms.length) return 0;
-  const hit = (text) => terms.some((t) => hasWord(text, t));
-  if (hit([p?.category, p?.subcategory, categoryLabel(p?.category), categoryLabel(p?.subcategory)].join(' '))) return 3;
-  if (hit(p?.name)) return 3;
-  if (hit([p?.tagline, p?.short_description].join(' '))) return 2;
-  return 1;
+export function relevance(p, raw) {
+  const text = String(raw || '').trim().toLowerCase();
+  if (!text) return 0;
+  const strong = [p?.name, p?.category, p?.subcategory, categoryLabel(p?.category), categoryLabel(p?.subcategory)].join(' ');
+  const middle = [p?.tagline, p?.short_description].join(' ');
+  const all = providerHaystack(p);
+  // A word counts as itself or any of its aliases. The last word may still be
+  // being typed, so the start of a word also counts, for less: "piz" finds the
+  // pizza place, but "shul" does not rank Shulman Dentistry with the shuls.
+  const whole = (hay, alts) => alts.some((t) => hasWord(hay, t));
+  const words = text.split(/\s+/).filter((w) => w.length > 1);
+  let score = 0;
+  words.forEach((word, i) => {
+    const alts = [word, ...(INDEX.get(word) || [])];
+    const last = i === words.length - 1;
+    score += whole(strong, alts) ? 3 : whole(middle, alts) ? 2 : whole(all, alts) ? 1
+      : last && startsWord(strong, word) ? 1 : 0;
+  });
+  const phrase = [text, ...(INDEX.get(text) || [])];
+  if (phrase.some((t) => hasWord(strong, t))) score += 5;
+  else if (phrase.some((t) => hasWord(middle, t))) score += 2;
+  return score;
 }
 
 /**
