@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import SearchPanel from '@/components/SearchPanel';
+import { Plus, ChevronRight } from 'lucide-react';
 import AddListingPrompt from '@/components/AddListingPrompt';
 import { useCommunity } from '@/lib/community';
 import CategoryGrid from '@/components/CategoryGrid';
@@ -61,7 +62,13 @@ export default function Directory(){
 
     <section className="rounded-xl bg-brand-navy p-7 text-white md:flex md:items-center md:justify-between md:p-10">
       <div><h2 className="text-2xl font-bold">Is your business or resource missing?</h2><p className="mt-2 text-white/75">Add a community resource or claim your business listing — it's live the moment you post it.</p></div>
-      <Link to="/add" className="mt-5 inline-block rounded-xl bg-brand-gold px-5 py-3 font-bold text-brand-navy md:mt-0">Add or claim a listing</Link>
+      {/* Same look as the "Add a listing" prompt under the search on Home: a
+          teal plus in a pale pill, so the two ways in read as one button. */}
+      <Link to="/add" className="group mt-5 inline-flex shrink-0 items-center gap-3 rounded-2xl bg-brand-tint py-2.5 pl-2.5 pr-4 font-bold text-brand-ink shadow-md ring-2 ring-brand-teal/40 transition hover:ring-brand-teal md:mt-0">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-teal text-white shadow-sm"><Plus size={20} strokeWidth={2.5} /></span>
+        Add or claim a listing
+        <ChevronRight size={18} className="shrink-0 text-brand-teal transition group-hover:translate-x-0.5" />
+      </Link>
     </section>
   </div>;
 }
