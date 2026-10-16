@@ -1,10 +1,11 @@
 import React,{useState} from 'react';
 import { api } from '@/api/client';
-import { ImagePlus, Send } from 'lucide-react';
+import { ImagePlus, Send, Linkedin, X } from 'lucide-react';
 import Headline from '@/components/Headline';
 import { AccountButtons } from '@/components/GuestPrompt';
 import { POST_TYPES, POST_TYPE_BY_ID } from '@/lib/postTypes';
 import { markEngaged } from '@/lib/engagement';
+import { LinkedInShareDialog, LI_BLUE } from '@/components/feed/FeedShare';
 
 // initialBody/initialType arrive from /feed?ask=… — a search that found
 // nothing, handed straight to the people who might know the answer.
@@ -13,6 +14,9 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
   // Expanded on a wide screen, a single line on a phone until tapped — but
   // always expanded when it arrives prefilled, or the text a visitor was
   // handed sits hidden behind a collapsed bar.
+  // The post just made, so it can go to LinkedIn too, and whether that
+  // dialog is open.
+  const [posted,setPosted]=useState(null),[sharing,setSharing]=useState(false);
   const [open,setOpen]=useState(()=>!!initialBody||typeof window==='undefined'||window.innerWidth>=640);
   const upload=async e=>{
     setUploading(true);
@@ -27,7 +31,7 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
     const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs});
     if(r.status>=400){ setErr(r.data?.error||'Could not post'); setBusy(false); return; }
     markEngaged();
-    setErr(''); setBody(''); setImgs([]); setBusy(false);
+    setErr(''); setBody(''); setImgs([]); setBusy(false); setPosted(r.data?.post||null);
     if(window.innerWidth<640) setOpen(false);
     onPosted?.();
   };
@@ -42,13 +46,19 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
   // min-w-0 and truncate are load-bearing: a flex child will not shrink below
   // its text, so without them this button stays as wide as the placeholder and
   // stretches the whole page past the edge of the screen.
-  if(!open) return <button type="button" onClick={()=>setOpen(true)} className="flex w-full min-w-0 items-center gap-3 rounded-xl bg-brand-surface p-3 text-left ring-1 ring-brand-line sm:hidden">
+  const postedNote=posted&&<div className="flex items-center gap-2 rounded-xl bg-brand-tint px-3 py-2 text-sm text-brand-body">
+    <span className="min-w-0 flex-1 font-semibold text-brand-ink">Posted. Share it on LinkedIn too?</span>
+    <button type="button" onClick={()=>setSharing(true)} className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{background:LI_BLUE}}><Linkedin size={14}/>Share on LinkedIn</button>
+    <button type="button" onClick={()=>setPosted(null)} aria-label="Dismiss" className="icon-button shrink-0 text-brand-muted"><X size={16}/></button>
+    {sharing&&<LinkedInShareDialog post={posted} onClose={()=>{ setSharing(false); setPosted(null); }}/>}
+  </div>;
+  if(!open) return <>{postedNote}<button type="button" onClick={()=>setOpen(true)} className="flex w-full min-w-0 items-center gap-3 rounded-xl bg-brand-surface p-3 text-left ring-1 ring-brand-line sm:hidden">
     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-tint text-xs font-bold text-brand-teal">{(user?.full_name||'You').split(' ').map(x=>x[0]).slice(0,2).join('')}</span>
     <span className="min-w-0 flex-1 truncate text-sm text-brand-muted">Share something with the klal…</span>
     <span className="shrink-0 rounded-full bg-brand-navy p-2 text-white"><Send size={15}/></span>
-  </button>;
+  </button></>;
 
-  return <form onSubmit={submit} className="panel space-y-3">
+  return <>{postedNote}<form onSubmit={submit} className="panel space-y-3">
     <div className="flex gap-3">
       <div className="hidden h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal sm:grid">You</div>
       <div className="min-w-0 flex-1">
@@ -65,5 +75,5 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
       </div>
       <div className="flex items-center gap-2">{err&&<span className="text-xs font-semibold text-brand-error">{err}</span>}<button type="button" onClick={()=>{setOpen(false);setBody('');}} className="text-xs font-medium text-brand-muted hover:text-brand-ink sm:hidden">Cancel</button><button disabled={busy||!body.trim()} className="primary"><Send size={15}/>{type==='question'?'Ask':'Post'}</button></div>
     </div>
-  </form>;
+  </form></>;
 }

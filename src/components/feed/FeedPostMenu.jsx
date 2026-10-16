@@ -3,9 +3,7 @@ import { api } from '@/api/client';
 import { MoreHorizontal, Link2, MessageCircle, Bookmark, BookmarkCheck, Flag, Trash2, Loader2 } from 'lucide-react';
 import { waShareUrl, WA_GREEN } from '@/components/ShareButton';
 import { POST_REPORT_REASONS, postExcerpt } from '@/lib/postTypes';
-
-// Where a single post lives: the feed, showing only that post (Feed.jsx).
-export const postLink = (id) => `${window.location.origin}/feed?post=${encodeURIComponent(id)}`;
+import { postLink } from '@/components/feed/FeedShare';
 
 // The "…" in the corner of a post card. Copy and share work for anyone,
 // guest included; saving and reporting need an account of one's own (the
@@ -92,7 +90,7 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
     if(r.status>=400){ setErr(r.data?.error||'Could not delete'); return; }
     setOpen(false); onDeleted?.(post.id);
   };
-  const shareText=`${postExcerpt(post.body,120)||`A post by ${post.author_name||'a community member'} on Klal`} — ${postLink(post.id)}`;
+  const shareText=`${postExcerpt(post.body||post.repost_body,120)||`A post by ${post.author_name||'a community member'} on Klal`} — ${postLink(post.id)}`;
   const item='flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-brand-body hover:bg-brand-tint hover:text-brand-ink focus:bg-brand-tint focus:outline-none disabled:opacity-50';
 
   return <div ref={ref} className="relative -mr-2 -mt-1 shrink-0">

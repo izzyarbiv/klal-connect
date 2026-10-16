@@ -526,6 +526,44 @@ export const functions = {
     return { post };
   },
 
+  // Sharing someone's post into the feed, with or without a few words of your
+  // own. The original is copied in, so the repost reads the same however many
+  // reposts down it is; reposting a repost shares the original it carries.
+  async repostPost({ post_id, body }, user) {
+    await assertWritable(user);
+    need(post_id, 'Missing post.');
+    let original = await store.get('FeedPost', post_id);
+    if (original?.repost_of) original = await store.get('FeedPost', original.repost_of);
+    if (!original) fail('That post is no longer available.', 404);
+    if (original.created_by_id === user.id) fail('You can share your own post with the Share button instead.');
+    const text = String(body || '').trim();
+    if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
+    const post = await store.create(
+      'FeedPost',
+      {
+        body: text,
+        post_type: 'post',
+        image_urls: [],
+        like_count: 0,
+        comment_count: 0,
+        view_count: 0,
+        repost_of: original.id,
+        repost_author_id: original.created_by_id || '',
+        repost_author_name: original.author_name || '',
+        repost_author_headline: original.author_headline || '',
+        repost_body: original.body || '',
+        repost_image_urls: original.image_urls || [],
+        repost_post_type: original.post_type || 'post',
+        repost_created_date: original.created_date || '',
+        ...authorFields(user),
+      },
+      user
+    );
+    const repost_count = await store.count('FeedPost', { repost_of: original.id });
+    await store.update('FeedPost', original.id, { repost_count });
+    return { post };
+  },
+
   async createComment({ post_id, body }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');
@@ -827,10 +865,23 @@ export const functions = {
     const staff = user.role === 'admin' || user.role === 'moderator';
     if (!own && !staff) fail('You can only delete your own posts.', 403);
 
-    for (const entity of ['Comment', 'FeedLike', 'CommentVote', 'SavedPost']) {
-      for (const row of await store.filter(entity, { post_id })) await store.delete(entity, row.id);
+    const removeWithEverything = async (id) => {
+      for (const entity of ['Comment', 'FeedLike', 'CommentVote', 'SavedPost']) {
+        for (const row of await store.filter(entity, { post_id: id })) await store.delete(entity, row.id);
+      }
+      await store.delete('FeedPost', id);
+    };
+    await removeWithEverything(post_id);
+    // Reposts of it keep their own words but no longer carry its copy; a bare
+    // repost has nothing left to show and goes too.
+    for (const repost of await store.filter('FeedPost', { repost_of: post_id })) {
+      if (!String(repost.body || '').trim()) { await removeWithEverything(repost.id); continue; }
+      await store.update('FeedPost', repost.id, { repost_removed: true, repost_body: '', repost_image_urls: [], repost_author_name: '', repost_author_headline: '' });
     }
-    await store.delete('FeedPost', post_id);
+    if (post.repost_of) {
+      const original = await store.get('FeedPost', post.repost_of);
+      if (original) await store.update('FeedPost', original.id, { repost_count: await store.count('FeedPost', { repost_of: original.id }) });
+    }
     if (!own) {
       await store.create('ActivityEvent', { type: 'moderation', entity: 'FeedPost', target_id: post_id, from: 'published', to: 'deleted', actor_role: user.role }, user);
     }
