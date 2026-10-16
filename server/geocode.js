@@ -314,6 +314,50 @@ const fromPlace = (p) => ({
 // reach the provider even when the curated list already named the town.
 const looksLikeAddress = (q) => /^\s*\d+[a-z]?(-\d+)?\s+[a-z]/i.test(q);
 
+// ---- US street addresses without a key ---------------------------------------
+
+// The US Census Bureau's geocoder: free, no key, no account, and it places a
+// US street address on its block. It is what lets "4000 N 46th Ave,
+// Hollywood FL" land on the building when no paid provider is configured, or
+// when the configured one cannot place the address. US only: anywhere else it
+// simply finds nothing, and the curated towns still answer. Set
+// KC_CENSUS_GEOCODER=0 to turn it off.
+const CENSUS_URL = process.env.KC_CENSUS_URL || 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress';
+const censusEnabled = () => process.env.KC_CENSUS_GEOCODER !== '0';
+
+// The Census answers in capitals: "4000 N 46TH AVE" -> "4000 N 46th Ave".
+const titleCase = (s) => String(s || '').toLowerCase()
+  .replace(/\b([a-z])/g, (c) => c.toUpperCase())
+  .replace(/\b(\d+)(St|Nd|Rd|Th)\b/g, (_, n, sfx) => n + sfx.toLowerCase())
+  .replace(/\b(Ne|Nw|Se|Sw)\b/g, (d) => d.toUpperCase());
+
+// "4000 N 46TH AVE, HOLLYWOOD, FL, 33021" -> "4000 N 46th Ave, Hollywood, FL 33021"
+function censusLabel(matched) {
+  const [street, city, state, zip] = String(matched || '').split(',').map((s) => s.trim());
+  if (!state) return titleCase(matched);
+  return `${titleCase(street)}, ${titleCase(city)}, ${state.toUpperCase()}${zip ? ` ${zip}` : ''}`;
+}
+
+async function censusSearch(q, limit) {
+  const key = `census:${q.toLowerCase()}`;
+  const hit = await geoCache.get(key);
+  if (hit) return hit;
+  const url = `${CENSUS_URL}?address=${encodeURIComponent(q)}&benchmark=Public_AR_Current&format=json`;
+  const d = await getJSON(url);
+  const matches = d?.result?.addressMatches || [];
+  const rows = matches.slice(0, limit).filter((m) => Number.isFinite(Number(m?.coordinates?.y)) && Number.isFinite(Number(m?.coordinates?.x))).map((m) => {
+    const city = m.addressComponents?.city || '';
+    return place(m.coordinates.y, m.coordinates.x, {
+      city: titleCase(city),
+      country_code: 'US',
+      label: censusLabel(m.matchedAddress),
+      precise: true,
+    });
+  });
+  await geoCache.set(key, rows, SEARCH_TTL);
+  return rows;
+}
+
 // ---- public API -------------------------------------------------------------
 
 const isFiniteNum = (n) => Number.isFinite(Number(n));
@@ -376,31 +420,51 @@ export async function searchPlaces(query, limit = 8) {
   // listed — and if there is no usable provider, the known places are still
   // an answer rather than a 503.
   const local = findPlaces(q, capped).map(fromPlace);
-  if ((local.length >= capped && !looksLikeAddress(q)) || !providerUsable()) {
+  const address = looksLikeAddress(q);
+  if (!address && (local.length >= capped || !providerUsable())) {
     if (local.length) return local;
     throw new GeoError(LOCATION_UNAVAILABLE, 503);
   }
 
-  // v2: results now carry `precise`; older cached rows do not.
-  const key = `search2:${PROVIDER}:${capped}:${q.toLowerCase()}`;
-  const hit = await geoCache.get(key);
-  if (hit) return mergePlaces(local, hit, capped);
-
-  let results;
-  try {
-    // An address search asks for the full list: the curated towns must not
-    // crowd out the one result that is the building itself.
-    results = await call(() => activeProvider().search(q, looksLikeAddress(q) ? capped : capped - local.length));
-  } catch (err) {
-    // The curated communities were already an answer, fetched above. A provider
-    // that errors must not take them down with it — that is how a search for
-    // "Lakewood" answered 503 while the list knew exactly where Lakewood is.
-    // It only bites once a provider is actually configured, which is the moment
-    // a key gets added.
-    if (local.length) return local;
-    throw err;
+  let results = [];
+  let failure = null;
+  if (providerUsable()) {
+    // v2: results now carry `precise`; older cached rows do not.
+    const key = `search2:${PROVIDER}:${capped}:${q.toLowerCase()}`;
+    const hit = await geoCache.get(key);
+    if (hit) results = hit;
+    else {
+      try {
+        // An address search asks for the full list: the curated towns must not
+        // crowd out the one result that is the building itself.
+        results = await call(() => activeProvider().search(q, address ? capped : capped - local.length));
+        await geoCache.set(key, results, SEARCH_TTL);
+      } catch (err) {
+        // The curated communities were already an answer, fetched above. A
+        // provider that errors must not take them down with it — that is how a
+        // search for "Lakewood" answered 503 while the list knew exactly where
+        // Lakewood is.
+        failure = err;
+      }
+    }
   }
-  await geoCache.set(key, results, SEARCH_TTL);
+
+  // A street address the configured provider could not place — or that no
+  // provider was asked about, because none is configured — goes to the
+  // Census geocoder. Without this, every address search on a site with no
+  // key ended at the middle of town.
+  if (address && censusEnabled() && !results.some((r) => r.precise)) {
+    try {
+      results = [...(await censusSearch(q, capped)), ...results];
+    } catch {
+      // Same as a failing provider: the towns still answer.
+    }
+  }
+
+  if (!results.length) {
+    if (local.length) return local;
+    throw failure || new GeoError(LOCATION_UNAVAILABLE, 503);
+  }
   return mergePlaces(local, results, capped);
 }
 

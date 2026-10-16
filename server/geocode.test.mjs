@@ -108,6 +108,58 @@ check('full address sent to google', asked.includes(encodeURIComponent('1880 Oce
 check('the building is first', pins[0]?.precise && Math.abs(pins[0].latitude - 40.6189) < 0.0001, pins[0] && `${pins[0].label} ${pins[0].latitude},${pins[0].longitude}`);
 check('the town is still offered', pins.some((p) => !p.precise && p.city === 'Brooklyn'), pins.map((p) => p.label));
 
+// No provider key at all — the live site's situation. A street address must
+// still land on the building, through the Census geocoder, and never by
+// asking a provider that is not configured.
+console.log('\nstreet address with no provider key (census):');
+delete process.env.KC_GEOCODER;
+delete process.env.KC_GEOCODER_KEY;
+process.env.NODE_ENV = 'production';
+const censusAsked = [];
+globalThis.fetch = async (url) => {
+  const u = String(url);
+  censusAsked.push(u);
+  if (!u.startsWith('https://geocoding.geo.census.gov/')) throw new Error(`unexpected call to ${u}`);
+  return { ok: true, status: 200, json: async () => ({ result: { addressMatches: [{
+    matchedAddress: '4000 N 46TH AVE, HOLLYWOOD, FL, 33021',
+    coordinates: { x: -80.1823, y: 26.0459 },
+    addressComponents: { city: 'HOLLYWOOD', state: 'FL', zip: '33021' },
+  }] } }) };
+};
+const census = await import(`${GEO_URL}?v=census`);
+const hw = await census.searchPlaces('4000 N 46th Ave, Hollywood FL', 8);
+check('census asked with the full address', censusAsked.some((u) => u.includes(encodeURIComponent('4000 N 46th Ave, Hollywood FL'))), censusAsked.length);
+check('the building is first', hw[0]?.precise && Math.abs(hw[0].latitude - 26.0459) < 0.0001 && Math.abs(hw[0].longitude + 80.1823) < 0.0001, hw[0]);
+check('readable label', hw[0]?.label === '4000 N 46th Ave, Hollywood, FL 33021', hw[0]?.label);
+check('city and country', hw[0]?.city === 'Hollywood' && hw[0]?.country_code === 'US', `${hw[0]?.city} / ${hw[0]?.country_code}`);
+const pinned = await census.pinForListing({ address: '4000 N 46th Ave', city: 'Hollywood', state: 'FL' });
+check('a saved listing gets the building as its pin', pinned?.pin_precise === true && Math.abs(pinned.latitude - 26.0459) < 0.0001, pinned);
+censusAsked.length = 0;
+await census.searchPlaces('Hollywood', 4).catch(() => []);
+check('a town search does not reach the census', censusAsked.length === 0, censusAsked.length);
+
+// A configured provider that can only place the street, not the building:
+// the Census gets a turn, and its exact answer comes first.
+console.log('\nprovider without an exact match falls back to census:');
+process.env.KC_GEOCODER = 'google';
+process.env.KC_GEOCODER_KEY = 'test-key';
+globalThis.fetch = async (url) => {
+  const u = String(url);
+  if (u.startsWith('https://geocoding.geo.census.gov/')) {
+    return { ok: true, status: 200, json: async () => ({ result: { addressMatches: [{
+      matchedAddress: '4000 N 46TH AVE, HOLLYWOOD, FL, 33021', coordinates: { x: -80.1823, y: 26.0459 },
+      addressComponents: { city: 'HOLLYWOOD' } }] } }) };
+  }
+  return { ok: true, status: 200, json: async () => ({ status: 'OK', results: [{
+    formatted_address: 'Hollywood, FL, USA', types: ['locality', 'political'],
+    geometry: { location: { lat: 26.0112, lng: -80.1495 }, location_type: 'APPROXIMATE' },
+    address_components: [{ long_name: 'Hollywood', short_name: 'Hollywood', types: ['locality', 'political'] },
+      { long_name: 'United States', short_name: 'US', types: ['country', 'political'] }] }] }) };
+};
+const mixed = await import(`${GEO_URL}?v=mixed`);
+const mx = await mixed.searchPlaces('4000 N 46th Ave, Hollywood FL', 8);
+check('census building comes first', mx[0]?.precise && mx[0].label.startsWith('4000 N 46th Ave'), mx.map((r) => r.label));
+
 // The curated list answers a known community first, with no provider call at
 // all — that is what keeps city lookup, zmanim and map pins working with no
 // key configured.
