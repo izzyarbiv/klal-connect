@@ -12,6 +12,9 @@ process.env.KC_EMAIL_DELIVERY = 'dev';
 // Saving a listing looks up its pin; without a provider that is answered
 // from the curated towns alone, so the checks never reach the network.
 process.env.KC_GEOCODER = 'none';
+// The keyless Census lookup for street addresses is a network call too.
+// geocode.test.mjs covers it against a recorded response.
+process.env.KC_CENSUS_GEOCODER = '0';
 delete process.env.NODE_ENV;
 // Uploads go to a throwaway directory, not server/uploads: the storage layer
 // reads this at import, and a test run must not leave files behind.
