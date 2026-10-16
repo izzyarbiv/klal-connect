@@ -20,6 +20,7 @@ import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { listingEditor, normalizeListingPatch, canSetPaymentLink } from '../src/lib/listing.js';
 import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
+import { isScheduled, byPostedAtDesc } from '../src/lib/scheduledPosts.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { ensureCoreCategories } from './ensure-core.js';
@@ -252,6 +253,12 @@ async function visibleRows(entity, rows, user) {
   if (entity === 'Recommendation' && user?.role !== 'admin') {
     rows = rows.filter((row) => row.status === 'accepted' || (user && (row.created_by_id === user.id || row.recipient_id === user.id)));
   }
+  // A scheduled post is its author's alone until its time comes, admins
+  // included: nobody else can see, share or react to it before then.
+  if (entity === 'FeedPost') {
+    const now = Date.now();
+    rows = rows.filter((row) => !isScheduled(row, now) || (!!user && !isGuest(user) && row.created_by_id === user.id));
+  }
   // The guest has no messages, notifications, saves or votes of its own —
   // anything addressed to it would be readable by every visitor at once.
   if (isGuest(user) && OWNER_SCOPED[entity]) return [];
@@ -378,7 +385,10 @@ app.get('/api/entities/:entity', async (req, res, next) => {
   const { entity } = req.params;
   const { sort, limit, query } = req.query;
   const q = parseJSON(query, null);
-  const rows = q ? await store.filter(entity, q, sort, null) : await store.list(entity, sort, null);
+  let rows = q ? await store.filter(entity, q, sort, null) : await store.list(entity, sort, null);
+  // A scheduled post takes its place in the feed at the time it went live, not
+  // the time it was written.
+  if (entity === 'FeedPost' && (sort || '-created_date') === '-created_date') rows = [...rows].sort(byPostedAtDesc);
   const visible = await readable(entity, rows, req.user);
   res.json(limit ? visible.slice(0, Number(limit)) : visible);
 });

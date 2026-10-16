@@ -1,11 +1,16 @@
 import React,{useState} from 'react';
 import { api } from '@/api/client';
-import { ImagePlus, Send, Linkedin, X } from 'lucide-react';
+import { ImagePlus, Send, Linkedin, X, CalendarClock } from 'lucide-react';
 import Headline from '@/components/Headline';
 import { AccountButtons } from '@/components/GuestPrompt';
 import { POST_TYPES, POST_TYPE_BY_ID } from '@/lib/postTypes';
 import { markEngaged } from '@/lib/engagement';
 import { LinkedInShareDialog, LI_BLUE } from '@/components/feed/FeedShare';
+import { isScheduled, scheduleLabel, toLocalInput } from '@/lib/scheduledPosts';
+
+// Where the time box starts when scheduling is opened: tomorrow at 9 AM, or
+// Sunday when tomorrow is Shabbos.
+function defaultScheduleTime(){ const d=new Date(); d.setDate(d.getDate()+(d.getDay()===5?2:1)); d.setHours(9,0,0,0); return toLocalInput(d); }
 
 // initialBody/initialType arrive from /feed?ask=… — a search that found
 // nothing, handed straight to the people who might know the answer.
@@ -17,6 +22,9 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
   // The post just made, so it can go to LinkedIn too, and whether that
   // dialog is open.
   const [posted,setPosted]=useState(null),[sharing,setSharing]=useState(false);
+  // A time to go live instead of now, picked in the poster's own time zone.
+  // Empty while posting straight away.
+  const [when,setWhen]=useState('');
   const [open,setOpen]=useState(()=>!!initialBody||typeof window==='undefined'||window.innerWidth>=640);
   const upload=async e=>{
     setUploading(true);
@@ -27,11 +35,15 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
     e.preventDefault();
     if(!body.trim())return;
     if(!(await api.auth.requireAccount()))return;
+    // The browser reads the picked time in its own zone; the server gets the
+    // exact moment.
+    const publish_at=when?new Date(when).toISOString():undefined;
+    if(when&&Number.isNaN(new Date(when).getTime())){ setErr('Pick a date and time for your post.'); return; }
     setBusy(true);
-    const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs});
+    const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs,publish_at});
     if(r.status>=400){ setErr(r.data?.error||'Could not post'); setBusy(false); return; }
     markEngaged();
-    setErr(''); setBody(''); setImgs([]); setBusy(false); setPosted(r.data?.post||null);
+    setErr(''); setBody(''); setImgs([]); setWhen(''); setBusy(false); setPosted(r.data?.post||null);
     if(window.innerWidth<640) setOpen(false);
     onPosted?.();
   };
@@ -46,7 +58,13 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
   // min-w-0 and truncate are load-bearing: a flex child will not shrink below
   // its text, so without them this button stays as wide as the placeholder and
   // stretches the whole page past the edge of the screen.
-  const postedNote=posted&&<div className="flex items-center gap-2 rounded-xl bg-brand-tint px-3 py-2 text-sm text-brand-body">
+  // A scheduled post has no link anyone else can open yet, so there is
+  // nothing to share until it goes live.
+  const postedNote=posted&&isScheduled(posted)?<div className="flex items-center gap-2 rounded-xl bg-brand-tint px-3 py-2 text-sm text-brand-body">
+    <CalendarClock size={16} className="shrink-0 text-brand-teal"/>
+    <span className="min-w-0 flex-1"><span className="font-semibold text-brand-ink">Scheduled for {scheduleLabel(posted.publish_at)}.</span> Only you can see it until then.</span>
+    <button type="button" onClick={()=>setPosted(null)} aria-label="Dismiss" className="icon-button shrink-0 text-brand-muted"><X size={16}/></button>
+  </div>:posted&&<div className="flex items-center gap-2 rounded-xl bg-brand-tint px-3 py-2 text-sm text-brand-body">
     <span className="min-w-0 flex-1 font-semibold text-brand-ink">Posted. Share it on LinkedIn too?</span>
     <button type="button" onClick={()=>setSharing(true)} className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{background:LI_BLUE}}><Linkedin size={14}/>Share on LinkedIn</button>
     <button type="button" onClick={()=>setPosted(null)} aria-label="Dismiss" className="icon-button shrink-0 text-brand-muted"><X size={16}/></button>
@@ -67,13 +85,22 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
         <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder={POST_TYPE_BY_ID[type]?.placeholder} autoFocus className="min-h-16 w-full resize-none rounded-lg border border-brand-line bg-brand-canvas px-4 py-3 text-sm outline-none focus:border-[#0D6B66] sm:min-h-20"/>
       </div>
     </div>
+    {when&&<div className="space-y-1.5 rounded-lg bg-brand-tint p-3 sm:ml-14">
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor="feed-schedule" className="text-sm font-semibold text-brand-ink">Goes live</label>
+        <input id="feed-schedule" type="datetime-local" value={when} min={toLocalInput(new Date())} onChange={e=>setWhen(e.target.value)} className="min-w-0 rounded-lg border border-brand-line bg-brand-canvas px-3 py-1.5 text-sm text-brand-ink outline-none focus:border-[#0D6B66]"/>
+        <button type="button" onClick={()=>setWhen('')} className="text-xs font-semibold text-brand-teal hover:underline">Post now instead</button>
+      </div>
+      <p className="text-xs text-brand-muted">In your time zone. Only you can see it until then, and you can change or cancel it anytime.</p>
+    </div>}
     {imgs.length>0&&<div className="flex gap-2 sm:pl-14">{imgs.map(u=><img key={u} src={u} className="h-16 w-16 rounded-lg object-cover"/>)}</div>}
     <div className="flex items-center justify-between sm:pl-14">
       <div className="flex items-center gap-2">
-        <label className="icon-button cursor-pointer"><ImagePlus size={18}/><input type="file" accept="image/*" onChange={upload} className="hidden"/></label>
+        <label className="icon-button cursor-pointer" aria-label="Add a photo"><ImagePlus size={18}/><input type="file" accept="image/*" onChange={upload} className="hidden"/></label>
+        <button type="button" onClick={()=>{ setErr(''); setWhen(w=>w?'':defaultScheduleTime()); }} aria-pressed={!!when} aria-label="Schedule for later" title="Schedule for later" className={`icon-button ${when?'bg-brand-tint text-brand-teal':''}`}><CalendarClock size={18}/></button>
         {uploading&&<span className="text-xs text-brand-body">Uploading…</span>}
       </div>
-      <div className="flex items-center gap-2">{err&&<span className="text-xs font-semibold text-brand-error">{err}</span>}<button type="button" onClick={()=>{setOpen(false);setBody('');}} className="text-xs font-medium text-brand-muted hover:text-brand-ink sm:hidden">Cancel</button><button disabled={busy||!body.trim()} className="primary"><Send size={15}/>{type==='question'?'Ask':'Post'}</button></div>
+      <div className="flex items-center gap-2">{err&&<span className="text-xs font-semibold text-brand-error">{err}</span>}<button type="button" onClick={()=>{setOpen(false);setBody('');setWhen('');}} className="text-xs font-medium text-brand-muted hover:text-brand-ink sm:hidden">Cancel</button><button disabled={busy||!body.trim()} className="primary">{when?<CalendarClock size={15}/>:<Send size={15}/>}{when?'Schedule':type==='question'?'Ask':'Post'}</button></div>
     </div>
   </form></>;
 }

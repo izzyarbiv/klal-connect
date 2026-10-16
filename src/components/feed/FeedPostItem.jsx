@@ -1,7 +1,7 @@
 import React,{useState} from 'react';
 import { api } from '@/api/client';
 import { Link } from 'react-router-dom';
-import { MessageCircle, Eye, ThumbsUp, Repeat2, Loader2 } from 'lucide-react';
+import { MessageCircle, Eye, ThumbsUp, Repeat2, Loader2, CalendarClock, Pencil, Send, Trash2 } from 'lucide-react';
 import FeedCommentList from '@/components/feed/FeedCommentList';
 import FeedPostMenu, { ReportPostForm } from '@/components/feed/FeedPostMenu';
 import FeedShareButton from '@/components/feed/FeedShare';
@@ -11,6 +11,7 @@ import TranslateToggle from '@/components/TranslateToggle';
 import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf, topReactions } from '@/lib/reactions';
 import { timeAgo, fullDate } from '@/lib/time';
+import { isScheduled, postedAt, scheduleLabel, toLocalInput } from '@/lib/scheduledPosts';
 
 // The post a repost carries, as it was when it was reposted.
 function RepostedCard({ post }) {
@@ -70,7 +71,96 @@ function RepostButton({ post, className, onReposted }) {
   </>;
 }
 
-export default function FeedPostItem({ post, user, onDeleted, onReposted }) {
+// A post its author scheduled, before it goes live. Only the author ever gets
+// this card (the server shows the post to nobody else), so it carries their
+// controls instead of likes and comments: change it, post it now, or cancel.
+function ScheduledPostItem({ post, onChanged, onDeleted }) {
+  const type=POST_TYPE_BY_ID[normalizePostType(post.post_type)];
+  const [editing,setEditing]=useState(false),[text,setText]=useState(post.body||''),[when,setWhen]=useState(toLocalInput(post.publish_at)),[busy,setBusy]=useState(''),[err,setErr]=useState('');
+  const change=async(payload,what)=>{
+    setBusy(what); setErr('');
+    const r=await api.functions.invoke('updateScheduledPost',{post_id:post.id,...payload});
+    setBusy('');
+    if(r.status>=400){ setErr(r.data?.error||'Could not save'); return false; }
+    onChanged?.(r.data.post); return true;
+  };
+  const save=async e=>{
+    e.preventDefault();
+    const t=new Date(when);
+    if(Number.isNaN(t.getTime())){ setErr('Pick a date and time for your post.'); return; }
+    if(await change({body:text,publish_at:t.toISOString()},'save')) setEditing(false);
+  };
+  const cancel=async()=>{
+    if(!window.confirm('Cancel this scheduled post? It will be deleted and never go live.'))return;
+    setBusy('cancel'); setErr('');
+    const r=await api.functions.invoke('deletePost',{post_id:post.id});
+    setBusy('');
+    if(r.status>=400){ setErr(r.data?.error||'Could not cancel'); return; }
+    onDeleted?.(post.id);
+  };
+  const btn='flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-brand-line hover:bg-brand-tint disabled:opacity-50';
+  return <article className="panel space-y-3">
+    <div className="flex items-start gap-2.5 rounded-lg bg-brand-tint px-3 py-2.5">
+      <CalendarClock size={18} className="mt-0.5 shrink-0 text-brand-teal"/>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-brand-ink">Scheduled for {scheduleLabel(post.publish_at)}</p>
+        <p className="text-xs text-brand-muted">Only you can see this until then.</p>
+      </div>
+    </div>
+    <div className="flex items-start gap-3">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">{(post.author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="truncate font-semibold text-brand-ink">{post.author_name||'Community member'}</p>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${BADGE_TONES[type.tone]}`}>{type.badge}</span>
+        </div>
+        <Headline text={post.author_headline}/>
+      </div>
+    </div>
+    {editing?<form onSubmit={save} className="space-y-2">
+      <textarea value={text} onChange={e=>setText(e.target.value)} maxLength={5000} aria-label="Post text" className="min-h-24 w-full resize-none rounded-lg border border-brand-line bg-brand-canvas px-4 py-3 text-sm outline-none focus:border-[#0D6B66]"/>
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor={`when-${post.id}`} className="text-sm font-semibold text-brand-ink">Goes live</label>
+        <input id={`when-${post.id}`} type="datetime-local" value={when} min={toLocalInput(new Date())} onChange={e=>setWhen(e.target.value)} className="min-w-0 rounded-lg border border-brand-line bg-brand-canvas px-3 py-1.5 text-sm text-brand-ink outline-none focus:border-[#0D6B66]"/>
+      </div>
+      {err&&<p className="text-xs font-semibold text-brand-error">{err}</p>}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={()=>{ setEditing(false); setText(post.body||''); setWhen(toLocalInput(post.publish_at)); setErr(''); }} className="secondary py-2">Cancel</button>
+        <button type="submit" disabled={!!busy} className="primary py-2">{busy==='save'&&<Loader2 size={15} className="animate-spin"/>}Save changes</button>
+      </div>
+    </form>:<>
+      {post.body&&<p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
+      {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
+      <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-brand-body">
+        <button type="button" onClick={()=>setEditing(true)} disabled={!!busy} className={btn}><Pencil size={14}/>Edit</button>
+        <button type="button" onClick={()=>change({post_now:true},'now')} disabled={!!busy} className={btn}>{busy==='now'?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}Post now</button>
+        <button type="button" onClick={cancel} disabled={!!busy} className={`${btn} text-brand-error`}>{busy==='cancel'?<Loader2 size={14} className="animate-spin"/>:<Trash2 size={14}/>}Cancel post</button>
+      </div>
+      {err&&<p className="text-xs font-semibold text-brand-error">{err}</p>}
+    </>}
+  </article>;
+}
+
+// A scheduled post shows its author the card above until its time comes, then
+// turns into an ordinary post on the page without a reload.
+export default function FeedPostItem(props) {
+  const [post,setPost]=useState(props.post);
+  React.useEffect(()=>{ setPost(props.post); },[props.post]);
+  const [,tick]=useState(0);
+  React.useEffect(()=>{
+    if(!isScheduled(post))return;
+    const wait=Date.parse(post.publish_at)-Date.now();
+    // setTimeout cannot wait longer than about 24 days; a post further off
+    // than a day is checked again on the next visit.
+    if(wait>86_400_000)return;
+    const t=setTimeout(()=>tick(n=>n+1),wait+500);
+    return ()=>clearTimeout(t);
+  },[post]);
+  if(isScheduled(post)) return <ScheduledPostItem post={post} onChanged={setPost} onDeleted={props.onDeleted}/>;
+  return <LivePostItem {...props} post={post}/>;
+}
+
+function LivePostItem({ post, user, onDeleted, onReposted }) {
   const type=POST_TYPE_BY_ID[normalizePostType(post.post_type)];
   const isAsk=type.id==='question';
   const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null),[reporting,setReporting]=useState(false);
@@ -109,7 +199,7 @@ export default function FeedPostItem({ post, user, onDeleted, onReposted }) {
   // The author sees how many people saw it; nobody else does, and the shared
   // guest session is nobody.
   const showViews=!!user&&!user.guest&&post.created_by_id===user.id;
-  const when=timeAgo(post.created_date);
+  const when=timeAgo(postedAt(post));
   const isRepost=!!post.repost_of;
   // Reposting your own post is just sharing it; the Share button does that.
   const canRepost=!(user&&!user.guest&&(isRepost?post.repost_author_id:post.created_by_id)===user.id);
@@ -122,7 +212,7 @@ export default function FeedPostItem({ post, user, onDeleted, onReposted }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate font-semibold text-brand-ink">{post.author_name||'Community member'}{isRepost&&<span className="font-normal text-brand-muted"> reposted</span>}</p>
-          {when&&<time dateTime={post.created_date} title={fullDate(post.created_date)} className="text-xs text-brand-muted">· {when}</time>}
+          {when&&<time dateTime={postedAt(post)} title={fullDate(postedAt(post))} className="text-xs text-brand-muted">· {when}</time>}
           {!isRepost&&<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${BADGE_TONES[type.tone]}`}>{type.badge}</span>}
           {isAsk&&helpfulId&&<span className="rounded-full bg-brand-tint px-2 py-0.5 text-[10px] font-bold text-brand-teal">Answered ✓</span>}
         </div>

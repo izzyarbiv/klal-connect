@@ -16,6 +16,7 @@ import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { canEditListing, canSetPaymentLink, normalizeGallery, normalizeLogoUrl } from '../src/lib/listing.js';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
+import { isScheduled, MAX_SCHEDULE_DAYS } from '../src/lib/scheduledPosts.js';
 
 const BADGE_BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b]));
 
@@ -51,6 +52,31 @@ const INITIAL_STATUS = REVIEW_FIRST ? 'pending' : 'published';
 const POST_TYPES = new Set(['post', 'question', 'insight', 'promotion']);
 const EMPLOYMENT_TYPES = new Set(['full_time', 'part_time', 'contract', 'seasonal', 'volunteer']);
 const postType = (value) => (value === 'update' ? 'post' : POST_TYPES.has(value) ? value : 'post');
+
+// A post somebody may act on: there, and already live. A scheduled post is
+// nobody's to like, comment on, save or repost until its time comes — it is
+// not visible to them (visibleRows in app.js), so it answers as missing.
+async function livePost(id, message = 'Post not found.') {
+  const post = await store.get('FeedPost', id);
+  if (!post || isScheduled(post)) fail(message, 404);
+  return post;
+}
+
+// The moment a post is to go live, checked. Empty means now. The time comes
+// from the poster's own browser as an exact moment, so their time zone is
+// already in it.
+async function scheduleTime(value, user) {
+  if (value === undefined || value === null || value === '') return null;
+  const t = Date.parse(value);
+  if (!Number.isFinite(t)) fail('Pick a date and time for your post.');
+  const now = Date.now();
+  if (t <= now + 60_000) fail('Pick a time later than now.');
+  if (t > now + MAX_SCHEDULE_DAYS * 86_400_000) fail('Posts can be scheduled up to a year ahead.');
+  // Nothing goes live in someone's name on Shabbos or Yom Tov, the same rule
+  // as posting by hand. Read for where the poster is.
+  if ((await computeShabbosStatus(user, t)).isRestricted) fail('That time is on Shabbos or Yom Tov where you are. Please pick a time after it ends.');
+  return new Date(t).toISOString();
+}
 
 // Own keys only: a plain object also answers to 'constructor' and friends.
 const validReaction = (value) => (value === undefined || value === null || value === '' ? DEFAULT_REACTION : (typeof value === 'string' && Object.hasOwn(REACTION_BY_ID, value) ? value : null));
@@ -505,17 +531,19 @@ export const functions = {
 
   // ---- feed -----------------------------------------------------------------
 
-  async createPost({ body, post_type, image_urls }, user) {
+  async createPost({ body, post_type, image_urls, publish_at }, user) {
     await assertWritable(user);
     const text = String(body || '').trim();
     if (!text && !(image_urls || []).length) fail('Write something to post.');
     if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
+    const when = await scheduleTime(publish_at, user);
     const post = await store.create(
       'FeedPost',
       {
         body: text,
         post_type: postType(post_type),
         image_urls: image_urls || [],
+        ...(when ? { publish_at: when } : {}),
         like_count: 0,
         comment_count: 0,
         view_count: 0,
@@ -526,6 +554,31 @@ export const functions = {
     return { post };
   },
 
+  // The author changing a post that has not gone live yet: its words, its
+  // time, or "post it now". Once it is live it stays as it is, like any post.
+  async updateScheduledPost({ post_id, body, publish_at, post_now }, user) {
+    await assertWritable(user);
+    need(post_id, 'Missing post.');
+    const post = await store.get('FeedPost', post_id);
+    if (!post) fail('Post not found.', 404);
+    if (post.created_by_id !== user.id) fail('You can only change your own posts.', 403);
+    if (!isScheduled(post)) fail('This post is already live.');
+    const patch = {};
+    if (body !== undefined) {
+      const text = String(body || '').trim();
+      if (!text && !(post.image_urls || []).length) fail('Write something to post.');
+      if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
+      patch.body = text;
+    }
+    if (post_now) patch.publish_at = new Date().toISOString();
+    else if (publish_at !== undefined) {
+      const when = await scheduleTime(publish_at, user);
+      if (!when) fail('Pick a date and time for your post.');
+      patch.publish_at = when;
+    }
+    return { post: await store.update('FeedPost', post_id, patch) };
+  },
+
   // Sharing someone's post into the feed, with or without a few words of your
   // own. The original is copied in, so the repost reads the same however many
   // reposts down it is; reposting a repost shares the original it carries.
@@ -534,7 +587,7 @@ export const functions = {
     need(post_id, 'Missing post.');
     let original = await store.get('FeedPost', post_id);
     if (original?.repost_of) original = await store.get('FeedPost', original.repost_of);
-    if (!original) fail('That post is no longer available.', 404);
+    if (!original || isScheduled(original)) fail('That post is no longer available.', 404);
     if (original.created_by_id === user.id) fail('You can share your own post with the Share button instead.');
     const text = String(body || '').trim();
     if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
@@ -554,7 +607,7 @@ export const functions = {
         repost_body: original.body || '',
         repost_image_urls: original.image_urls || [],
         repost_post_type: original.post_type || 'post',
-        repost_created_date: original.created_date || '',
+        repost_created_date: original.publish_at || original.created_date || '',
         ...authorFields(user),
       },
       user
@@ -569,8 +622,7 @@ export const functions = {
     need(post_id, 'Missing post.');
     const text = String(body || '').trim();
     if (!text) fail('Write a comment first.');
-    const post = await store.get('FeedPost', post_id);
-    if (!post) fail('Post not found.', 404);
+    const post = await livePost(post_id);
 
     const comment = await store.create('Comment', { post_id, body: text, ...authorFields(user) }, user);
     // Recount rather than increment so the badge can't drift from reality.
@@ -703,8 +755,7 @@ export const functions = {
   async markHelpful({ post_id, comment_id }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');
-    const post = await store.get('FeedPost', post_id);
-    if (!post) fail('Post not found.', 404);
+    const post = await livePost(post_id);
     if (post.created_by_id !== user.id) fail('Only the person who asked can mark an answer as helpful.', 403);
     const previous = post.helpful_comment_id || null;
     const next = previous === comment_id ? null : comment_id;
@@ -738,8 +789,7 @@ export const functions = {
   async toggleLike({ post_id, reaction }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');
-    const post = await store.get('FeedPost', post_id);
-    if (!post) fail('Post not found.', 404);
+    const post = await livePost(post_id);
     const wanted = validReaction(reaction);
     if (!wanted) fail('Unknown reaction.');
 
@@ -783,8 +833,7 @@ export const functions = {
   // Views are counted once per viewer, so a refresh loop can't inflate them.
   async recordPostView({ postId }, user) {
     need(postId, 'Missing post.');
-    const post = await store.get('FeedPost', postId);
-    if (!post) fail('Post not found.', 404);
+    const post = await livePost(postId);
 
     // The count is the author's alone (see present() in app.js), and the
     // author never records a view of their own post — so nothing comes back.
@@ -804,8 +853,7 @@ export const functions = {
   async toggleSavePost({ post_id }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');
-    const post = await store.get('FeedPost', post_id);
-    if (!post) fail('Post not found.', 404);
+    const post = await livePost(post_id);
     const existing = await store.filter('SavedPost', { post_id, created_by_id: user.id });
     if (existing.length) {
       for (const row of existing) await store.delete('SavedPost', row.id);
@@ -822,8 +870,7 @@ export const functions = {
   async reportPost({ post_id, reason_category, explanation }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');
-    const post = await store.get('FeedPost', post_id);
-    if (!post) fail('Post not found.', 404);
+    const post = await livePost(post_id);
     if (post.created_by_id === user.id) fail('You cannot report your own post.');
     const reason = typeof reason_category === 'string' && Object.hasOwn(POST_REPORT_REASON_BY_ID, reason_category) ? POST_REPORT_REASON_BY_ID[reason_category] : null;
     if (!reason) fail('Please choose a reason.');
