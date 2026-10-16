@@ -20,8 +20,10 @@
 // the row at creation time. One list now, imported by both.
 export const ADMIN_ONLY_LISTING_FIELDS = ['featured', 'sponsored', 'sponsored_until', 'last_confirmed_at'];
 
-export const VERIFIED_MEANING =
-  'Klal Connect contacted this business or organization directly and confirmed it exists, that these details reach them, and that they agreed to be listed. It is not a recommendation, a kashrus certification, or any judgment of their work.';
+// What a ticked "Verified by Klal" box tells the public. Kept short on Eli's
+// word: the admin box carries only the label, and this one line is what a
+// reader sees once an admin ticks it.
+export const VERIFIED_MEANING = 'This information and page have been verified by Klal.';
 
 export const SPONSORED_MEANING =
   'This listing paid for placement. Payment never affects whether a listing is verified, and never changes where it appears in search results.';
