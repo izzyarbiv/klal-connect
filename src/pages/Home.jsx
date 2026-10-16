@@ -8,7 +8,7 @@ import SearchPanel from '@/components/SearchPanel';
 import AddListingPrompt from '@/components/AddListingPrompt';
 import ResourceCard from '@/components/ResourceCard';
 import { iconFor, guessIcon } from '@/lib/categoryIcons';
-import { expandQuery, matchesQuery, providerHaystack } from '@/lib/searchTerms';
+import { countMatches } from '@/lib/search';
 import { servesPlace, communitiesFrom } from '@/lib/place';
 import { useCommunity } from '@/lib/community';
 import { useShabbosStatus } from '@/hooks/useShabbosStatus';
@@ -73,11 +73,8 @@ export default function Home() {
   // a promise the directory keeps. Links with results come first; the rest stay
   // visible, because a gap is also information — and an invitation.
   const quickLinks = useMemo(() => QUICK_LINKS
-    .map(([label, q]) => {
-      const terms = expandQuery(q);
-      return { label, q, count: local.filter((p) => matchesQuery(providerHaystack(p), terms)).length };
-    })
-    .sort((a, b) => (b.count > 0) - (a.count > 0)), [local]);
+    .map(([label, q]) => ({ label, q, count: countMatches(providers, q, community) }))
+    .sort((a, b) => (b.count > 0) - (a.count > 0)), [providers, community]);
 
   // Real counts or none. A category with nothing in it is not hidden and is
   // not promised as "coming soon" — nobody has committed to filling it. It

@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import SuggestInput from '@/components/SuggestInput';
-import { keywordSuggestions, placeSuggestions } from '@/lib/searchTerms';
-import { servesPlace } from '@/lib/place';
+import { suggestKeywords, suggestPlaces } from '@/lib/search';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 
@@ -32,7 +31,6 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
     queryKey: ['categories'],
     queryFn: () => api.entities.Category.list('order'),
   });
-  const local = providers.filter((p) => servesPlace(p, location));
 
   const go = (q, where, category = '') => navigate(`/browse?q=${encodeURIComponent(q)}&location=${encodeURIComponent(where)}${category ? `&category=${encodeURIComponent(category)}` : ''}`);
   const submit = (e) => {
@@ -58,15 +56,15 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
     <label className="flex flex-1 items-center gap-3 border-b px-3 py-3 md:border-b-0 md:border-r">
       <Search className="text-brand-teal" />
       <SuggestInput wrapperClassName="w-full" value={query} onChange={setQuery} onPick={pickKeyword}
-        suggest={(text) => keywordSuggestions(text, local, categories)}
+        suggest={(text) => suggestKeywords(text, providers, categories, location)}
         autoFocus={autoFocus} className="w-full bg-transparent outline-none" placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
     </label>
     <label className="flex flex-1 items-center gap-3 px-3 py-3">
       <MapPin className="text-brand-teal" />
       <SuggestInput wrapperClassName="w-full" value={location} onChange={(v) => { typed.current = true; setLocation(v); }}
         onPick={(item) => { typed.current = true; setLocation(item.value); }}
-        suggest={(text) => placeSuggestions(text, providers)} suggestMore={lookupPlaces} minLength={2}
-        className="w-full bg-transparent outline-none" placeholder="City, neighborhood, or ZIP" aria-label="Where" />
+        suggest={(text) => suggestPlaces(text, providers)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        className="w-full bg-transparent outline-none" placeholder="Everywhere" aria-label="Where: city, state or ZIP" />
     </label>
     {/* Navy and white, the site's own primary button, instead of the gold
         block: it reads cleaner in both themes and matches every other main

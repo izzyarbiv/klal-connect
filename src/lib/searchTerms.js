@@ -81,8 +81,14 @@ const GROUPS = [
 
   // Simcha and services
   ['caterer', 'caterers', 'catering'],
-  ['bakery', 'bakeries', 'baker'],
+  ['bakery', 'bakeries', 'baker', 'bakeshop', 'bake shop', 'bakehouse', 'patisserie'],
   ['restaurant', 'restaurants', 'takeout', 'take out'],
+  ['pizza', 'pizzeria', 'pizza shop'],
+  ['butcher', 'butchers', 'butcher shop', 'meat market'],
+  ['factory', 'factories', 'manufacturer', 'manufacturers', 'manufacturing', 'co-packer', 'copacker', 'co packer', 'producer'],
+  ['wholesale', 'wholesaler', 'wholesalers', 'distributor', 'distributors', 'distribution', 'supplier', 'suppliers'],
+  ['senior home', 'nursing home', 'nursing homes', 'senior residence', 'assisted living', 'senior living',
+    'retirement home', 'senior care', 'elder care', 'eldercare', 'adult home'],
   ['photographer', 'photographers', 'photography', 'photo'],
   ['videographer', 'video', 'videography'],
   ['florist', 'flowers', 'floral'],
@@ -111,6 +117,16 @@ const GROUPS = [
 const INDEX = new Map();
 for (const group of GROUPS) {
   for (const term of group) INDEX.set(term, group);
+}
+
+/** The words that mean the same as `term`, or null. */
+export function aliasGroup(term) {
+  return INDEX.get(String(term || '').trim().toLowerCase()) || null;
+}
+
+/** Every term in every alias group. */
+export function aliasPhrases() {
+  return [...INDEX.keys()];
 }
 
 /**
@@ -210,13 +226,13 @@ export function relevance(p, raw) {
  * it). Each comes with how many listings it would show, and nothing is offered
  * that would lead to an empty page.
  */
-export function keywordSuggestions(raw, providers, categories = []) {
+export function keywordSuggestions(raw, providers, categories = [], countFor = null) {
   const text = String(raw || '').trim().toLowerCase();
   if (!text) return [];
-  const count = (q) => {
+  const count = countFor || ((q) => {
     const terms = expandQuery(q);
     return providers.filter((p) => matchesQuery(providerHaystack(p), terms)).length;
-  };
+  });
   const seen = new Set();
   const fresh = (label) => {
     const k = String(label).toLowerCase();
