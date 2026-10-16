@@ -1,6 +1,7 @@
 import { categoryLabel } from './categories.js';
 import { aliasGroup, aliasPhrases, keywordSuggestions, placeSuggestions } from './searchTerms.js';
 import { placeMatcher, isPlaceWord } from './place.js';
+import { countryName, countryOf, countryMatcher, inCountry } from './countries.js';
 
 // Directory search: what someone types, matched the way they meant it.
 //
@@ -69,6 +70,7 @@ export function indexDirectory(providers) {
   const vocab = new Map(); // every word, with how many times it is used
   const known = new Map(); // words in names, types and summaries: what typos are corrected to
   const cities = new Map(); // "boca raton" -> "Boca Raton"
+  const countries = new Set(); // "Israel", "France": the countries with listings
   const rows = providers.map((p) => {
     const fields = FIELDS.map(([, weight, get]) => {
       const list = words(get(p)).map(stem);
@@ -80,9 +82,10 @@ export function indexDirectory(providers) {
     });
     const city = String(p?.city || '').trim();
     if (city) cities.set(words(city).join(' '), city);
+    if (countryOf(p)) countries.add(countryOf(p));
     return { p, fields };
   });
-  const index = { rows, vocab, known, cities };
+  const index = { rows, vocab, known, cities, countries };
   indexCache.set(providers, index);
   return index;
 }
@@ -113,10 +116,19 @@ function correct(word, { vocab, known }, isLast) {
 
 // How a place found in the search is shown back: the city as listings spell
 // it, a short code in capitals, anything else as typed.
-function placeLabel(phrase, typed, cities) {
+function placeLabel(phrase, typed, { cities, countries }) {
   if (cities.has(phrase)) return cities.get(phrase);
+  if (countries.has(countryName(phrase))) return countryName(phrase);
   if (phrase.length <= 3) return phrase.toUpperCase();
   return typed;
+}
+
+// A country that has listings, typed with the search ("mikvah Israel"). Not
+// the ones that are also things people search for: a turkey is food.
+const NOT_COUNTRIES = new Set(['turkey', 'china', 'jersey', 'chad', 'jordan', 'guinea', 'georgia', 'us']);
+function isCountryWord(phrase, typed, { countries }) {
+  if (NOT_COUNTRIES.has(phrase) || (phrase.length <= 2 && typed !== typed.toUpperCase())) return false;
+  return countries.has(countryName(phrase));
 }
 
 /**
@@ -142,8 +154,8 @@ export function parseQuery(raw, providers = [], { findPlace = true } = {}) {
       const phrase = tokens.slice(i, i + n).join(' ');
       const typed = typedTokens.slice(i, i + n).join(' ');
       const upper = typed.length <= 2 && typed === typed.toUpperCase();
-      if (index.cities.has(phrase) || isPlaceWord(phrase, { upper })) {
-        place = placeLabel(phrase, typed, index.cities);
+      if (index.cities.has(phrase) || isPlaceWord(phrase, { upper }) || isCountryWord(phrase, typed, index)) {
+        place = placeLabel(phrase, typed, index);
         tokens = [...tokens.slice(0, i), ...tokens.slice(i + n)];
       }
     }
@@ -198,27 +210,30 @@ function fieldScore(field, concept) {
  * at all ("frum", "please") is left out rather than emptying the page.
  * Returns the matching listings, best first, with what the search was read as.
  */
-export function searchDirectory(providers, { q = '', where = '', anywhere = false } = {}) {
-  const first = run(providers, parseQuery(q, providers), where, anywhere);
+export function searchDirectory(providers, { q = '', where = '', anywhere = false, country = '' } = {}) {
+  const first = run(providers, parseQuery(q, providers), where, anywhere, country);
   // A word that is also a town ("Deal", "Lawrence") is a word again when
   // reading it as a place finds nothing.
   if (!first.results.length && first.parsed.place && first.parsed.place !== where) {
-    const again = run(providers, parseQuery(q, providers, { findPlace: false }), where, anywhere);
+    const again = run(providers, parseQuery(q, providers, { findPlace: false }), where, anywhere, country);
     if (again.results.length) return again;
   }
   return first;
 }
 
 // `anywhere` keeps the words but not the place, for "listed in other communities".
-function run(providers, parsed, where, anywhere) {
+// The country stays: other communities in the country that was picked.
+function run(providers, parsed, where, anywhere, country) {
   const index = indexDirectory(providers);
   const place = parsed.place || String(where || '').trim();
   const inPlace = anywhere ? null : placeMatcher(place, providers);
+  const inChosenCountry = countryMatcher(country);
   const live = parsed.concepts.filter((c) => index.rows.some((r) => r.fields.some((f) => fieldScore(f, c) > 0)));
   const nothing = parsed.concepts.length > 0 && live.length === 0;
 
   const results = [];
   for (const row of nothing ? [] : index.rows) {
+    if (inChosenCountry && !inChosenCountry(row.p)) continue;
     if (inPlace && !inPlace(row.p)) continue;
     let score = 0, ok = true;
     for (const c of live) {
@@ -239,27 +254,29 @@ function run(providers, parsed, where, anywhere) {
 }
 
 /** How many listings a search finds, for the counts beside suggestions. */
-export function countMatches(providers, q, where = '') {
-  return searchDirectory(providers, { q, where }).results.length;
+export function countMatches(providers, q, where = '', country = '') {
+  return searchDirectory(providers, { q, where, country }).results.length;
 }
 
 /** Keyword suggestions, each counted the way the search itself would count it. */
-export function suggestKeywords(raw, providers, categories, where = '') {
-  const count = (q) => countMatches(providers, q, where);
-  const found = keywordSuggestions(raw, providers, categories, count);
+export function suggestKeywords(raw, providers, categories, where = '', country = '') {
+  const count = (q) => countMatches(providers, q, where, country);
+  const here = inCountry(providers, country);
+  const found = keywordSuggestions(raw, here, categories, count);
   if (found.length) return found;
   // Nothing starts with a typo: offer what it was probably meant to be.
   const { corrected } = parseQuery(raw, providers, { findPlace: false });
-  return corrected ? keywordSuggestions(corrected, providers, categories, count) : [];
+  return corrected ? keywordSuggestions(corrected, here, categories, count) : [];
 }
 
 /**
  * Place suggestions, with "Everywhere" always first, so leaving the box blank
- * is a choice on screen rather than a silent fallback.
+ * is a choice on screen rather than a silent fallback. With a country picked,
+ * only places in that country are suggested.
  */
-export function suggestPlaces(raw, providers) {
+export function suggestPlaces(raw, providers, country = '') {
   const text = String(raw || '').trim();
-  const everywhere = { group: 'Places with listings', kind: 'place', label: 'Everywhere', value: '', hint: 'all communities' };
+  const everywhere = { group: 'Places with listings', kind: 'place', label: 'Everywhere', value: '', hint: country ? `all of ${country}` : 'all communities' };
   if (!text) return [everywhere];
-  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...placeSuggestions(text, providers)];
+  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...placeSuggestions(text, inCountry(providers, country))];
 }

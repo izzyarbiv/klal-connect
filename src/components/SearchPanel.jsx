@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Search, MapPin, LocateFixed } from 'lucide-react';
+import { Search, MapPin, LocateFixed, Globe } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import SuggestInput from '@/components/SuggestInput';
+import CountrySelect from '@/components/CountrySelect';
 import { suggestKeywords, suggestPlaces } from '@/lib/search';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
@@ -13,6 +14,7 @@ import { providerPath } from '@/lib/paths';
 export default function SearchPanel({ defaultLocation = '', autoFocus = false }) {
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState(defaultLocation);
+  const [country, setCountry] = useState('');
   const [locating, setLocating] = useState(false);
   const navigate = useNavigate();
 
@@ -32,7 +34,13 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
     queryFn: () => api.entities.Category.list('order'),
   });
 
-  const go = (q, where, category = '') => navigate(`/browse?q=${encodeURIComponent(q)}&location=${encodeURIComponent(where)}${category ? `&category=${encodeURIComponent(category)}` : ''}`);
+  const go = (q, where, category = '') => navigate(`/browse?q=${encodeURIComponent(q)}&location=${encodeURIComponent(where)}${country ? `&country=${encodeURIComponent(country)}` : ''}${category ? `&category=${encodeURIComponent(category)}` : ''}`);
+  // Picking a country empties a Where box filled in for you (your own
+  // community), which would otherwise find nothing there. Something you typed stays.
+  const chooseCountry = (value) => {
+    setCountry(value);
+    if (value && !typed.current) setLocation('');
+  };
   const submit = (e) => {
     e.preventDefault();
     go(query, location);
@@ -56,15 +64,19 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
     <label className="flex flex-1 items-center gap-3 border-b px-3 py-3 md:border-b-0 md:border-r">
       <Search className="text-brand-teal" />
       <SuggestInput wrapperClassName="w-full" value={query} onChange={setQuery} onPick={pickKeyword}
-        suggest={(text) => suggestKeywords(text, providers, categories, location)}
+        suggest={(text) => suggestKeywords(text, providers, categories, location, country)}
         autoFocus={autoFocus} className="w-full bg-transparent outline-none" placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
     </label>
-    <label className="flex flex-1 items-center gap-3 px-3 py-3">
+    <label className="flex flex-1 items-center gap-3 border-b px-3 py-3 md:border-b-0 md:border-r">
       <MapPin className="text-brand-teal" />
       <SuggestInput wrapperClassName="w-full" value={location} onChange={(v) => { typed.current = true; setLocation(v); }}
         onPick={(item) => { typed.current = true; setLocation(item.value); }}
-        suggest={(text) => suggestPlaces(text, providers)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
-        className="w-full bg-transparent outline-none" placeholder="Everywhere" aria-label="Where: city, state or ZIP" />
+        suggest={(text) => suggestPlaces(text, providers, country)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        className="w-full bg-transparent outline-none" placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
+    </label>
+    <label className="flex items-center gap-3 px-3 py-3 md:w-48 md:flex-none">
+      <Globe className="shrink-0 text-brand-teal" />
+      <CountrySelect className="w-full min-w-0 bg-transparent outline-none" providers={providers} value={country} onChange={chooseCountry} />
     </label>
     {/* Navy and white, the site's own primary button, instead of the gold
         block: it reads cleaner in both themes and matches every other main

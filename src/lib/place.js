@@ -12,6 +12,8 @@
 // directory exists to answer, so it is answered in one place and shared by the
 // homepage and the search rather than written twice and allowed to drift.
 
+import { countryOf, countryName, servesWorldwide, US } from './countries.js';
+
 // Service areas that mean "anywhere", not a place. Matched on word boundaries
 // so a city named in passing cannot trip it.
 const EVERYWHERE = /\b(nationwide|nation-?wide|national(?:ly)?|worldwide|international(?:ly)?|global(?:ly)?|anywhere|everywhere|remote(?:ly)?|virtual(?:ly)?|telehealth|by phone|all communities|any community|usa|united states)\b/i;
@@ -82,7 +84,14 @@ export function isPlaceWord(text, { upper = false } = {}) {
 export function placeMatcher(where, providers = null) {
   const text = norm(where);
   if (!text) return null;
-  const everywhereOr = (test) => (p) => servesEverywhere(p) || test(p);
+  // A listing that serves its whole country ("Nationwide") matches places in
+  // that country only: Chai Lifeline is not in Jerusalem. One that serves the
+  // whole world, or names no country, matches every place.
+  const everywhereOr = (test, countries = null) => (p) => test(p) || servesWorldwide(p) || (servesEverywhere(p)
+    && (!countries || !countryOf(p) || countries.has(countryOf(p))));
+  const inUS = new Set([US]);
+  // A US state means a US listing: "WA" is not Perth, Western Australia.
+  const usOk = (p) => !countryOf(p) || countryOf(p) === US;
   const cityOf = (p) => norm(p?.city);
   const areasOf = (p) => (p?.service_areas || []).map(norm);
   const stateOf = (p) => norm(p?.state);
@@ -91,16 +100,19 @@ export function placeMatcher(where, providers = null) {
     return (p) => set.has(cityOf(p)) || set.has(norm(p?.neighborhood)) || areasOf(p).some((a) => set.has(a));
   };
 
-  if (/^\d{3,5}$/.test(text)) return everywhereOr((p) => String(p?.zip || '').startsWith(text));
+  if (/^\d{3,5}$/.test(text)) return everywhereOr((p) => String(p?.zip || '').startsWith(text) && usOk(p), inUS);
   const alias = ALIASES[text];
   if (alias) {
     const inAlias = inCities(alias.cities);
-    return everywhereOr((p) => inAlias(p) && (!stateOf(p) || stateOf(p) === alias.state));
+    return everywhereOr((p) => inAlias(p) && usOk(p) && (!stateOf(p) || stateOf(p) === alias.state), inUS);
   }
   if (STATES[text] || STATE_BY_NAME[text]) {
     const code = STATES[text] ? text : STATE_BY_NAME[text];
-    return everywhereOr((p) => stateOf(p) === code);
+    return everywhereOr((p) => stateOf(p) === code && usOk(p), inUS);
   }
+  // A country: "Israel", "France", "England".
+  const country = text.length > 2 || text === 'uk' ? countryName(text) : '';
+  if (country) return everywhereOr((p) => countryOf(p) === country, new Set([country]));
 
   // "Brooklyn, NY", "Brooklyn NY" or "Boca Raton Florida"
   let city = text, state = '';
@@ -108,19 +120,25 @@ export function placeMatcher(where, providers = null) {
   const last = words[words.length - 1], lastTwo = words.slice(-2).join(' ');
   if (words.length > 2 && STATE_BY_NAME[lastTwo]) { state = STATE_BY_NAME[lastTwo]; city = words.slice(0, -2).join(' '); }
   else if (words.length > 1 && (STATES[last] || STATE_BY_NAME[last])) { state = STATES[last] ? last : STATE_BY_NAME[last]; city = words.slice(0, -1).join(' '); }
-  const stateOk = (p) => !state || stateOf(p) === state;
+  const stateOk = (p) => !state || (stateOf(p) === state && usOk(p));
   if (ALIASES[city]) {
     const inAlias = inCities(ALIASES[city].cities);
-    return everywhereOr((p) => inAlias(p) && stateOk(p));
+    return everywhereOr((p) => inAlias(p) && stateOk(p), inUS);
   }
 
   // "Boca" is Boca and Boca Raton; "Miami" is Miami and Miami Beach.
   const named = (name) => name === city || name.startsWith(`${city} `);
   const exact = (p) => named(cityOf(p)) || named(norm(p?.neighborhood)) || areasOf(p).some(named);
-  if (!providers || providers.some(exact)) return everywhereOr((p) => exact(p) && stateOk(p));
+  // The countries this city is in, going by the listings there.
+  const countriesOf = (test) => (providers ? new Set(providers.filter(test).map(countryOf).filter(Boolean)) : null);
+  if (!providers || providers.some(exact)) {
+    const test = (p) => exact(p) && stateOk(p);
+    return everywhereOr(test, countriesOf(test));
+  }
   // Still typing: the start of a city name, at a word boundary.
   const starts = (name) => name.startsWith(city) || name.includes(` ${city}`);
-  return everywhereOr((p) => (starts(cityOf(p)) || areasOf(p).some(starts)) && stateOk(p));
+  const test = (p) => (starts(cityOf(p)) || areasOf(p).some(starts)) && stateOk(p);
+  return everywhereOr(test, countriesOf(test));
 }
 
 /**
