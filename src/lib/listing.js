@@ -1,3 +1,5 @@
+import { normalizeMinyanim } from './minyanim.js';
+
 // Who controls a listing.
 //
 // Whoever claimed it, or whoever added it while nobody has. Claiming hands the
@@ -129,6 +131,7 @@ export function normalizeListingPatch(patch, row, { badgeById, badgeApplies, saf
   const out = { ...patch };
   if ('gallery' in out) out.gallery = normalizeGallery(out.gallery, { safeUrl });
   if ('logo_url' in out) out.logo_url = normalizeLogoUrl(out.logo_url);
+  if ('minyanim' in out) out.minyanim = normalizeMinyanim(out.minyanim);
   const category = 'category' in out ? out.category : row?.category;
   // A category change re-tests the badges already on the row, because a badge
   // only means anything next to the trade it was granted for.

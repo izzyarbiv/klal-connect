@@ -7,6 +7,7 @@ import { store, users, userToPublic, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable as assertShabbosWritable } from './shabbos.js';
 import { canDeliverCodes } from './auth.js';
 import { pinForListing } from './geocode.js';
+import { normalizeMinyanim } from '../src/lib/minyanim.js';
 import { vouchesEnabled } from './settings.js';
 import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
@@ -74,7 +75,9 @@ function listingInput(payload) {
   // held to the same uploads-only rule as the photos — it used to pass through
   // `...rest` untouched while the gallery next to it was checked.
   const logo_url = normalizeLogoUrl(rest.logo_url);
-  return { ...rest, badges, whatsapp, payment_link_url, gallery, logo_url };
+  const minyanim = normalizeMinyanim(rest.minyanim);
+  const minyan_url = safeExternalUrl(rest.minyan_url);
+  return { ...rest, badges, whatsapp, payment_link_url, gallery, logo_url, minyanim, minyan_url };
 }
 
 // A link a visitor will be sent to — a Stripe Payment Link, PayPal.me,

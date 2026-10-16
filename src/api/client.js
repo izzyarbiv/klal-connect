@@ -298,6 +298,7 @@ const geo = {
   reverse: (latitude, longitude) => request('GET', '/geo/reverse', { query: { lat: latitude, lon: longitude } }),
   search: (q, limit = 8) => request('GET', '/geo/search', { query: { q, limit } }),
   ip: () => request('GET', '/geo/ip'),
+  tz: (latitude, longitude) => request('GET', '/geo/tz', { query: { lat: latitude, lon: longitude } }),
 };
 
 let configPromise = null;

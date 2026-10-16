@@ -23,7 +23,7 @@ import { isValidTimeZone } from './shabbos.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { ensureCoreCategories } from './ensure-core.js';
-import { reverseGeocode, searchPlaces, geolocateIp, pinForListing, PROVIDER as GEO_PROVIDER } from './geocode.js';
+import { reverseGeocode, searchPlaces, geolocateIp, pinForListing, tzFor, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { translateEnabled, LANGUAGES as TRANSLATE_LANGUAGES } from './translate.js';
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
@@ -450,7 +450,7 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   // through this generic route.
   // Every link that becomes an href a visitor can click. apply_url reaches
   // JobDetail as one, so it is validated here too and not only in createJob.
-  for (const field of ['payment_link_url', 'apply_url']) {
+  for (const field of ['payment_link_url', 'apply_url', 'minyan_url']) {
     if (!(field in body)) continue;
     try { body[field] = safeExternalUrl(body[field]); }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
@@ -530,7 +530,7 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
       patch = stripProtected(req.body);
     }
   }
-  for (const field of ['payment_link_url', 'apply_url']) {
+  for (const field of ['payment_link_url', 'apply_url', 'minyan_url']) {
     if (!patch || !(field in patch)) continue;
     try { patch = { ...patch, [field]: safeExternalUrl(patch[field]) }; }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
@@ -1143,6 +1143,16 @@ app.get('/api/geo/search', requireAuth, async (req, res, next) => {
   try {
     res.json(await searchPlaces(req.query.q, req.query.limit));
   } catch (err) { next(err); }
+});
+
+// The time zone at a point, for a shul page working out its next minyan.
+// Public, unlike the routes above: listing pages are, and this is a lookup in
+// a table shipped with the app, so there is no provider quota to protect.
+app.get('/api/geo/tz', (req, res) => {
+  const lat = Number(req.query.lat), lon = Number(req.query.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return res.status(400).json({ error: 'lat and lon are required' });
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.json({ timezone: tzFor(lat, lon) || '' });
 });
 
 // Coarse fallback when the browser's geolocation is denied or unavailable.

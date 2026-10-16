@@ -7,7 +7,9 @@ import HeadlineEdit from '@/components/HeadlineEdit';
 import { badgesForCategory } from '@/lib/badges';
 import { categoryLabel } from '@/lib/categories';
 import { GALLERY_MAX } from '@/lib/listing';
-const blank={name:'',tagline:'',category:'',subcategory:'',short_description:'',description:'',address:'',city:'',state:'',zip:'',phone:'',text_phone:'',email:'',website:'',hours:'',service_areas:'',languages:'English',delivery_mode:'in_person',whatsapp:'',payment_link_url:'',badges:[],gallery:[]};
+import MinyanEditor from '@/components/MinyanEditor';
+import { isShulListing } from '@/lib/minyanim';
+const blank={name:'',tagline:'',category:'',subcategory:'',short_description:'',description:'',address:'',city:'',state:'',zip:'',phone:'',text_phone:'',email:'',website:'',hours:'',service_areas:'',languages:'English',delivery_mode:'in_person',whatsapp:'',payment_link_url:'',badges:[],gallery:[],minyanim:[],minyan_url:''};
 // initialCategory arrives from /add?category=… — an empty category tile on the
 // homepage asking for the first listing of that kind. initialName and
 // sourcePostId arrive from /add?from_post=… — an answer to an ask being turned
@@ -31,6 +33,7 @@ const fromProvider = (row) => ({
   languages: Array.isArray(row?.languages) ? row.languages.join(', ') : (row?.languages || 'English'),
   badges: Array.isArray(row?.badges) ? row.badges : [],
   gallery: Array.isArray(row?.gallery) ? row.gallery : [],
+  minyanim: Array.isArray(row?.minyanim) ? row.minyanim : [],
 });
 // Shown when Save is pressed mid-upload, and taken down by itself once the
 // upload lands — it used to stay next to "New image ready" until the next click.
@@ -102,7 +105,7 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
         if(k==='service_areas'||k==='languages') return data[k]!==before[k];
         // Objects, not ids: the generic sort-and-compare above turns each photo
         // into "[object Object]" and would call any two galleries equal.
-        if(k==='gallery') return JSON.stringify(v)!==JSON.stringify(before[k]);
+        if(k==='gallery'||k==='minyanim') return JSON.stringify(v)!==JSON.stringify(before[k]);
         return !same(v,before[k]);
       }));
       // Saying "Your changes are live" over an empty patch is how a lost
@@ -123,6 +126,7 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
     : <>Your listing is live. Thank you for helping our community grow — {done.id?<a className="underline" href={`/provider/${done.id}`}>see it in the directory</a>:'find it in the directory'}, share it on WhatsApp{vouchesOn ? ', and ask people who know your work to vouch for it' : ''}.</>}</div>;return <form onSubmit={submit} className="space-y-5"><div className="form-grid"><Field label="Business or resource name" name="name" value={data.name} onChange={change} required/><label>Category<select className="field" name="category" value={data.category} onChange={change} required><option value="">Choose a category</option>{data.category&&categories.length>0&&!categories.some(c=>c.name===data.category)&&<option value={data.category}>{categoryLabel(data.category)}</option>}{categories.map(c=><option key={c.id} value={c.name}>{categoryLabel(c.name)}</option>)}</select></label><Field label="Subcategory" name="subcategory" value={data.subcategory} onChange={change} list="kc-subcategories" autoComplete="off" placeholder={data.category==='Other'?'Say what it is — this is what people will search for':(categories.find(c=>c.name===data.category)?.subcategories||[]).length?'Pick one or type your own':''}/><datalist id="kc-subcategories">{(categories.find(c=>c.name===data.category)?.subcategories||[]).map(s=><option key={s} value={s}/>)}</datalist><Field label="Short description" name="short_description" value={data.short_description} onChange={change} required/><label>City<CityInput value={data.city} onChange={v=>setData(d=>({...d,city:v}))} onPick={p=>setData(d=>({...d,city:p.city,state:stateForPlace(p,d.state),latitude:p.latitude,longitude:p.longitude,country_code:p.country_code||d.country_code}))} required={!provider}/></label><label>State<StateSelect value={data.state} onChange={v=>setData(d=>({...d,state:v}))}/></label><Field label="ZIP code" name="zip" value={data.zip} onChange={change}/><Field label="Address (optional)" name="address" value={data.address} onChange={change}/><Field label="Phone" name="phone" value={data.phone} onChange={change}/><Field label="Text-enabled phone" name="text_phone" value={data.text_phone} onChange={change}/><Field label="WhatsApp number (with country code)" name="whatsapp" value={data.whatsapp} onChange={change} placeholder="1 732 555 0100"/><Field label="Payment link (optional)" name="payment_link_url" value={data.payment_link_url} onChange={change} placeholder="Stripe Payment Link, PayPal.me, Venmo…"/><Field label="Email" name="email" type="email" value={data.email} onChange={change}/><Field label="Website" name="website" value={data.website} onChange={change}/><Field label="Hours" name="hours" value={data.hours} onChange={change}/><Field label="Areas served (comma separated)" name="service_areas" value={data.service_areas} onChange={change}/><Field label="Languages (comma separated)" name="languages" value={data.languages} onChange={change}/><label>Service format<select className="field" name="delivery_mode" value={data.delivery_mode} onChange={change}><option value="in_person">In person</option><option value="remote">Remote</option><option value="both">Both</option></select></label></div><HeadlineEdit label="Tagline" value={data.tagline||''} onChange={v=>setData({...data,tagline:v})} helper="Appears under your listing name across the app."/>
 <ListingLocationPicker value={data} onChange={loc=>setData(d=>({...d,...loc}))}/>
 <BadgePicker category={data.category} value={data.badges} onChange={badges=>setData(d=>({...d,badges}))}/>
+{isShulListing(data)&&<MinyanEditor value={data.minyanim} onChange={m=>setData(d=>({...d,minyanim:typeof m==='function'?m(d.minyanim):m}))} link={data.minyan_url} onLink={v=>setData(d=>({...d,minyan_url:v}))}/>}
 {/* Required to add a listing, optional to save one. createListing asks for
       a name and a category and nothing else, so a listing that reached the
       directory through the API or an older form can be missing either of
