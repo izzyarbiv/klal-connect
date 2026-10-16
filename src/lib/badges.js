@@ -31,15 +31,13 @@ export const BADGES = [
   { id: 'emergency', label: '24/7 emergency', hint: 'Reachable outside normal hours for emergencies.', categories: ['Home Services', 'Health'] },
   { id: 'house_calls', label: 'House calls', categories: ['Health', 'Home Services', 'Education', 'Technology'] },
   { id: 'licensed_insured', label: 'Licensed & insured', verify: true, categories: ['Home Services', 'Health', 'Legal', 'Financial', 'Business', 'Simcha Services'] },
-  { id: 'background_checked', label: 'Background checked', hint: 'For anyone working with children or in a home. Confirmed by Klal.', verify: true, categories: ['Education', 'Health', 'Home Services', 'Community'] },
+  { id: 'background_checked', label: 'Background checked', hint: 'For anyone working with children or in a home.', verify: true, categories: ['Education', 'Health', 'Home Services', 'Community'] },
   { id: 'accepts_insurance', label: 'Accepts insurance', categories: ['Health'] },
   { id: 'remote', label: 'Remote available', hint: 'Works with clients anywhere by phone or video.', categories: ['Business', 'Education', 'Health', 'Legal', 'Financial', 'Technology'] },
 
   // --- who runs it (every listing) --------------------------------------
   { id: 'shomer_shabbos', label: 'Shomer Shabbos', hint: 'Closed on Shabbos and Yom Tov.', verify: true },
-  { id: 'women_owned', label: 'Women-owned' },
   { id: 'women_only', label: 'Women only', hint: 'Serves women and girls only.', categories: ['Health', 'Education', 'Simcha Services'] },
-  { id: 'veteran_owned', label: 'Veteran-owned' },
   { id: 'yiddish', label: 'Yiddish spoken' },
   { id: 'hebrew', label: 'Hebrew spoken' },
 ];

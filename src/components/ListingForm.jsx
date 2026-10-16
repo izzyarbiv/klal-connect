@@ -164,7 +164,7 @@ export function GalleryEditor({ value = [], onChange, onUploading }){
   };
   return <fieldset className="rounded-lg border border-brand-line p-4">
     <legend className="px-1 text-sm font-semibold text-brand-ink">Photos (up to {GALLERY_MAX}, official sources only)</legend>
-    <p className="helper mt-0">Only pictures the business itself has published. Each one needs a short credit and a link to where it came from.</p>
+    <p className="helper mt-0">Only pictures the business itself has published.</p>
     {value.length>0&&<ul className="mt-3 space-y-4">{value.map((g,i)=><li key={g.url+i} className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
       <img src={g.url} alt={g.caption||`Photo ${i+1}`} className="h-24 w-24 rounded-lg border border-brand-line object-cover"/>
       <div className="grid gap-2">
@@ -196,7 +196,7 @@ export function BadgePicker({ category, value = [], onChange }){
     {!category
       ? <p className="helper mt-0">Choose a category above and the badges for that kind of business appear here.</p>
       : <>
-        <p className="helper mt-0">Tick what applies to {category.toLowerCase()}. Claims like Shomer Shabbos or kashrus read as self-declared until Klal confirms them.</p>
+        <p className="helper mt-0">Tick what applies to {category.toLowerCase()}. Claims like Shomer Shabbos or kashrus read as self-declared.</p>
         {specific.length>0&&<div className="mt-3 grid gap-2 sm:grid-cols-2">{specific.map(b=><Row key={b.id} b={b}/>)}</div>}
         {universal.length>0&&<><p className="mt-4 text-xs font-semibold uppercase tracking-wide text-brand-muted">Any listing</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{universal.map(b=><Row key={b.id} b={b}/>)}</div></>}
       </>}
