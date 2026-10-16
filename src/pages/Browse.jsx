@@ -4,11 +4,10 @@ import { api } from '@/api/client';
 import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
-import { expandQuery, matchesQuery, providerHaystack, relevance, keywordSuggestions, placeSuggestions } from '@/lib/searchTerms';
+import { searchDirectory, suggestKeywords, suggestPlaces } from '@/lib/search';
 import SuggestInput from '@/components/SuggestInput';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
-import { servesPlace } from '@/lib/place';
 import { readStoredCommunity, storeCommunity } from '@/lib/community';
 import { categoryLabel } from '@/lib/categories';
 
@@ -30,7 +29,13 @@ export default function Browse() {
   const [categories, setCategories] = useState([]);
   const [q, setQ] = useState(params.get('q') || '');
   // The community chosen anywhere else on the site, unless this link names one.
-  const [place, setPlace] = useState(params.get('location') || readStoredCommunity());
+  // A link with an empty location (a search with the Where box left blank)
+  // means everywhere.
+  const linkedPlace = params.has('location');
+  const [place, setPlace] = useState(params.get('location') || (linkedPlace ? '' : readStoredCommunity()));
+  // A member's own city fills the Where box, visibly, only when nothing else
+  // chose a place. It used to apply silently behind a blank box.
+  const placeTouched = React.useRef(linkedPlace || Boolean(place));
   const [category, setCategory] = useState(params.get('category') || '');
   const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
   // "Nearest" needs a location to measure from. Without one every distance is
@@ -57,29 +62,27 @@ export default function Browse() {
       setHomeCity((me.home_city || me.city || '').trim());
     }).catch(() => {});
   }, []);
-
-  const terms = useMemo(() => expandQuery(q), [q]);
+  useEffect(() => { if (homeCity && !placeTouched.current) setPlace(homeCity); }, [homeCity]);
+  const choosePlace = (value) => { placeTouched.current = true; setPlace(value); };
 
   // Narrowing to a place is also choosing a community — remembered, so the
-  // rest of the site opens where this search left off. servesPlace lives in
-  // @/lib/place: it is the same answer the homepage gives.
+  // rest of the site opens where this search left off. The matching itself is
+  // in @/lib/search, shared with the homepage search box.
   useEffect(() => { storeCommunity(place); }, [place]);
 
-  const matchesText = (p) => matchesQuery(providerHaystack(p), terms);
-  // Everything but the category, so the category list can count what each
-  // choice would show for this search.
-  const matchesExceptCategory = (p, where) => matchesText(p)
-    && servesPlace(p, where)
-    && (!verified || p.verified);
-  const matches = (p, where) => matchesExceptCategory(p, where)
-    && (!category || p.category === category);
+  // Every word typed and the place both count; see @/lib/search. Everything
+  // but the category is applied here, so the category list can count what
+  // each choice would show for this search.
+  const search = useMemo(() => searchDirectory(providers, { q, where: place }), [providers, q, place]);
+  const scoreOf = useMemo(() => new Map(search.results.map((r) => [r.provider.id, r.score])), [search]);
+  const passes = (p) => (!verified || p.verified) && (!category || p.category === category);
 
   // With a search typed, the listings that are what was asked for come first
   // (a search for shul opens on the shuls), and the chosen sort orders each
   // tier. Without one, the sort alone decides.
-  const order = (rows) => {
-    const score = new Map(rows.map((p) => [p, relevance(p, q)]));
-    return [...rows].sort((a, b) => (score.get(b) - score.get(a)) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
+  const order = (rows, scores = scoreOf) => {
+    const score = (p) => scores.get(p.id) || 0;
+    return [...rows].sort((a, b) => (score(b) - score(a)) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
       : sort === 'used' ? (b.usage_count || 0) - (a.usage_count || 0)
         : sort === 'saved' ? (b.save_count || 0) - (a.save_count || 0)
           : sort === 'recent' ? new Date(b.created_date) - new Date(a.created_date)
@@ -92,31 +95,33 @@ export default function Browse() {
   // returned every listing in the directory while the header counted them as
   // results. A padded answer is worse than an honest "not yet".
   const { results, elsewhere, askedPlace } = useMemo(() => {
-    const withDistance = providers.map((p) => ({
+    const withDistance = (p) => ({
       ...p,
       distance: lat && lng && p.latitude && p.longitude ? miles(lat, lng, p.latitude, p.longitude) : null,
-    }));
-    const where = place || homeCity;
-    const hits = withDistance.filter((p) => matches(p, where));
+    });
+    const where = search.parsed.place;
+    const hits = search.results.map((r) => r.provider).filter(passes);
     // Same search, other communities. Shown under its own heading, never
     // mixed into the count.
-    const other = where ? withDistance.filter((p) => matches(p, '') && !matches(p, where)) : [];
-    return { results: order(hits), elsewhere: order(other), askedPlace: where };
-  }, [providers, q, place, category, sort, verified, lat, lng, homeCity]); // eslint-disable-line react-hooks/exhaustive-deps
+    let other = [], otherScores = new Map();
+    if (where) {
+      const seen = new Set(hits.map((p) => p.id));
+      const wide = searchDirectory(providers, { q, anywhere: true }).results;
+      otherScores = new Map(wide.map((r) => [r.provider.id, r.score]));
+      other = wide.map((r) => r.provider).filter((p) => passes(p) && !seen.has(p.id));
+    }
+    return { results: order(hits.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
+  }, [search, category, sort, verified, lat, lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Counts follow the search on screen: after searching for shul in Boca
   // Raton, "All categories" counts those results, and each category how many
   // of them it holds, never the whole directory.
-  const scoped = useMemo(() => {
-    const where = place || homeCity;
-    return providers.filter((p) => matchesExceptCategory(p, where));
-  }, [providers, q, place, verified, homeCity]); // eslint-disable-line react-hooks/exhaustive-deps
+  const scoped = useMemo(() => search.results.map((r) => r.provider).filter((p) => !verified || p.verified), [search, verified]);
   const countFor = (name) => scoped.filter((p) => p.category === name).length;
 
   // Suggestions under the keyword box count what is listed in the place being
   // searched, so they never promise results the page will not show.
   const navigate = useNavigate();
-  const local = useMemo(() => providers.filter((p) => servesPlace(p, place || homeCity)), [providers, place, homeCity]);
   const pickKeyword = (item) => {
     if (item.kind === 'listing') navigate(providerPath(item.value));
     else if (item.kind === 'category') { setCategory(item.value); setQ(''); }
@@ -170,7 +175,7 @@ export default function Browse() {
   // comes with somewhere to look.
   const otherPlaces = [...new Set(elsewhere.map((p) => (p.city || '').trim()).filter(Boolean))].slice(0, 6);
 
-  const clearFilters = () => { setQ(''); setPlace(''); setCategory(''); setVerified(false); };
+  const clearFilters = () => { setQ(''); choosePlace(''); setCategory(''); setVerified(false); };
 
   return <div className="page-shell py-8">
     <div className="mb-7">
@@ -181,11 +186,11 @@ export default function Browse() {
 
     <div className="mb-6 grid gap-2 rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:grid-cols-12">
       <SuggestInput wrapperClassName="md:col-span-3" value={q} onChange={setQ} onPick={pickKeyword}
-        suggest={(text) => keywordSuggestions(text, local, categories)}
+        suggest={(text) => suggestKeywords(text, providers, categories, place)}
         placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
-      <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={setPlace} onPick={(item) => setPlace(item.value)}
-        suggest={(text) => placeSuggestions(text, providers)} suggestMore={lookupPlaces} minLength={2}
-        placeholder="City or ZIP" aria-label="Where" />
+      <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
+        suggest={(text) => suggestPlaces(text, providers)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        placeholder="Everywhere" aria-label="Where: city, state or ZIP" />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
         <option value="">All categories</option>
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)} ({countFor(c.name)})</option>)}
@@ -209,7 +214,7 @@ export default function Browse() {
           same confusion the padded count used to cause. */}
       <span className="text-sm font-medium">
         {results.length > 0
-          ? <>{results.length} {results.length === 1 ? 'resource' : 'resources'} found{askedPlace ? ` in ${askedPlace}` : ''}</>
+          ? <>{results.length} {results.length === 1 ? 'resource' : 'resources'} found {askedPlace ? `in ${askedPlace}` : 'everywhere'}</>
           : isSearch
             ? <>No matches{askedPlace ? <> in {askedPlace}</> : null}{elsewhere.length > 0 ? ` · ${elsewhere.length} elsewhere` : ''}</>
             : <>0 resources found</>}
@@ -219,6 +224,9 @@ export default function Browse() {
         <button onClick={() => setView('map')} className={`view-button ${view === 'map' ? 'active' : ''}`}><MapIcon size={16} />Map</button>
       </div>
     </div>
+
+    {/* A corrected typo is said out loud, so a surprise result explains itself. */}
+    {search.parsed.corrected && <p className="mb-3 text-sm text-brand-muted">Showing results for <b className="text-brand-ink">{search.parsed.corrected}</b></p>}
 
     {results.length > 0 && (view === 'map'
       ? <DirectoryMap providers={results} />
@@ -245,7 +253,7 @@ export default function Browse() {
               <p className="text-sm font-semibold text-brand-ink">Listed in other communities</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {otherPlaces.map((city) => (
-                  <button key={city} type="button" onClick={() => setPlace(city)} className="inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1.5 text-xs font-semibold text-brand-teal hover:ring-1 hover:ring-brand-teal">
+                  <button key={city} type="button" onClick={() => choosePlace(city)} className="inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1.5 text-xs font-semibold text-brand-teal hover:ring-1 hover:ring-brand-teal">
                     <MapPin size={12} />{city}
                   </button>
                 ))}

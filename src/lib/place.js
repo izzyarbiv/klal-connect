@@ -23,24 +23,114 @@ export function servesEverywhere(provider) {
   return areas.some((area) => EVERYWHERE.test(String(area || '')));
 }
 
-/** Every place a listing names, as one searchable string. */
-function placeText(provider) {
-  return [
-    provider?.city, provider?.neighborhood, provider?.zip,
-    (provider?.service_areas || []).join(' '), provider?.state,
-  ].join(' ').toLowerCase();
+// Place matching is by city, state or ZIP, never by a fragment of text: a
+// substring test let "FL" match Flushing, NY, and "LA" match Atlanta.
+const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  .replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+const STATES = {
+  al: 'alabama', ak: 'alaska', az: 'arizona', ar: 'arkansas', ca: 'california', co: 'colorado', ct: 'connecticut',
+  de: 'delaware', dc: 'district of columbia', fl: 'florida', ga: 'georgia', hi: 'hawaii', id: 'idaho', il: 'illinois',
+  in: 'indiana', ia: 'iowa', ks: 'kansas', ky: 'kentucky', la: 'louisiana', me: 'maine', md: 'maryland',
+  ma: 'massachusetts', mi: 'michigan', mn: 'minnesota', ms: 'mississippi', mo: 'missouri', mt: 'montana',
+  ne: 'nebraska', nv: 'nevada', nh: 'new hampshire', nj: 'new jersey', nm: 'new mexico', ny: 'new york',
+  nc: 'north carolina', nd: 'north dakota', oh: 'ohio', ok: 'oklahoma', or: 'oregon', pa: 'pennsylvania',
+  ri: 'rhode island', sc: 'south carolina', sd: 'south dakota', tn: 'tennessee', tx: 'texas', ut: 'utah',
+  vt: 'vermont', va: 'virginia', wa: 'washington', wv: 'west virginia', wi: 'wisconsin', wy: 'wyoming',
+};
+const STATE_BY_NAME = Object.fromEntries(Object.entries(STATES).map(([code, name]) => [name, code]));
+
+// What people call a place that is not one city. "LA" is Los Angeles here,
+// never Louisiana (spell out "Louisiana" for the state), and NYC is the five
+// boroughs and the neighbourhoods listings name instead of a borough.
+const QUEENS = ['queens', 'flushing', 'forest hills', 'rego park', 'kew gardens', 'kew gardens hills', 'fresh meadows',
+  'jamaica', 'jamaica estates', 'far rockaway', 'middle village', 'bayside', 'hillcrest', 'briarwood', 'jackson heights',
+  'long island city', 'astoria', 'little neck', 'oakland gardens', 'holliswood', 'richmond hill', 'whitestone', 'college point'];
+const NYC = ['new york', 'new york city', 'manhattan', 'brooklyn', 'bronx', 'riverdale', 'staten island', ...QUEENS];
+const LA = ['los angeles', 'valley village', 'sherman oaks', 'encino', 'tarzana', 'north hollywood', 'n hollywood',
+  'beverly hills', 'reseda', 'woodland hills', 'van nuys', 'studio city', 'west hollywood', 'northridge',
+  'canoga park', 'west hills', 'pico robertson', 'hancock park', 'santa monica', 'culver city', 'glendale'];
+const FIVE_TOWNS = ['lawrence', 'cedarhurst', 'woodmere', 'hewlett', 'inwood', 'far rockaway', 'woodsburgh', 'hewlett bay park'];
+const ALIASES = {
+  la: { state: 'ca', cities: LA }, 'l a': { state: 'ca', cities: LA }, 'los angeles': { state: 'ca', cities: LA },
+  nyc: { state: 'ny', cities: NYC }, 'new york city': { state: 'ny', cities: NYC },
+  queens: { state: 'ny', cities: QUEENS },
+  'five towns': { state: 'ny', cities: FIVE_TOWNS }, '5 towns': { state: 'ny', cities: FIVE_TOWNS },
+};
+
+/**
+ * Is this text a place alias or a state? Used to spot a place typed into the
+ * keyword box. A two-letter code only counts when typed in capitals ("FL",
+ * "LA"), so "in", "or", "me" and the "la" of "La Vela" stay words.
+ */
+export function isPlaceWord(text, { upper = false } = {}) {
+  const t = norm(text);
+  if (t.length <= 2) return upper && Boolean(ALIASES[t] || STATES[t]);
+  return Boolean(ALIASES[t] || STATE_BY_NAME[t]);
+}
+
+/**
+ * A test for "does this listing serve `where`?", built once per search.
+ *
+ * `where` can be a ZIP, a state ("FL", "Florida"), a city with or without its
+ * state ("Boca Raton", "Brooklyn, NY"), or an alias (NYC, LA, Five Towns).
+ * A city is matched by whole words ("Boca" is Boca and Boca Raton); only when
+ * no listing has such a city (while someone is still typing "Bo") does the
+ * start of a city name count.
+ * Listings that serve everywhere match every place. Returns null for no place.
+ */
+export function placeMatcher(where, providers = null) {
+  const text = norm(where);
+  if (!text) return null;
+  const everywhereOr = (test) => (p) => servesEverywhere(p) || test(p);
+  const cityOf = (p) => norm(p?.city);
+  const areasOf = (p) => (p?.service_areas || []).map(norm);
+  const stateOf = (p) => norm(p?.state);
+  const inCities = (cities) => {
+    const set = new Set(cities);
+    return (p) => set.has(cityOf(p)) || set.has(norm(p?.neighborhood)) || areasOf(p).some((a) => set.has(a));
+  };
+
+  if (/^\d{3,5}$/.test(text)) return everywhereOr((p) => String(p?.zip || '').startsWith(text));
+  const alias = ALIASES[text];
+  if (alias) {
+    const inAlias = inCities(alias.cities);
+    return everywhereOr((p) => inAlias(p) && (!stateOf(p) || stateOf(p) === alias.state));
+  }
+  if (STATES[text] || STATE_BY_NAME[text]) {
+    const code = STATES[text] ? text : STATE_BY_NAME[text];
+    return everywhereOr((p) => stateOf(p) === code);
+  }
+
+  // "Brooklyn, NY", "Brooklyn NY" or "Boca Raton Florida"
+  let city = text, state = '';
+  const words = text.split(' ');
+  const last = words[words.length - 1], lastTwo = words.slice(-2).join(' ');
+  if (words.length > 2 && STATE_BY_NAME[lastTwo]) { state = STATE_BY_NAME[lastTwo]; city = words.slice(0, -2).join(' '); }
+  else if (words.length > 1 && (STATES[last] || STATE_BY_NAME[last])) { state = STATES[last] ? last : STATE_BY_NAME[last]; city = words.slice(0, -1).join(' '); }
+  const stateOk = (p) => !state || stateOf(p) === state;
+  if (ALIASES[city]) {
+    const inAlias = inCities(ALIASES[city].cities);
+    return everywhereOr((p) => inAlias(p) && stateOk(p));
+  }
+
+  // "Boca" is Boca and Boca Raton; "Miami" is Miami and Miami Beach.
+  const named = (name) => name === city || name.startsWith(`${city} `);
+  const exact = (p) => named(cityOf(p)) || named(norm(p?.neighborhood)) || areasOf(p).some(named);
+  if (!providers || providers.some(exact)) return everywhereOr((p) => exact(p) && stateOk(p));
+  // Still typing: the start of a city name, at a word boundary.
+  const starts = (name) => name.startsWith(city) || name.includes(` ${city}`);
+  return everywhereOr((p) => (starts(cityOf(p)) || areasOf(p).some(starts)) && stateOk(p));
 }
 
 /**
  * Does this listing serve `where`?
  * An empty `where` is no constraint, and a listing that serves everywhere
- * serves every `where`.
+ * serves every `where`. For many listings, build a placeMatcher once instead.
  */
 export function servesPlace(provider, where) {
-  const needle = String(where || '').trim().toLowerCase();
-  if (!needle) return true;
-  if (servesEverywhere(provider)) return true;
-  return placeText(provider).includes(needle);
+  const test = placeMatcher(where);
+  return !test || test(provider);
 }
 
 /**
