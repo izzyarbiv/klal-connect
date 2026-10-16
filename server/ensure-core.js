@@ -13,6 +13,7 @@
 import { store } from './db.js';
 import { stableId } from './db-shared.js';
 import { DIRECTORY_CATEGORIES } from '../src/lib/categories.js';
+import { fixListingTypes } from './listing-types.js';
 
 const KEY = 'categories_offered';
 const SHULS_MOVED = 'community_shuls_removed';
@@ -59,6 +60,7 @@ async function run() {
   else if (marker.value !== list) await store.update('Setting', marker.id, { value: list });
   if (added.length) console.log(`[categories] added ${added.join(', ')}`);
   await dropShulsFromCommunity();
+  await fixListingTypes();
   return added;
 }
 
