@@ -178,6 +178,12 @@
   .section-head { @apply mb-5 flex items-end justify-between gap-4; }
   .panel { @apply rounded-xl bg-brand-surface p-5 ring-1 ring-brand-line sm:p-6; }
   .field { @apply mt-1 block w-full rounded-xl border border-brand-line bg-brand-surface px-3 py-2.5 text-sm text-brand-ink outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/10; }
+  /* iPhone Safari draws time and date pickers as native pills with their own
+     minimum width, height and centred text, so they overhang the grid and sit
+     taller than the selects beside them. Strip that styling so they size like
+     every other field. */
+  input.field[type='time'], input.field[type='date'] { -webkit-appearance: none; appearance: none; min-width: 0; height: 2.625rem; text-align: left; }
+  input.field::-webkit-date-and-time-value { text-align: left; margin: 0; }
   /* Buttons rise a pixel and gain a soft shadow on hover, and settle back when
      pressed, so they answer the pointer. Reduced-motion keeps the colour change
      and drops the movement. */
