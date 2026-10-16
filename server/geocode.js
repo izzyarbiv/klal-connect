@@ -90,7 +90,7 @@ const call = (task) => (needsThrottle() ? throttled(task) : task());
 // Using the browser's zone is wrong the moment someone picks a city in another
 // zone — and zmanim are computed from it, so that would silently produce the
 // wrong candle-lighting time.
-function tzFor(latitude, longitude) {
+export function tzFor(latitude, longitude) {
   try {
     return tzLookup(Number(latitude), Number(longitude));
   } catch {
