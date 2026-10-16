@@ -148,7 +148,16 @@
 
   body {
     @apply bg-brand-canvas text-brand-ink font-body;
+    /* A long link or address pasted into a listing (a full Google Maps URL is
+       one unbroken "word" of ~100 characters) ran past the right edge. Safari
+       on iPhone then zoomed the whole page out to fit it, so every page looked
+       shrunk with a gap down the right side. Long words now wrap instead. */
+    overflow-wrap: break-word;
   }
+  /* Belt and braces for the same thing: if anything still sticks out, it is
+     clipped rather than widening the page and making iPhone zoom out.
+     `clip`, not `hidden`, so position: sticky on the header keeps working. */
+  html, body { overflow-x: clip; }
   /* Colours, shadow and the small lift/press below all ease together, so a
      hover reads as one motion rather than a colour snap. */
   button, a { @apply transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200 ease-out motion-reduce:transition-none; }
