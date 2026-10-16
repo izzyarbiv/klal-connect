@@ -44,6 +44,18 @@ const guest = demo.data.access_token;
 ok(demo.data.user.guest === true && demo.data.user.full_name === 'Guest', 'guest session is masked', JSON.stringify(demo.data.user));
 // Admin writes a "leak" onto the guest row, the way it happened in production.
 const admin = (await call('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data.access_token;
+// Adding a listing does not make it yours to edit: only an owner the team has
+// accepted may. Most checks below are about what an owner may do, so they
+// start from a listing an admin has already handed to whoever added it. The
+// path that gets an owner there for real is pinned under "editing a listing".
+async function createOwned(token, body) {
+  const r = await call('POST', '/functions/createListing', { token, body });
+  const id = r.data?.provider?.id;
+  if (!id) return r;
+  const me = (await call('GET', '/auth/me', { token })).data;
+  const handed = await call('PUT', `/entities/Provider/${id}`, { token: admin, body: { owner_id: me.id, claimed: true } });
+  return { ...r, data: { ...r.data, provider: handed.data } };
+}
 const guestId = demo.data.user.id;
 const leak = await call('PUT', `/users/${guestId}`, { token: admin, body: { full_name: 'Eli Epstein', phone: '555-0100', headline: 'Real person', bio: 'private', banner_url: 'https://x/y.png' } });
 ok(leak.status === 200 && leak.data.full_name === 'Eli Epstein', 'admin can write the guest row (to scrub it)');
@@ -198,7 +210,7 @@ const payEmail = `pay${Date.now()}@example.com`;
 const payReg = await call('POST', '/auth/register', { body: { email: payEmail, password: 'password123' } });
 const payVer = await call('POST', '/auth/verify-otp', { body: { email: payEmail, otpCode: payReg.data.dev_code } });
 const payTok = payVer.data.access_token;
-const payListing = await call('POST', '/functions/createListing', { token: payTok, body: { name: 'Pay Test Biz', category: 'Food', short_description: 'x' } });
+const payListing = await createOwned(payTok, { name: 'Pay Test Biz', category: 'Food', short_description: 'x' });
 const payProviderId = payListing.data.provider.id;
 
 let payR = await call('POST', '/functions/updateListingPaymentLink', { token: payTok, body: { provider_id: payProviderId, payment_link_url: 'javascript:alert(1)' } });
@@ -334,7 +346,7 @@ const selfAccept = await call('POST', '/entities/Connection/update-many', { toke
 const connAfter = (await call('GET', `/entities/Connection/${ownConn.data.id}`, { token: userA })).data;
 ok(connAfter.status === 'pending', 'update-many cannot accept a connection request you sent yourself', JSON.stringify({ selfAccept: selfAccept.data, status: connAfter.status }));
 
-const ownListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Audit Listing', category: 'Business', short_description: 'x' } });
+const ownListing = await createOwned(userA, { name: 'Audit Listing', category: 'Business', short_description: 'x' });
 const selfPublish = await call('POST', '/entities/Provider/update-many', { token: userA, body: { query: { id: ownListing.data.provider.id }, update: { verified: true, vouch_count: 999 } } });
 const listingAfter = (await call('GET', `/entities/Provider/${ownListing.data.provider.id}`, { token: userA })).data;
 ok(listingAfter.verified !== true && listingAfter.vouch_count !== 999, 'update-many cannot verify your own listing or inflate its counters', JSON.stringify({ selfPublish: selfPublish.data, verified: listingAfter.verified, vouches: listingAfter.vouch_count }));
@@ -404,7 +416,7 @@ ok(proto.status === 404, 'an inherited property is not callable as a function', 
 // resources" rail that queries it: an owner could promote themselves into it
 // with one PUT. A confirmation date is the same kind of claim — a forged one
 // is worse than none, because it dresses stale details as checked.
-const promoListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Promo Plumbing', category: 'Home Services', short_description: 'Repairs and installations.' } });
+const promoListing = await createOwned(userA, { name: 'Promo Plumbing', category: 'Home Services', short_description: 'Repairs and installations.' });
 const promoId = promoListing.data?.provider?.id;
 await call('PUT', `/entities/Provider/${promoId}`, { token: userA, body: { featured: true, sponsored: true, sponsored_until: '2030-01-01T00:00:00.000Z', last_confirmed_at: '2030-01-01T00:00:00.000Z' } });
 const promoAfter = (await call('GET', `/entities/Provider/${promoId}`, { token: userA })).data || {};
@@ -428,7 +440,7 @@ const galleryVer = await call('POST', '/auth/verify-otp', { body: { email: galle
 const galleryTok = galleryVer.data?.access_token, galleryUserId = galleryVer.data?.user?.id;
 const fourUp = await call('POST', '/functions/createListing', { token: galleryTok, body: { name: 'Gallery Four', category: 'Food', short_description: 'x', gallery: [photo(1), photo(2), photo(3), photo(4)] } });
 ok(fourUp.status === 400, 'a fourth photo is refused on create', JSON.stringify(fourUp.data));
-const galleryListing = await call('POST', '/functions/createListing', { token: galleryTok, body: { name: 'Gallery Bakery', category: 'Food', short_description: 'x' } });
+const galleryListing = await createOwned(galleryTok, { name: 'Gallery Bakery', category: 'Food', short_description: 'x' });
 const galleryId = galleryListing.data?.provider?.id;
 ok(Array.isArray(galleryListing.data?.provider?.gallery) && galleryListing.data.provider.gallery.length === 0, 'a listing without photos stores an empty gallery', JSON.stringify(galleryListing.data?.provider?.gallery));
 let g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1), photo(2), photo(3), photo(4)] } });
@@ -494,7 +506,7 @@ ok(!born.last_confirmed_at, 'a listing cannot be born already confirmed', JSON.s
 // ---- the admin switch for vouches and community notes --------------------
 // Off until an admin turns it on. Off is a rule, not a hidden section: no new
 // vouches or notes, and none served to anyone but staff. The rows are kept.
-const switchListing = await call('POST', '/functions/createListing', { token: userB, body: { name: 'Switch Test Plumbing', category: 'Home Services', short_description: 'Repairs and installations.' } });
+const switchListing = await createOwned(userB, { name: 'Switch Test Plumbing', category: 'Home Services', short_description: 'Repairs and installations.' });
 const switchId = switchListing.data?.provider?.id;
 await call('PUT', `/entities/Provider/${switchId}`, { token: admin, body: { status: 'published' } });
 ok((await call('GET', '/config')).data.vouchesEnabled === false, 'vouches start switched off');
@@ -523,7 +535,7 @@ ok(onVouch.status === 200 && onVouch.data?.active === true, 'vouching works agai
 // later: sensitivity is read from the listing's own words, so an owner editing
 // their description (or the term list growing, which has happened) can make a
 // listing private long after people vouched for it publicly.
-const laterListing = await call('POST', '/functions/createListing', { token: userB, body: { name: 'Later Private Co', category: 'Home Services', short_description: 'General repairs and installations.' } });
+const laterListing = await createOwned(userB, { name: 'Later Private Co', category: 'Home Services', short_description: 'General repairs and installations.' });
 const laterId = laterListing.data?.provider?.id;
 const laterVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: laterId, activity: 'vouch' } });
 ok(laterVouch.status === 200 && laterVouch.data?.active === true, 'an ordinary listing can still be vouched for', String(laterVouch.status));
@@ -545,7 +557,7 @@ ok(!(await vouchVisibleTo(null)), 'and is not readable anonymously either');
 // presentation. These assertions are the rule: a named vouch or a counted use
 // on such a listing publishes something about the member's own life, so the
 // server refuses it however the request arrives.
-const sensListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Crisis Support Line', category: 'Health', short_description: 'Confidential crisis intervention and counseling.' } });
+const sensListing = await createOwned(userA, { name: 'Crisis Support Line', category: 'Health', short_description: 'Confidential crisis intervention and counseling.' });
 const sensId = sensListing.data?.provider?.id;
 ok(!!sensId, 'a sensitive listing can be created', JSON.stringify(sensListing.data || {}).slice(0, 120));
 
@@ -568,7 +580,7 @@ ok(sensNote.status >= 400, 'a signed public note is refused on a sensitive listi
 // else's. Worth its own assertion because this category was added on a
 // suggestion, and the brief draws the line at resources and contacts — no
 // profiles, no matching.
-const shidduchListing = await call('POST', '/functions/createListing', { token: userB, body: { name: 'R. Gold', category: 'Shidduchim', short_description: 'Introductions for singles in the community.' } });
+const shidduchListing = await createOwned(userB, { name: 'R. Gold', category: 'Shidduchim', short_description: 'Introductions for singles in the community.' });
 const shidduchId = shidduchListing.data?.provider?.id;
 ok(!!shidduchId, 'a shidduchim listing can be created', String(shidduchListing.status));
 const shidduchVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: shidduchId, activity: 'vouch' } });
@@ -578,7 +590,7 @@ ok(shidduchSave.status === 200, 'but can still be saved privately', String(shidd
 
 // And the rule is narrow rather than blanket: public trust still works where
 // it helps, which is most of the directory.
-const plainListing = await call('POST', '/functions/createListing', { token: userA, body: { name: 'Reliable Plumbing Co', category: 'Home Services', short_description: 'Repairs and installations for kitchens and bathrooms.' } });
+const plainListing = await createOwned(userA, { name: 'Reliable Plumbing Co', category: 'Home Services', short_description: 'Repairs and installations for kitchens and bathrooms.' });
 const plainId = plainListing.data?.provider?.id;
 const plainVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userB, body: { providerId: plainId, activity: 'vouch' } });
 ok(plainVouch.status === 200 && plainVouch.data?.active === true, 'a plumber can still be vouched for', String(plainVouch.status));
@@ -593,20 +605,18 @@ const ownListing2 = await call('POST', '/functions/createListing', { token: user
 const ownId = ownListing2.data?.provider?.id;
 ok(!!ownId, 'a member can add a listing to edit', String(ownListing2.status));
 
-// The person who added it may change it.
+// Adding a listing does not make it yours. Whoever added it suggests a
+// correction like anyone else until the team accepts them as its owner; before
+// this, a member who typed in a shop they did not own could rewrite it for as
+// long as the shop had not claimed it.
 const edited = await call('PUT', `/entities/Provider/${ownId}`, { token: userB, body: { description: 'Resoling, stretching and repairs while you wait.', phone: '(561) 555-0199' } });
-ok(edited.status === 200 && edited.data?.description?.startsWith('Resoling, stretching'), 'the person who added a listing can edit it', String(edited.status));
-ok(edited.data?.name === 'Gold Shoe Repair', 'and a partial edit leaves the rest of the row alone', edited.data?.name);
+ok(edited.status === 403, 'the person who added a listing cannot edit it before owning it', String(edited.status));
+const taglineByAdder = await call('POST', '/functions/updateListingTagline', { token: userB, body: { provider_id: ownId, tagline: 'Mine?' } });
+ok(taglineByAdder.status === 403, 'nor set its tagline', String(taglineByAdder.status));
 
-// Nobody else may, claimed or not.
+// Nobody else may either, claimed or not.
 const strangerEdit = await call('PUT', `/entities/Provider/${ownId}`, { token: userA, body: { description: 'Hijacked.' } });
 ok(strangerEdit.status === 403, 'another member cannot edit someone elses listing', String(strangerEdit.status));
-
-// Editing is not a way around the fields an admin owns.
-await call('PUT', `/entities/Provider/${ownId}`, { token: userB, body: { verified: true, featured: true, usage_count: 99 } });
-const afterSneak = (await call('GET', `/entities/Provider/${ownId}`, { token: userB })).data || {};
-ok(!afterSneak.verified && !afterSneak.featured && !afterSneak.usage_count, 'editing cannot grant verification, prominence or counters',
-  JSON.stringify({ verified: afterSneak.verified, featured: afterSneak.featured, usage_count: afterSneak.usage_count }));
 
 // A claim, and what approving it is supposed to do.
 // Two claims filed while the listing is still unowned, held for the guards
@@ -630,6 +640,13 @@ ok(resolved.data?.provider?.owner_id === idA, 'and hands it to whoever claimed i
 // longer does. They can still suggest a correction.
 const claimerEdit = await call('PUT', `/entities/Provider/${ownId}`, { token: userA, body: { hours: 'Sun-Thu 9-6, Fri 9-1' } });
 ok(claimerEdit.status === 200 && claimerEdit.data?.hours?.startsWith('Sun-Thu'), 'the business can edit once its claim is approved', String(claimerEdit.status));
+ok(claimerEdit.data?.name === 'Gold Shoe Repair', 'and a partial edit leaves the rest of the row alone', claimerEdit.data?.name);
+
+// Editing is not a way around the fields an admin owns.
+await call('PUT', `/entities/Provider/${ownId}`, { token: userA, body: { verified: true, featured: true, usage_count: 99 } });
+const afterSneak = (await call('GET', `/entities/Provider/${ownId}`, { token: userA })).data || {};
+ok(!afterSneak.verified && !afterSneak.featured && !afterSneak.usage_count, 'editing cannot grant verification, prominence or counters',
+  JSON.stringify({ verified: afterSneak.verified, featured: afterSneak.featured, usage_count: afterSneak.usage_count }));
 const formerEdit = await call('PUT', `/entities/Provider/${ownId}`, { token: userB, body: { description: 'Still mine?' } });
 ok(formerEdit.status === 403, 'and whoever added it no longer can', String(formerEdit.status));
 
@@ -679,20 +696,36 @@ ok(afterBulk.description !== 'Taken back through the bulk route', 'and the listi
 const myNotifs = await call('POST', '/entities/Notification/update-many', { token: userB, body: { query: { recipient_id: idB, read: false }, update: { read: true } } });
 ok(myNotifs.status === 200, 'marking your own notifications read still works', String(myNotifs.status));
 
-// The person who added a listing is its editor until a business claims it.
-// Reported in the field as "the creating account sees Claim, not Edit": the
-// client decides that from created_by_id on the row it fetched, so the row
-// has to carry it, the filter the Settings page runs has to find it, and the
-// server has to accept the edit.
+// The listing row carries who added it back to the client, which the page
+// uses to tell a staff edit from an owner's.
 const creatorListing = await call('POST', '/functions/createListing', { token: userC, body: { name: 'Creator Plumbing', category: 'Home Services', short_description: 'Leaks fixed the same day.' } });
 const creatorRow = creatorListing.data?.provider || {};
 ok(creatorRow.created_by_id === idC, 'a created listing carries its creator id back to the client', JSON.stringify({ created_by_id: creatorRow.created_by_id, idC }));
 const creatorFetched = (await call('GET', `/entities/Provider/${creatorRow.id}`, { token: userC })).data || {};
 ok(creatorFetched.created_by_id === idC, 'and still carries it when the listing page fetches it', JSON.stringify(creatorFetched.created_by_id));
-const creatorMine = (await call('GET', `/entities/Provider?query=${encodeURIComponent(JSON.stringify({ created_by_id: idC }))}`, { token: userC })).data || [];
-ok(Array.isArray(creatorMine) && creatorMine.some((p) => p.id === creatorRow.id), 'Settings → Manage my listings finds it by creator', String(Array.isArray(creatorMine) && creatorMine.length));
+ok(!creatorListing.data?.claim, 'adding a listing files no claim unless asked to', JSON.stringify(creatorListing.data?.claim));
 const creatorEdit = await call('PUT', `/entities/Provider/${creatorRow.id}`, { token: userC, body: { description: 'Licensed and insured.' } });
-ok(creatorEdit.status === 200 && creatorEdit.data?.description === 'Licensed and insured.', 'the creator can edit their own listing', String(creatorEdit.status));
+ok(creatorEdit.status === 403, 'the creator cannot edit a listing they have not been accepted as owner of', String(creatorEdit.status));
+
+// "This is my business" on the add form files the claim alongside the
+// listing, so an owner adding their own page does not have to say it twice.
+// It is still a claim: nothing is handed over until the team accepts it.
+const mineEmail = `mineowner${Date.now()}@example.com`;
+const mineReg = await call('POST', '/auth/register', { body: { email: mineEmail, password: 'password123' } });
+const mineTok = (await call('POST', '/auth/verify-otp', { body: { email: mineEmail, otpCode: mineReg.data?.dev_code } })).data?.access_token;
+const mineUserId = (await call('GET', '/auth/me', { token: mineTok })).data?.id;
+const mineListing = await call('POST', '/functions/createListing', { token: mineTok, body: { name: 'Mine Plumbing', category: 'Home Services', short_description: 'Our own shop.', phone: '555-0142', claim_as_owner: true } });
+const mineId = mineListing.data?.provider?.id;
+const mineClaim = mineListing.data?.claim;
+ok(mineClaim?.status === 'pending' && mineClaim?.provider_id === mineId, 'adding a listing as its owner files a pending claim on it', JSON.stringify(mineClaim));
+ok(/555-0142/.test(mineClaim?.verification_details || ''), 'with the listing\'s contact details for the team to check', String(mineClaim?.verification_details));
+ok(mineListing.data?.provider && !('claim_as_owner' in mineListing.data.provider), 'and the flag is not stored on the listing');
+const mineEarly = await call('PUT', `/entities/Provider/${mineId}`, { token: mineTok, body: { description: 'Before approval.' } });
+ok(mineEarly.status === 403, 'the owner still cannot edit before the claim is accepted', String(mineEarly.status));
+const mineResolved = await call('POST', '/functions/resolveClaim', { token: admin, body: { claim_id: mineClaim?.id, approve: true } });
+ok(mineResolved.status === 200 && mineResolved.data?.provider?.owner_id === mineUserId, 'accepting it hands the listing over', String(mineResolved.status));
+const mineEdit = await call('PUT', `/entities/Provider/${mineId}`, { token: mineTok, body: { description: 'Licensed and insured.' } });
+ok(mineEdit.status === 200 && mineEdit.data?.description === 'Licensed and insured.', 'and then the owner can edit it', String(mineEdit.status));
 
 // Moderators are staff on listings: they edit the content of any listing
 // without claiming it, and without the listing changing hands. Protected
@@ -761,7 +794,7 @@ ok(memberEdit.status === 403 && afterMember.description !== 'Rewritten by a stra
   'an ordinary member still cannot edit another member\'s listing', String(memberEdit.status));
 // Narrowing is unchanged for the other staff queues: a moderator on someone
 // else's report changes its state, not its words.
-const modOwn = await call('POST', '/functions/createListing', { token: modTok, body: { name: 'Moderator Bakery', category: 'Food & Catering', short_description: 'Bread and rolls.' } });
+const modOwn = await createOwned(modTok, { name: 'Moderator Bakery', category: 'Food & Catering', short_description: 'Bread and rolls.' });
 const modOwnEdit = await call('PUT', `/entities/Provider/${modOwn.data?.provider?.id}`, { token: modTok, body: { description: 'Fresh daily from 6am.' } });
 ok(modOwnEdit.status === 200 && modOwnEdit.data?.description === 'Fresh daily from 6am.',
   'a moderator can still edit a listing that is genuinely theirs', String(modOwnEdit.status));
@@ -782,7 +815,7 @@ ok(Array.isArray(trail) && trail.some((e) => e.type === 'moderation' && e.target
 const staffEdit = Array.isArray(trail) ? trail.find((e) => e.type === 'staff_edit' && e.target_id === modListingId && /description/.test(e.fields || '')) : null;
 ok(!!staffEdit && /phone/.test(staffEdit.fields) && staffEdit.actor_role === 'moderator',
   'a staff content edit on someone else\'s listing is recorded with the fields it changed', JSON.stringify(staffEdit));
-ok(!trail.some((e) => e.type === 'staff_edit' && e.target_id === modOwn.data?.provider?.id),
+ok(!trail.some((e) => e.type === 'staff_edit' && e.target_id === modOwn.data?.provider?.id && e.actor_role === 'moderator'),
   'while editing a listing that is genuinely theirs is not a staff edit');
 
 // Claims were the last unbounded write.
@@ -864,13 +897,13 @@ const ownerTok = (await call('POST', '/auth/verify-otp', { body: { email: ownerE
 // at the victim's canonical URL with their own title, OG tags and JSON-LD.
 const victim = await call('POST', '/functions/createListing', { token: admin, body: { name: 'Devorahs Kosher Catering', category: 'Food & Catering', short_description: 'Catering for simchas.', slug: 'devorahs-kosher-catering' } });
 ok(!victim.data?.provider?.slug, 'a new listing cannot choose its own public URL', String(victim.data?.provider?.slug));
-const squatter = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Not The Caterer', category: 'Business', short_description: 'Something else entirely.' } });
+const squatter = await createOwned(ownerTok, { name: 'Not The Caterer', category: 'Business', short_description: 'Something else entirely.' });
 const squatId = squatter.data?.provider?.id;
 const squat = await call('PUT', `/entities/Provider/${squatId}`, { token: ownerTok, body: { slug: 'devorahs-kosher-catering' } });
 ok(squat.status === 200 && !squat.data?.slug, 'nor take over another listing URL by editing', String(squat.data?.slug));
 
 // Verification is a statement about one specific business.
-const toVerify = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Verified Bakery', category: 'Food & Catering', short_description: 'Bread and challah.', city: 'Lakewood' } });
+const toVerify = await createOwned(ownerTok, { name: 'Verified Bakery', category: 'Food & Catering', short_description: 'Bread and challah.', city: 'Lakewood' });
 const vId = toVerify.data?.provider?.id;
 await call('PUT', `/entities/Provider/${vId}`, { token: admin, body: { verified: true, verified_at: '2026-10-01T00:00:00Z', latitude: 40.0963, longitude: -74.2176, badges: ['pas_yisroel'], verified_badges: ['pas_yisroel'] } });
 ok(!!vId, 'the rows the verification assertions need exist', String(toVerify.status));
@@ -882,12 +915,12 @@ ok(becameSomethingElse.status === 200 && becameSomethingElse.data?.latitude !== 
 
 // A town typed rather than picked saves without coordinates; the server finds
 // the pin itself, or saves the listing anyway when it cannot.
-const townOnly = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Town Only Tailor', category: 'Business', short_description: 'Alterations.', city: 'Lakewood', state: 'NJ' } });
+const townOnly = await createOwned(ownerTok, { name: 'Town Only Tailor', category: 'Business', short_description: 'Alterations.', city: 'Lakewood', state: 'NJ' });
 ok(townOnly.status === 200 && !!townOnly.data?.provider?.id, 'a listing with only a town saves without error', String(townOnly.status));
 const townPin = townOnly.data?.provider || {};
 ok((townPin.latitude == null && townPin.longitude == null) || (Math.abs(townPin.latitude - 40.0978) < 0.1 && Math.abs(townPin.longitude + 74.2176) < 0.1),
   'and is pinned at the town when the town is known', `${townPin.latitude},${townPin.longitude}`);
-const noPlace = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Remote Only Tutor', category: 'Business', short_description: 'Online lessons.', delivery_mode: 'remote' } });
+const noPlace = await createOwned(ownerTok, { name: 'Remote Only Tutor', category: 'Business', short_description: 'Online lessons.', delivery_mode: 'remote' });
 ok(noPlace.status === 200 && noPlace.data?.provider?.latitude == null, 'a listing with no place at all saves with no pin and no error', String(noPlace.status));
 const trail2 = (await call('GET', '/entities/ActivityEvent?limit=500', { token: admin })).data || [];
 ok(trail2.some((e) => e.type === 'listing_identity_change' && e.target_id === vId),
@@ -900,20 +933,20 @@ const pinTok = (await call('POST', '/auth/verify-otp', { body: { email: pinEmail
 
 // A curated town is only an answer in its own state. The list knows a Paris
 // and a Jackson, and a listing in Paris, TX was drawn in France.
-const parisTx = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Paris Texas Tailor', category: 'Business', short_description: 'Alterations.', address: '12 Main St', city: 'Paris', state: 'TX' } });
+const parisTx = await createOwned(pinTok, { name: 'Paris Texas Tailor', category: 'Business', short_description: 'Alterations.', address: '12 Main St', city: 'Paris', state: 'TX' });
 ok(parisTx.status === 200 && parisTx.data?.provider?.latitude == null, 'a listing in Paris, TX is not pinned at Paris, France', `${parisTx.data?.provider?.latitude}`);
-const jacksonMs = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Jackson Mississippi Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson', state: 'MS' } });
+const jacksonMs = await createOwned(pinTok, { name: 'Jackson Mississippi Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson', state: 'MS' });
 ok(jacksonMs.status === 200 && jacksonMs.data?.provider?.latitude == null, 'nor Jackson, MS at Jackson, NJ', `${jacksonMs.data?.provider?.latitude}`);
-const jacksonBare = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Jackson Somewhere Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson' } });
+const jacksonBare = await createOwned(pinTok, { name: 'Jackson Somewhere Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson' });
 ok(jacksonBare.status === 200 && jacksonBare.data?.provider?.latitude == null, 'a town name shared across states is not pinned without a state', `${jacksonBare.data?.provider?.latitude}`);
-const jacksonNj = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Jackson NJ Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson', state: 'NJ', pin_precise: true } });
+const jacksonNj = await createOwned(pinTok, { name: 'Jackson NJ Movers', category: 'Business', short_description: 'Moving.', city: 'Jackson', state: 'NJ', pin_precise: true });
 const jnj = jacksonNj.data?.provider || {};
 ok(jacksonNj.status === 200 && Math.abs(jnj.latitude - 40.1090) < 0.1 && Math.abs(jnj.longitude + 74.3646) < 0.1, 'the same town with its state is pinned at the town', `${jnj.latitude},${jnj.longitude}`);
 ok(jnj.pin_precise === false, 'and a town pin is stored as not the building, whatever the client claimed', String(jnj.pin_precise));
 const claimPrecise = await call('PUT', `/entities/Provider/${jnj.id}`, { token: pinTok, body: { pin_precise: true } });
 ok(claimPrecise.status === 200 && claimPrecise.data?.pin_precise !== true, 'a client cannot mark its own pin as the building by editing', String(claimPrecise.data?.pin_precise));
 // Empty strings in both columns are no pin, not a pin that blocks the lookup.
-const emptyCoords = await call('POST', '/functions/createListing', { token: pinTok, body: { name: 'Empty Coordinates Tailor', category: 'Business', short_description: 'Alterations.', city: 'Lakewood', state: 'NJ', latitude: '', longitude: '' } });
+const emptyCoords = await createOwned(pinTok, { name: 'Empty Coordinates Tailor', category: 'Business', short_description: 'Alterations.', city: 'Lakewood', state: 'NJ', latitude: '', longitude: '' });
 ok(emptyCoords.status === 200 && Math.abs(emptyCoords.data?.provider?.latitude - 40.0978) < 0.1, 'a listing saved with empty-string coordinates is still pinned at its town', `${emptyCoords.data?.provider?.latitude}`);
 // "Remove pin" sends both coordinates as null; the same request must not pin
 // the town straight back, or the control is a no-op.
@@ -933,7 +966,7 @@ ok(movedWithout.status === 200 && Math.abs(movedWithout.data?.latitude - 41.1115
 // listing stops making the claim, the admin's confirmation of it has to go too
 // — the page draws a badge that is declared OR confirmed, so un-ticking it in
 // the form changed nothing while the form said the change was live.
-const kosher = await call('POST', '/functions/createListing', { token: ownerTok, body: { name: 'Badge Bakery', category: 'Food & Catering', short_description: 'Cakes.', badges: ['cholov_yisroel', 'pas_yisroel'] } });
+const kosher = await createOwned(ownerTok, { name: 'Badge Bakery', category: 'Food & Catering', short_description: 'Cakes.', badges: ['cholov_yisroel', 'pas_yisroel'] });
 const kId = kosher.data?.provider?.id;
 await call('PUT', `/entities/Provider/${kId}`, { token: admin, body: { verified_badges: ['cholov_yisroel', 'pas_yisroel'] } });
 ok(!!kId, 'and the badge assertions have a row too', String(kosher.status));
@@ -976,7 +1009,7 @@ if (pngUpload.data?.file_url) {
   const served = await fetch(`http://127.0.0.1:${server.address().port}${pngUpload.data.file_url}`);
   ok(served.status === 200 && /^image\/png/.test(served.headers.get('content-type') || ''), 'the uploaded file is served back as image/png', `${served.status} ${served.headers.get('content-type')}`);
 }
-const logoListing = await call('POST', '/functions/createListing', { token: logoTok, body: { name: 'Logo Listing', category: 'Business', short_description: 'x' } });
+const logoListing = await createOwned(logoTok, { name: 'Logo Listing', category: 'Business', short_description: 'x' });
 const logoRow = logoListing.data?.provider;
 ok(!!logoRow?.id && !logoRow.logo_url, 'a listing starts without a logo', JSON.stringify(logoListing.data));
 // Timestamps are millisecond ISO strings; a save within the same tick as the

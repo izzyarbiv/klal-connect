@@ -36,7 +36,7 @@ export default function AddListing() {
         // The same rule the server enforces, so the refusal is explained here
         // rather than arriving as a 403 after the form is filled in.
         if (!canEditListing(row, user)) {
-          setEditError({ title: 'This one is not yours to edit', body: 'A listing is editable by whoever added it, or by the business once it has claimed it. You can suggest a correction from the listing page, and the team will take it from there.' });
+          setEditError({ title: 'This one is not yours to edit', body: 'Only the owner of a listing can edit it, once the Klal team has accepted their claim. If this is your business, claim it from the listing page. Otherwise, suggest a correction there and the team will take it from there.' });
           return;
         }
         setEditing(row);
@@ -63,13 +63,13 @@ export default function AddListing() {
     // Staff correcting a listing they neither added nor claimed are told so
     // too: the listing page one click earlier called this a staff edit, and an
     // eyebrow then reading "YOUR LISTING" contradicted it. The listing stays
-    // with whoever added or claimed it, and the header says that.
+    // with its owner, and the header says that.
     const staffEdit = !!editing && listingEditor(editing) !== user.id;
     return <div className="page-shell max-w-4xl py-9">
       <span className="eyebrow">{editError ? 'LISTING' : staffEdit ? 'STAFF EDIT' : 'YOUR LISTING'}</span>
       <h1 className="title text-3xl">{editError ? editError.title : staffEdit ? 'Edit this listing as staff' : 'Edit this listing'}</h1>
       {!editError && (staffEdit
-        ? <p className="helper mb-6">Changes go live as soon as you save, and are recorded as a staff edit. The listing stays with whoever added or claimed it; you are correcting it, not taking it over.</p>
+        ? <p className="helper mb-6">Changes go live as soon as you save, and are recorded as a staff edit. The listing stays with its owner, if it has one; you are correcting it, not taking it over.</p>
         : <p className="helper mb-6">Changes go live as soon as you save. Verification, featured placement and the community counters are not yours to set — those stay with the Klal team.</p>)}
       {editError
         ? <div className="empty"><p>{editError.body}</p><div className="flex flex-wrap justify-center gap-2"><a href={`/provider/${encodeURIComponent(editId)}`} className="primary">Open the listing</a><Link to="/directory" className="secondary">Browse the directory</Link></div></div>
@@ -82,7 +82,7 @@ export default function AddListing() {
   return <div className="page-shell max-w-4xl py-9">
     <span className="eyebrow">CONTRIBUTE</span>
     <h1 className="title text-3xl">Help our directory grow</h1>
-    <p className="helper mb-6">New listings go live right away. Claims are checked with the business before the listing is handed over.</p>
+    <p className="helper mb-6">New listings go live right away. Only a listing's owner can edit it, and claims are checked with the business before the listing is handed over.</p>
     <div className="mb-6 grid grid-cols-2 rounded-lg bg-brand-tint p-1">
       <button onClick={() => setTab('add')} className={`tab ${tab === 'add' ? 'active' : ''}`}>Add a Community Resource</button>
       <button onClick={() => setTab('claim')} className={`tab ${tab === 'claim' ? 'active' : ''}`}>List or Claim Your Business</button>
