@@ -109,6 +109,10 @@ export default function ProviderDetail(){
         <div className="mt-4 space-y-2 border-t pt-4">
           <TrustMarks provider={provider}/>
           <p className="text-xs leading-5 text-brand-muted">{provider.verified ? VERIFIED_MEANING : 'Not yet verified by Klal Connect. As with any listing, please do your own research.'}</p>
+          {/* Claimed means the team accepted a claim, which sets both claimed
+              and owner_id (the same owner who may edit). Until then the page
+              is what we put together from public listings, and says so. */}
+          {!provider.claimed&&!listingEditor(provider)&&<p className="text-xs leading-5 text-brand-muted">Not yet claimed. Compiled from public information.</p>}
         </div></section>
         <ReportForm provider={provider}/>
         {/* Whoever may edit it gets the link to do so: the owner the team
