@@ -6,6 +6,9 @@ import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
 import { searchDirectory, suggestKeywords, suggestPlaces } from '@/lib/search';
 import SuggestInput from '@/components/SuggestInput';
+import CountrySelect from '@/components/CountrySelect';
+import { placeMatcher } from '@/lib/place';
+import { inCountry } from '@/lib/countries';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 import { readStoredCommunity, storeCommunity } from '@/lib/community';
@@ -37,6 +40,7 @@ export default function Browse() {
   // chose a place. It used to apply silently behind a blank box.
   const placeTouched = React.useRef(linkedPlace || Boolean(place));
   const [category, setCategory] = useState(params.get('category') || '');
+  const [country, setCountry] = useState(params.get('country') || '');
   const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
   // "Nearest" needs a location to measure from. Without one every distance is
   // unknown, so it left the list in no order at all while claiming one.
@@ -64,6 +68,13 @@ export default function Browse() {
   }, []);
   useEffect(() => { if (homeCity && !placeTouched.current) setPlace(homeCity); }, [homeCity]);
   const choosePlace = (value) => { placeTouched.current = true; setPlace(value); };
+  // Picking a country lets go of a place that is not in it: "Israel" with
+  // "Boca Raton" still in the Where box would find nothing.
+  const chooseCountry = (value) => {
+    setCountry(value);
+    const test = placeMatcher(place, providers);
+    if (value && test && !inCountry(providers, value).some(test)) choosePlace('');
+  };
 
   // Narrowing to a place is also choosing a community — remembered, so the
   // rest of the site opens where this search left off. The matching itself is
@@ -73,7 +84,7 @@ export default function Browse() {
   // Every word typed and the place both count; see @/lib/search. Everything
   // but the category is applied here, so the category list can count what
   // each choice would show for this search.
-  const search = useMemo(() => searchDirectory(providers, { q, where: place }), [providers, q, place]);
+  const search = useMemo(() => searchDirectory(providers, { q, where: place, country }), [providers, q, place, country]);
   const scoreOf = useMemo(() => new Map(search.results.map((r) => [r.provider.id, r.score])), [search]);
   const passes = (p) => (!verified || p.verified) && (!category || p.category === category);
 
@@ -106,12 +117,14 @@ export default function Browse() {
     let other = [], otherScores = new Map();
     if (where) {
       const seen = new Set(hits.map((p) => p.id));
-      const wide = searchDirectory(providers, { q, anywhere: true }).results;
+      const wide = searchDirectory(providers, { q, anywhere: true, country }).results;
       otherScores = new Map(wide.map((r) => [r.provider.id, r.score]));
       other = wide.map((r) => r.provider).filter((p) => passes(p) && !seen.has(p.id));
     }
     return { results: order(hits.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
-  }, [search, category, sort, verified, lat, lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, category, sort, verified, lat, lng, country]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Where the results are, in words: "Boca Raton", "Israel", "Jerusalem, Israel".
+  const whereText = [askedPlace, country].filter(Boolean).filter((s, i, all) => all.indexOf(s) === i).join(', ');
 
   // Counts follow the search on screen: after searching for shul in Boca
   // Raton, "All categories" counts those results, and each category how many
@@ -128,7 +141,7 @@ export default function Browse() {
     else setQ(item.value);
   };
 
-  const isSearch = !!(q || place || category || verified);
+  const isSearch = !!(q || place || category || verified || country);
 
   // Every search is recorded, not only the ones where someone clicks the
   // button — most arrive from a link with the query already in the URL. The
@@ -146,13 +159,14 @@ export default function Browse() {
         query: q,
         category,
         city: askedPlace,
+        country,
         results: results.length,
         zero_result: results.length === 0,
         search_id,
       }).catch(() => {});
     }, 900);
     return () => clearTimeout(timer);
-  }, [q, place, category, verified, results.length, providers.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q, place, category, verified, country, results.length, providers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // What to call the thing they were looking for, in a sentence. This text is
   // posted publicly under a real person's name, so it must not read as though
@@ -167,15 +181,15 @@ export default function Browse() {
   const lookingFor = q.trim() || category || 'listings';
   const askSubject = q.trim() || category;
   const askText = askSubject
-    ? `Looking for “${askSubject}”${askedPlace ? ` in ${askedPlace}` : ''} — does anyone have someone they would suggest?`
-    : `Looking for a recommendation${askedPlace ? ` in ${askedPlace}` : ''} — can anyone help?`;
+    ? `Looking for “${askSubject}”${whereText ? ` in ${whereText}` : ''} — does anyone have someone they would suggest?`
+    : `Looking for a recommendation${whereText ? ` in ${whereText}` : ''} — can anyone help?`;
   const askHref = `/feed?ask=${encodeURIComponent(askText)}`;
 
   // The communities that do have something for this search, so "not here"
   // comes with somewhere to look.
   const otherPlaces = [...new Set(elsewhere.map((p) => (p.city || '').trim()).filter(Boolean))].slice(0, 6);
 
-  const clearFilters = () => { setQ(''); choosePlace(''); setCategory(''); setVerified(false); };
+  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(''); setCategory(''); setVerified(false); };
 
   return <div className="page-shell py-8">
     <div className="mb-7">
@@ -186,16 +200,17 @@ export default function Browse() {
 
     <div className="mb-6 grid gap-2 rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:grid-cols-12">
       <SuggestInput wrapperClassName="md:col-span-3" value={q} onChange={setQ} onPick={pickKeyword}
-        suggest={(text) => suggestKeywords(text, providers, categories, place)}
+        suggest={(text) => suggestKeywords(text, providers, categories, place, country)}
         placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
       <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
-        suggest={(text) => suggestPlaces(text, providers)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
-        placeholder="Everywhere" aria-label="Where: city, state or ZIP" />
+        suggest={(text) => suggestPlaces(text, providers, country)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
+      <CountrySelect className="field md:col-span-2" providers={providers} value={country} onChange={chooseCountry} />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
         <option value="">All categories</option>
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)} ({countFor(c.name)})</option>)}
       </select>
-      <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)}>
+      <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
         {located && <option value="nearest">Nearest</option>}
         <option value="used">Most Used</option>
         <option value="saved">Most Saved</option>
@@ -203,7 +218,7 @@ export default function Browse() {
         <option value="alpha">Alphabetical</option>
       </select>
       <button onClick={clearFilters} className="secondary md:col-span-1">Clear</button>
-      <label className="flex items-center gap-2 px-2 text-sm md:col-span-2">
+      <label className="flex items-center gap-2 px-2 text-sm md:col-span-12">
         <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only
       </label>
     </div>
@@ -214,9 +229,9 @@ export default function Browse() {
           same confusion the padded count used to cause. */}
       <span className="text-sm font-medium">
         {results.length > 0
-          ? <>{results.length} {results.length === 1 ? 'resource' : 'resources'} found {askedPlace ? `in ${askedPlace}` : 'everywhere'}</>
+          ? <>{results.length} {results.length === 1 ? 'resource' : 'resources'} found {whereText ? `in ${whereText}` : 'everywhere'}</>
           : isSearch
-            ? <>No matches{askedPlace ? <> in {askedPlace}</> : null}{elsewhere.length > 0 ? ` · ${elsewhere.length} elsewhere` : ''}</>
+            ? <>No matches{whereText ? <> in {whereText}</> : null}{elsewhere.length > 0 ? ` · ${elsewhere.length} elsewhere` : ''}</>
             : <>0 resources found</>}
       </span>
       <div className="flex rounded-xl bg-brand-surface p-1 ring-1 ring-brand-line">
@@ -244,7 +259,7 @@ export default function Browse() {
           <div className="min-w-0">
             <p className="font-semibold text-brand-ink">
               {isSearch
-                ? <>No matching {lookingFor.toLowerCase()}{askedPlace ? <> in <b>{askedPlace}</b></> : null} yet.</>
+                ? <>No matching {lookingFor.toLowerCase()}{whereText ? <> in <b>{whereText}</b></> : null} yet.</>
                 : <>Nothing matched those filters.</>}
             </p>
             <p className="helper mt-1">This is a curated directory, so a gap means nobody has added it — not that it does not exist.</p>

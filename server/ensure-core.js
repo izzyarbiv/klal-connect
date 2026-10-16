@@ -14,6 +14,7 @@ import { store } from './db.js';
 import { stableId } from './db-shared.js';
 import { DIRECTORY_CATEGORIES } from '../src/lib/categories.js';
 import { fixListingTypes } from './listing-types.js';
+import { fillListingCountries } from './listing-countries.js';
 
 const KEY = 'categories_offered';
 const SHULS_MOVED = 'community_shuls_removed';
@@ -61,6 +62,7 @@ async function run() {
   if (added.length) console.log(`[categories] added ${added.join(', ')}`);
   await dropShulsFromCommunity();
   await fixListingTypes();
+  await fillListingCountries();
   return added;
 }
 

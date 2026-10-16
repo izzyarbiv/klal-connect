@@ -1,6 +1,7 @@
 // Directory search: plurals, typos, synonyms, places, and every word counting.
 import assert from 'node:assert/strict';
-import { searchDirectory } from './search.js';
+import { searchDirectory, suggestPlaces } from './search.js';
+import { countryOf, countriesFrom, placeLine } from './countries.js';
 
 let passed = 0;
 const ok = (name, fn) => { fn(); passed++; console.log(`  ok   ${name}`); };
@@ -63,5 +64,49 @@ ok('a blank place is everywhere, and nationwide listings serve every place', () 
   assert.equal(names('').length, P.length);
   assert.ok(names('', 'Boca Raton').includes('Chai Lifeline'));
   assert.ok(names('', 'Boca').includes('Pita Pan Bakery'));
+});
+
+// Countries: listings outside the US, the Country filter, and a country typed as the place.
+const W = [
+  ...P,
+  L('Mikvah Yerushalayim', 'Mikvas', "Women's Mikvah", 'Jerusalem', 'IL-JM', { country: 'Israel', tagline: 'Mikvah in Jerusalem, Israel' }),
+  L('Mikvah Ramat Beit Shemesh', 'Mikvas', "Women's Mikvah", 'Beit Shemesh', '', { country: 'Israel' }),
+  L('Mikvah de Paris', 'Mikvas', "Women's Mikvah", 'Paris', '', { country: 'France' }),
+  L('Mikvah Perth', 'Mikvas', "Women's Mikvah", 'Perth', 'WA', { country: 'Australia' }),
+  L('Seattle Mikvah', 'Mikvas', "Women's Mikvah", 'Seattle', 'WA'),
+  L('Torah by Phone', 'Education', 'Shiurim', '', '', { service_areas: ['Worldwide'] }),
+  L('OHEL', 'Health', 'Support', 'Brooklyn', 'NY', { service_areas: ['Nationwide'] }),
+];
+const inC = (q, country, where = '') => searchDirectory(W, { q, where, country }).results.map((r) => r.provider.name).sort();
+ok('a listing in a US state is in the United States without saying so', () => {
+  assert.equal(countryOf({ state: 'FL' }), 'United States');
+  assert.equal(countryOf({ state: 'New York' }), 'United States');
+  assert.equal(countryOf({ state: 'WA', country: 'Australia' }), 'Australia');
+  assert.equal(countryOf({ state: 'IL-JM' }), '');
+});
+ok('the Country filter keeps to that country; worldwide listings show in every one', () => {
+  assert.deepEqual(inC('mikvah', 'Israel'), ['Mikvah Ramat Beit Shemesh', 'Mikvah Yerushalayim']);
+  assert.deepEqual(inC('mikvah', 'United States'), ['Seattle Mikvah']);
+  assert.deepEqual(inC('mikvah', ''), ['Mikvah Perth', 'Mikvah Ramat Beit Shemesh', 'Mikvah Yerushalayim', 'Mikvah de Paris', 'Seattle Mikvah']);
+  assert.ok(inC('', 'Israel').includes('Torah by Phone'));
+  // Nationwide is the listing's own country, not Israel.
+  assert.ok(!inC('', 'Israel').includes('OHEL'));
+});
+ok('a US state is a US place: WA is not Perth', () => {
+  assert.deepEqual(inC('mikvah', '', 'WA'), ['Seattle Mikvah']);
+});
+ok('a country typed in Where or with the search', () => {
+  assert.deepEqual(inC('', '', 'Israel').filter((n) => n.startsWith('Mikvah')), ['Mikvah Ramat Beit Shemesh', 'Mikvah Yerushalayim']);
+  assert.deepEqual(inC('mikvah israel', ''), ['Mikvah Ramat Beit Shemesh', 'Mikvah Yerushalayim']);
+  assert.equal(searchDirectory(W, { q: 'mikvah france' }).parsed.place, 'France');
+  // A US nationwide listing serves US places, not Paris.
+  assert.ok(!inC('', '', 'Paris').includes('OHEL'));
+  assert.ok(inC('', '', 'Boca Raton').includes('OHEL'));
+});
+ok('the filter lists countries with listings, US first; places follow the country', () => {
+  assert.deepEqual(countriesFrom(W).map((c) => c.country), ['United States', 'Israel', 'Australia', 'France']);
+  assert.deepEqual(suggestPlaces('Pe', W, 'Australia').map((s) => s.label), ['Perth']);
+  assert.equal(placeLine({ city: 'Paris', country: 'France' }), 'Paris, France');
+  assert.equal(placeLine({ city: 'Boca Raton', state: 'FL' }), 'Boca Raton, FL');
 });
 console.log(`\n${passed} passed`);
