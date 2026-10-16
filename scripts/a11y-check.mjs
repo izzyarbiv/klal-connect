@@ -170,7 +170,10 @@ if (!LOCAL) {
 
     // A listing of their own and the staff queues: the owner panel's buttons
     // and the claim card's controls were never reached by this sweep.
-    await api('POST', '/functions/createListing', { token, body: { name: 'A11y Check Plumbing', category: 'Home Services', short_description: 'A listing to render the owner panel.', description: 'Measured, not imagined.', city: 'Lakewood' } });
+    // Adding a listing does not make it yours; the claim the team accepts does.
+    const ownListing = await api('POST', '/functions/createListing', { token, body: { name: 'A11y Check Plumbing', category: 'Home Services', short_description: 'A listing to render the owner panel.', description: 'Measured, not imagined.', city: 'Lakewood', claim_as_owner: true } });
+    const ownAdmin = (await api('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;
+    if (ownListing.data?.claim && ownAdmin) await api('POST', '/functions/resolveClaim', { token: ownAdmin, body: { claim_id: ownListing.data.claim.id, approve: true } });
     const staffTok = (await api('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;
     if (staffTok && listings[0]) await api('POST', '/functions/createClaim', { token, body: { provider_id: listings[0].id, provider_name: listings[0].name, relationship: 'owner', verification_details: 'Our sign and our phone number say so.' } });
     const routes = [...AUTH_ROUTES, ...(listings[0] ? [`provider/${listings[0].id}`] : [])];

@@ -22,7 +22,7 @@ export default function NotificationBell(){
   return <div className="relative" ref={ref}>
     <button onClick={()=>setOpen(o=>!o)} className="icon-button relative" aria-label="Notifications">
       <Bell size={19}/>
-      {unread>0&&<span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-error px-1 text-[10px] font-bold text-white">{unread>9?'9+':unread}</span>}
+      {unread>0&&<span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-error px-1 text-[10px] font-bold text-white dark:text-black">{unread>9?'9+':unread}</span>}
     </button>
     {/* max-w keeps the panel on screen now that this bell is in the header on a
         phone too: 320px fixed would hang off the edge at 360px wide. */}

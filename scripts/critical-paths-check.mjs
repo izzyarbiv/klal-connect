@@ -187,6 +187,17 @@ await sleep(1200);
 const stillEmpty = await ev(`[...document.querySelectorAll('form [required]')].filter((e) => !e.value).map((e) => e.name || e.tagName.toLowerCase())`);
 ok((stillEmpty || []).length === 0, '    every required field is filled', JSON.stringify(stillEmpty));
 
+// Adding a listing does not make it yours to edit; "This is my business"
+// files the claim that, once the team accepts it, does.
+const ticked = await ev(`(() => {
+  const l = [...document.querySelectorAll('form label')].find((x) => /This is my business/.test(x.textContent));
+  const c = l && l.querySelector('input[type=checkbox]');
+  if (!c) return false;
+  if (!c.checked) c.click();
+  return c.checked;
+})()`);
+ok(ticked, '    the "This is my business" box can be ticked');
+await sleep(300);
 
 const clicked = await ev(`(() => {
   const b = [...document.querySelectorAll('button')].find((x) => /Publish my listing/i.test(x.textContent));
@@ -199,6 +210,7 @@ await sleep(6000);
 
 const body = await ev('document.body.innerText');
 ok(/Your listing is live/i.test(body), '    publishing succeeds', /Your listing is live/i.test(body) ? '' : body.slice(0, 180).split('\n').join(' '));
+ok(/request to manage it as the owner/i.test(body), '    and says the ownership request was sent');
 
 // And it is really in the directory, not just a success message.
 const found = await (await fetch(`${BASE}/api/entities/Provider?limit=200`)).json().catch(() => []);
@@ -214,6 +226,20 @@ console.log('\n  editing the listing');
 const mine = (Array.isArray(found) ? found : []).find((x) => x.name === LISTING);
 ok(!!mine, '    the new listing can be found by id', mine ? mine.id : '(not found)');
 if (mine) {
+  // Not editable until the team accepts the claim.
+  await send('Page.navigate', { url: `${BASE}/add?edit=${encodeURIComponent(mine.id)}` });
+  await sleep(4500);
+  ok(/not yours to edit/i.test(await ev('document.body.innerText')), '    the edit form is refused before the claim is accepted');
+
+  // The team accepts it, the way Admin → Claim requests does.
+  const adminLogin = await (await fetch(`${BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'demo@klal.app', password: 'demo1234' }) })).json().catch(() => ({}));
+  const adminAuth = { Authorization: `Bearer ${adminLogin.access_token || ''}`, 'Content-Type': 'application/json' };
+  const claims = await (await fetch(`${BASE}/api/entities/ClaimRequest?query=${encodeURIComponent(JSON.stringify({ provider_id: mine.id, status: 'pending' }))}`, { headers: adminAuth })).json().catch(() => []);
+  const claim = Array.isArray(claims) ? claims[0] : null;
+  ok(!!claim, '    publishing as the owner filed a claim', JSON.stringify(claims).slice(0, 80));
+  const approved = claim ? await fetch(`${BASE}/api/functions/resolveClaim`, { method: 'POST', headers: adminAuth, body: JSON.stringify({ claim_id: claim.id, approve: true }) }) : null;
+  ok(approved && approved.ok, '    the team can accept it', approved ? String(approved.status) : '(no claim)');
+
   await send('Page.navigate', { url: `${BASE}/add?edit=${encodeURIComponent(mine.id)}` });
   await sleep(5500);
   const prefilled = await ev(`(() => { const i = document.querySelector('input[name=name]'); return i ? i.value : ''; })()`);

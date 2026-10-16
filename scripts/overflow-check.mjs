@@ -155,7 +155,10 @@ if (!LOCAL) {
     // And a listing of their own, so "Manage my listings" renders its rows —
     // a name, a status, two buttons and a completeness ring on one line at
     // 320px, which is the shape that breaks.
-    await api('POST', '/functions/createListing', { token, body: { name: 'Overflow Check Plumbing and Heating Services', category: 'Home Services', short_description: 'A listing long enough to test the row.', description: 'Measured, not imagined.', city: 'Lakewood' } });
+    // Adding a listing does not make it yours; the claim the team accepts does.
+    const ownListing = await api('POST', '/functions/createListing', { token, body: { name: 'Overflow Check Plumbing and Heating Services', category: 'Home Services', short_description: 'A listing long enough to test the row.', description: 'Measured, not imagined.', city: 'Lakewood', claim_as_owner: true } });
+    const ownAdmin = (await api('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;
+    if (ownListing.data?.claim && ownAdmin) await api('POST', '/functions/resolveClaim', { token: ownAdmin, body: { claim_id: ownListing.data.claim.id, approve: true } });
     // The administrator's claim queue, which no sweep had ever opened. Its
     // cards are definition lists of free text a claimant typed.
     const staff = (await api('POST', '/auth/login', { body: { email: 'demo@klal.app', password: 'demo1234' } })).data?.access_token;

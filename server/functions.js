@@ -229,6 +229,14 @@ export const functions = {
     await assertUnderDailyLimit('Provider', user, 5, 'listings');
     need(payload.name, 'A listing name is required.');
     need(payload.category, 'Please choose a category.');
+    // "This is my business" files a claim alongside the listing. Adding a
+    // listing no longer makes it yours to edit (see listingEditor), so an owner
+    // adding their own page would otherwise have to find the claim form
+    // separately and say it all again. It is still a claim: the team accepts it
+    // before the listing is handed over, the same as any other.
+    const { claim_as_owner, ...listingPayload } = payload || {};
+    if (claim_as_owner) await assertUnderDailyLimit('ClaimRequest', user, 3, 'claims');
+    payload = listingPayload;
     // Published on submission unless KC_REVIEW_LISTINGS=1 puts the
     // hold-for-approval step back — see REVIEW_FIRST above. This comment used
     // to claim the opposite, which is worth more than a nitpick: a stale note
@@ -258,7 +266,26 @@ export const functions = {
     // coordinates, and the listing then never appeared on the map or in
     // "nearest". The pin is found here from the address instead.
     const pin = await pinForListing(provider);
-    return { provider: pin ? await store.update('Provider', provider.id, pin) : provider };
+    const saved = pin ? await store.update('Provider', provider.id, pin) : provider;
+    let claim = null;
+    if (claim_as_owner) {
+      const contact = [
+        payload.email && `Email: ${payload.email}`,
+        payload.phone && `Phone: ${payload.phone}`,
+        payload.website && `Website: ${payload.website}`,
+      ].filter(Boolean).join('\n');
+      claim = await store.create('ClaimRequest', {
+        provider_id: saved.id,
+        provider_name: saved.name,
+        relationship: 'Added this listing and said it is their business',
+        business_email: payload.email || '',
+        business_phone: payload.phone || '',
+        website: payload.website || '',
+        verification_details: contact || 'No contact details on the listing.',
+        status: 'pending',
+      }, user);
+    }
+    return { provider: saved, claim };
   },
 
   // A business's own Stripe Payment Link, PayPal.me, Venmo or Zelle page.

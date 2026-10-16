@@ -16,9 +16,8 @@ export default function ManageListings({user}){
   const [savedId,setSavedId]=useState(null);
   const [payErrFor,setPayErrFor]=useState({});
 
-  // Both sides of a handover: a listing you claimed appears here, and one you
-  // added that someone else has since claimed drops off — it is theirs to edit
-  // now. Listing only by created_by_id showed the wrong set in both directions.
+  // Only listings you own: one you added but never claimed is not yours to
+  // edit (see listingEditor), so it does not appear here.
   useEffect(()=>{(async()=>{
     const [added,claimed]=await Promise.all([
       api.entities.Provider.filter({created_by_id:user.id}).catch(()=>[]),
